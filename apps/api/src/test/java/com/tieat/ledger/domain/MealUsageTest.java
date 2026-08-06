@@ -24,6 +24,7 @@ class MealUsageTest {
         assertThat(usage.mealContractId()).isEqualTo(mealContractId());
         assertThat(usage.entrySource()).isEqualTo(EntrySource.PARTNER_MOBILE);
         assertThat(usage.createdAt()).isEqualTo(CONFIRMED_AT.minusSeconds(60));
+        assertThat(usage.version()).isZero();
         assertThat(usage.status()).isEqualTo(MealUsageStatus.PENDING);
         assertThat(usage.confirmation()).isEmpty();
         assertThat(usage.prepaidAllocation()).isEmpty();
@@ -156,6 +157,58 @@ class MealUsageTest {
         assertThat(usage.status()).isEqualTo(MealUsageStatus.PENDING);
         assertThat(usage.confirmation()).isEmpty();
         assertThat(usage.prepaidAllocation()).isEmpty();
+    }
+
+    @Test
+    void restoresConfirmedUsageWithoutReplayingConfirmation() {
+        Confirmation confirmation = new Confirmation("HK", CONFIRMED_AT);
+        PrepaidAllocation allocation = new PrepaidAllocation(12_000, 5_000, 7_000, 0);
+
+        MealUsage restored = MealUsage.restoreConfirmed(
+            id(),
+            storeId(),
+            mealContractId(),
+            EntrySource.PARTNER_MOBILE,
+            12_000,
+            createdAt(),
+            3,
+            confirmation,
+            allocation
+        );
+
+        assertThat(restored.status()).isEqualTo(MealUsageStatus.CONFIRMED);
+        assertThat(restored.version()).isEqualTo(3);
+        assertThat(restored.confirmation()).contains(confirmation);
+        assertThat(restored.prepaidAllocation()).contains(allocation);
+    }
+
+    @Test
+    void rejectsInvalidRestoredLifecycleState() {
+        assertThatIllegalArgumentException().isThrownBy(() -> MealUsage.restoreConfirmed(
+            id(),
+            storeId(),
+            mealContractId(),
+            EntrySource.PARTNER_MOBILE,
+            12_000,
+            createdAt(),
+            0,
+            null,
+            new PrepaidAllocation(12_000, 12_000, 0, 0)
+        ));
+        assertThatIllegalArgumentException().isThrownBy(() -> MealUsage.restorePending(
+            id(), storeId(), mealContractId(), EntrySource.PARTNER_MOBILE, 12_000, createdAt(), -1
+        ));
+        assertThatIllegalArgumentException().isThrownBy(() -> MealUsage.restoreConfirmed(
+            id(),
+            storeId(),
+            mealContractId(),
+            EntrySource.PARTNER_MOBILE,
+            12_000,
+            createdAt(),
+            0,
+            new Confirmation("HK", CONFIRMED_AT),
+            new PrepaidAllocation(10_000, 10_000, 0, 0)
+        ));
     }
 
     private void assertAllocationInvariant(MealUsage usage) {

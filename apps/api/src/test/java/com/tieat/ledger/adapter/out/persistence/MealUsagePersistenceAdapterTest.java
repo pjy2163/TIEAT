@@ -1,12 +1,15 @@
 package com.tieat.ledger.adapter.out.persistence;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.tieat.ledger.domain.EntrySource;
+import com.tieat.ledger.domain.Confirmation;
 import com.tieat.ledger.domain.MealUsage;
 import com.tieat.ledger.domain.MealUsageId;
+import com.tieat.ledger.domain.PrepaidAllocation;
 import com.tieat.partnership.domain.MealContractId;
 import com.tieat.store.domain.StoreId;
 import java.time.Instant;
@@ -16,7 +19,7 @@ import org.junit.jupiter.api.Test;
 class MealUsagePersistenceAdapterTest {
 
     @Test
-    void rejectsConfirmedMealUsageBeforeCallingJpaRepository() {
+    void mapsConfirmedMealUsageForPersistence() {
         MealUsageJpaRepository jpaRepository = mock(MealUsageJpaRepository.class);
         MealUsagePersistenceAdapter adapter = new MealUsagePersistenceAdapter(jpaRepository);
         MealUsage confirmed = MealUsage.pending(
@@ -28,11 +31,16 @@ class MealUsagePersistenceAdapterTest {
             Instant.parse("2026-08-05T09:14:30Z")
         );
         confirmed.confirm("HK", Instant.parse("2026-08-05T09:15:30Z"), 12_000);
+        when(jpaRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertThatThrownBy(() -> adapter.save(confirmed))
-            .isInstanceOf(UnsupportedOperationException.class)
-            .hasMessage("Only pending meal usages can be persisted in the initial schema");
+        MealUsage saved = adapter.save(confirmed);
 
-        verifyNoInteractions(jpaRepository);
+        assertThat(saved.status()).isEqualTo(confirmed.status());
+        assertThat(saved.confirmation()).contains(new Confirmation(
+            "HK", Instant.parse("2026-08-05T09:15:30Z")
+        ));
+        assertThat(saved.prepaidAllocation()).contains(
+            new PrepaidAllocation(12_000, 12_000, 0, 0)
+        );
     }
 }

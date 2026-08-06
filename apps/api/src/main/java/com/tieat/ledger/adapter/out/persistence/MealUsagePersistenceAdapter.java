@@ -4,6 +4,8 @@ import com.tieat.ledger.domain.MealUsage;
 import com.tieat.ledger.domain.MealUsageId;
 import com.tieat.ledger.domain.MealUsageRepository;
 import com.tieat.ledger.domain.MealUsageStatus;
+import com.tieat.ledger.domain.PrepaidAllocation;
+import com.tieat.ledger.domain.Confirmation;
 import com.tieat.partnership.domain.MealContractId;
 import com.tieat.store.domain.StoreId;
 import java.util.Objects;
@@ -22,7 +24,7 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
     @Override
     public MealUsage save(MealUsage mealUsage) {
         Objects.requireNonNull(mealUsage, "Meal usage must be supplied");
-        return toDomain(repository.save(toEntity(mealUsage)));
+        return toDomain(repository.saveAndFlush(toEntity(mealUsage)));
     }
 
     @Override
@@ -32,11 +34,8 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
     }
 
     private MealUsageJpaEntity toEntity(MealUsage mealUsage) {
-        if (mealUsage.status() != MealUsageStatus.PENDING) {
-            throw new UnsupportedOperationException(
-                "Only pending meal usages can be persisted in the initial schema"
-            );
-        }
+        Confirmation confirmation = mealUsage.confirmation().orElse(null);
+        PrepaidAllocation prepaidAllocation = mealUsage.prepaidAllocation().orElse(null);
         return new MealUsageJpaEntity(
             mealUsage.id().value(),
             mealUsage.storeId().value(),
@@ -44,21 +43,53 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
             mealUsage.entrySource(),
             mealUsage.amount(),
             mealUsage.createdAt(),
-            mealUsage.status()
+            mealUsage.version(),
+            mealUsage.status(),
+            confirmation == null ? null : confirmation.staffInitials(),
+            confirmation == null ? null : confirmation.confirmedAt(),
+            prepaidAllocation == null ? null : prepaidAllocation.prepaidApplied(),
+            prepaidAllocation == null ? null : prepaidAllocation.receivableCreated(),
+            prepaidAllocation == null ? null : prepaidAllocation.remainingPrepaid()
         );
     }
 
     private MealUsage toDomain(MealUsageJpaEntity entity) {
-        if (entity.status() != MealUsageStatus.PENDING) {
-            throw new IllegalStateException("Initial schema contains only pending meal usages");
+        if (entity.status() == MealUsageStatus.PENDING) {
+            return MealUsage.restorePending(
+                new MealUsageId(entity.id()),
+                new StoreId(entity.storeId()),
+                new MealContractId(entity.mealContractId()),
+                entity.entrySource(),
+                entity.amount(),
+                entity.createdAt(),
+                entity.version()
+            );
         }
-        return MealUsage.pending(
-            new MealUsageId(entity.id()),
-            new StoreId(entity.storeId()),
-            new MealContractId(entity.mealContractId()),
-            entity.entrySource(),
-            entity.amount(),
-            entity.createdAt()
-        );
+        if (entity.status() == MealUsageStatus.CONFIRMED) {
+            return MealUsage.restoreConfirmed(
+                new MealUsageId(entity.id()),
+                new StoreId(entity.storeId()),
+                new MealContractId(entity.mealContractId()),
+                entity.entrySource(),
+                entity.amount(),
+                entity.createdAt(),
+                entity.version(),
+                new Confirmation(entity.confirmedStaffInitials(), entity.confirmedAt()),
+                new PrepaidAllocation(
+                    entity.amount(),
+                    requiredAllocationValue(entity.prepaidApplied(), "prepaid applied"),
+                    requiredAllocationValue(entity.receivableCreated(), "receivable created"),
+                    requiredAllocationValue(entity.remainingPrepaid(), "remaining prepaid")
+                )
+            );
+        }
+        throw new IllegalStateException("Unsupported meal usage status: " + entity.status());
+    }
+
+    private long requiredAllocationValue(Long value, String fieldName) {
+        if (value == null) {
+            throw new IllegalStateException("Confirmed meal usage is missing " + fieldName);
+        }
+        return value;
     }
 }

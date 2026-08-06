@@ -14,6 +14,7 @@ public final class MealUsage {
     private final EntrySource entrySource;
     private final long amount;
     private final Instant createdAt;
+    private final long version;
     private MealUsageStatus status;
     private Confirmation confirmation;
     private PrepaidAllocation prepaidAllocation;
@@ -24,7 +25,11 @@ public final class MealUsage {
         MealContractId mealContractId,
         EntrySource entrySource,
         long amount,
-        Instant createdAt
+        Instant createdAt,
+        long version,
+        MealUsageStatus status,
+        Confirmation confirmation,
+        PrepaidAllocation prepaidAllocation
     ) {
         this.id = Objects.requireNonNull(id, "Meal usage id must be supplied");
         this.storeId = Objects.requireNonNull(storeId, "Store id must be supplied");
@@ -35,7 +40,14 @@ public final class MealUsage {
         }
         this.amount = amount;
         this.createdAt = Objects.requireNonNull(createdAt, "Created at must be supplied");
-        this.status = MealUsageStatus.PENDING;
+        if (version < 0) {
+            throw new IllegalArgumentException("Meal usage version must not be negative");
+        }
+        this.version = version;
+        this.status = Objects.requireNonNull(status, "Meal usage status must be supplied");
+        this.confirmation = confirmation;
+        this.prepaidAllocation = prepaidAllocation;
+        validateLifecycleState();
     }
 
     public static MealUsage pending(
@@ -46,7 +58,66 @@ public final class MealUsage {
         long amount,
         Instant createdAt
     ) {
-        return new MealUsage(id, storeId, mealContractId, entrySource, amount, createdAt);
+        return new MealUsage(
+            id,
+            storeId,
+            mealContractId,
+            entrySource,
+            amount,
+            createdAt,
+            0,
+            MealUsageStatus.PENDING,
+            null,
+            null
+        );
+    }
+
+    public static MealUsage restorePending(
+        MealUsageId id,
+        StoreId storeId,
+        MealContractId mealContractId,
+        EntrySource entrySource,
+        long amount,
+        Instant createdAt,
+        long version
+    ) {
+        return new MealUsage(
+            id,
+            storeId,
+            mealContractId,
+            entrySource,
+            amount,
+            createdAt,
+            version,
+            MealUsageStatus.PENDING,
+            null,
+            null
+        );
+    }
+
+    public static MealUsage restoreConfirmed(
+        MealUsageId id,
+        StoreId storeId,
+        MealContractId mealContractId,
+        EntrySource entrySource,
+        long amount,
+        Instant createdAt,
+        long version,
+        Confirmation confirmation,
+        PrepaidAllocation prepaidAllocation
+    ) {
+        return new MealUsage(
+            id,
+            storeId,
+            mealContractId,
+            entrySource,
+            amount,
+            createdAt,
+            version,
+            MealUsageStatus.CONFIRMED,
+            confirmation,
+            prepaidAllocation
+        );
     }
 
     /**
@@ -90,6 +161,10 @@ public final class MealUsage {
         return createdAt;
     }
 
+    public long version() {
+        return version;
+    }
+
     public MealUsageStatus status() {
         return status;
     }
@@ -100,5 +175,17 @@ public final class MealUsage {
 
     public Optional<PrepaidAllocation> prepaidAllocation() {
         return Optional.ofNullable(prepaidAllocation);
+    }
+
+    private void validateLifecycleState() {
+        if (status == MealUsageStatus.PENDING && (confirmation != null || prepaidAllocation != null)) {
+            throw new IllegalArgumentException("Pending meal usages must not have confirmation data");
+        }
+        if (status == MealUsageStatus.CONFIRMED && (confirmation == null || prepaidAllocation == null)) {
+            throw new IllegalArgumentException("Confirmed meal usages require confirmation and allocation data");
+        }
+        if (prepaidAllocation != null && prepaidAllocation.usageAmount() != amount) {
+            throw new IllegalArgumentException("Prepaid allocation amount must match meal usage amount");
+        }
     }
 }
