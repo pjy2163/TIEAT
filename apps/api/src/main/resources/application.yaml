@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: tieat-api
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/tieat}
+    username: ${DB_USERNAME:tieat}
+    password: ${DB_PASSWORD:tieat_local}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

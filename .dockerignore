@@ -1,0 +1,8 @@
+.git
+.gradle
+.idea
+.codex
+**/build
+**/node_modules
+docs/NOTION.local.md
+*.log

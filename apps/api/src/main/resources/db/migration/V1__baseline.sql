@@ -1,0 +1,1 @@
+-- Schema changes start after the first aggregate and invariants are approved.
