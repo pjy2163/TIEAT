@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.tieat.ledger.application.ConfirmMealUsageCommand;
 import com.tieat.ledger.application.ConfirmMealUsageUseCase;
 import com.tieat.ledger.application.MealContractNotFoundException;
+import com.tieat.ledger.application.MealUsageAlreadyConfirmedException;
 import com.tieat.ledger.application.MealUsageContractScopeMismatchException;
 import com.tieat.ledger.domain.EntrySource;
 import com.tieat.ledger.domain.MealUsage;
@@ -107,7 +108,7 @@ class ContractBalanceConfirmationIntegrationTest {
         mealContractRepository.save(contract);
         mealUsageRepository.save(usage);
 
-        MealUsage confirmed = confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), "HK"));
+        MealUsage confirmed = confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), STORE_ID, "HK"));
 
         assertThat(confirmed.status()).isEqualTo(MealUsageStatus.CONFIRMED);
         assertThat(confirmed.prepaidAllocation()).hasValueSatisfying(allocation -> {
@@ -126,7 +127,7 @@ class ContractBalanceConfirmationIntegrationTest {
         mealContractRepository.save(contract);
         mealUsageRepository.save(usage);
 
-        MealUsage confirmed = confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), "HK"));
+        MealUsage confirmed = confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), STORE_ID, "HK"));
 
         assertThat(confirmed.prepaidAllocation()).hasValueSatisfying(allocation -> {
             assertThat(allocation.prepaidApplied()).isZero();
@@ -143,7 +144,7 @@ class ContractBalanceConfirmationIntegrationTest {
         mealUsageRepository.save(missingContractUsage);
 
         assertThatThrownBy(() -> confirmMealUsageUseCase.confirm(
-            new ConfirmMealUsageCommand(missingContractUsage.id(), "HK")
+            new ConfirmMealUsageCommand(missingContractUsage.id(), STORE_ID, "HK")
         )).isInstanceOf(MealContractNotFoundException.class);
         assertThat(reloadUsage(missingContractUsage.id()).status()).isEqualTo(MealUsageStatus.PENDING);
 
@@ -157,7 +158,7 @@ class ContractBalanceConfirmationIntegrationTest {
         mealUsageRepository.save(mismatchedUsage);
 
         assertThatThrownBy(() -> confirmMealUsageUseCase.confirm(
-            new ConfirmMealUsageCommand(mismatchedUsage.id(), "HK")
+            new ConfirmMealUsageCommand(mismatchedUsage.id(), mismatchedUsage.storeId(), "HK")
         )).isInstanceOf(MealUsageContractScopeMismatchException.class);
         assertThat(reloadUsage(mismatchedUsage.id()).status()).isEqualTo(MealUsageStatus.PENDING);
         assertThat(reloadContract(mismatchedContract.id()).prepaidBalance()).isEqualTo(10_000);
@@ -170,10 +171,10 @@ class ContractBalanceConfirmationIntegrationTest {
         mealContractRepository.save(contract);
         mealUsageRepository.save(usage);
 
-        confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), "HK"));
+        confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), STORE_ID, "HK"));
 
-        assertThatThrownBy(() -> confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), "JS")))
-            .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), STORE_ID, "JS")))
+            .isInstanceOf(MealUsageAlreadyConfirmedException.class);
         assertThat(reloadContract(contract.id()).prepaidBalance()).isEqualTo(2_000);
         assertThat(reloadUsage(usage.id()).confirmation()).hasValueSatisfying(
             confirmation -> assertThat(confirmation.staffInitials()).isEqualTo("HK")
@@ -198,13 +199,13 @@ class ContractBalanceConfirmationIntegrationTest {
                 mealContractRepository.findByIdForUpdate(contract.id()).orElseThrow();
                 firstLockAcquired.countDown();
                 await(releaseFirst);
-                return confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(firstUsage.id(), "HK"));
+                return confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(firstUsage.id(), STORE_ID, "HK"));
             }));
             assertThat(firstLockAcquired.await(5, TimeUnit.SECONDS)).isTrue();
 
             Future<MealUsage> second = executor.submit(() -> {
                 secondStarted.countDown();
-                return confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(secondUsage.id(), "JS"));
+                return confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(secondUsage.id(), STORE_ID, "JS"));
             });
             assertThat(secondStarted.await(5, TimeUnit.SECONDS)).isTrue();
             assertThat(second.isDone()).isFalse();
@@ -250,13 +251,13 @@ class ContractBalanceConfirmationIntegrationTest {
                 mealContractRepository.findByIdForUpdate(contract.id()).orElseThrow();
                 firstLockAcquired.countDown();
                 await(releaseFirst);
-                return confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), "HK"));
+                return confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), STORE_ID, "HK"));
             }));
             assertThat(firstLockAcquired.await(5, TimeUnit.SECONDS)).isTrue();
 
             Future<MealUsage> stale = executor.submit(() -> {
                 secondStarted.countDown();
-                return confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), "JS"));
+                return confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), STORE_ID, "JS"));
             });
             assertThat(secondStarted.await(5, TimeUnit.SECONDS)).isTrue();
             assertThat(stale.isDone()).isFalse();

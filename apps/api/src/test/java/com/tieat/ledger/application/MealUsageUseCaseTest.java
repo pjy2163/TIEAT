@@ -2,7 +2,6 @@ package com.tieat.ledger.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tieat.ledger.domain.EntrySource;
@@ -61,7 +60,7 @@ class MealUsageUseCaseTest {
             Clock.fixed(SERVER_TIME, ZoneOffset.UTC)
         );
 
-        MealUsage confirmed = useCase.confirm(new ConfirmMealUsageCommand(pending.id(), "HK"));
+        MealUsage confirmed = useCase.confirm(new ConfirmMealUsageCommand(pending.id(), storeId(), "HK"));
 
         assertThat(confirmed.status()).isEqualTo(MealUsageStatus.CONFIRMED);
         assertThat(confirmed.confirmation()).hasValueSatisfying(confirmation -> {
@@ -87,7 +86,7 @@ class MealUsageUseCaseTest {
         );
         MealUsageId missingId = new MealUsageId(UUID.fromString("cb36c29b-dc69-4bd5-9f2a-5892734a3049"));
 
-        assertThatThrownBy(() -> useCase.confirm(new ConfirmMealUsageCommand(missingId, "HK")))
+        assertThatThrownBy(() -> useCase.confirm(new ConfirmMealUsageCommand(missingId, storeId(), "HK")))
             .isInstanceOf(MealUsageNotFoundException.class)
             .hasMessageContaining(missingId.value().toString());
     }
@@ -95,7 +94,7 @@ class MealUsageUseCaseTest {
     @Test
     void rejectsInvalidConfirmationInputBeforeLoadingUsage() {
         assertThatIllegalArgumentException().isThrownBy(
-            () -> new ConfirmMealUsageCommand(pendingUsage().id(), " ")
+            () -> new ConfirmMealUsageCommand(pendingUsage().id(), storeId(), " ")
         );
         assertThatIllegalArgumentException().isThrownBy(
             () -> new CreateMealUsageCommand(storeId(), mealContractId(), EntrySource.PARTNER_MOBILE, 0)
@@ -116,9 +115,8 @@ class MealUsageUseCaseTest {
             Clock.fixed(SERVER_TIME.plusSeconds(1), ZoneOffset.UTC)
         );
 
-        assertThatIllegalStateException().isThrownBy(
-            () -> useCase.confirm(new ConfirmMealUsageCommand(alreadyConfirmed.id(), "HK"))
-        );
+        assertThatThrownBy(() -> useCase.confirm(new ConfirmMealUsageCommand(alreadyConfirmed.id(), storeId(), "HK")))
+            .isInstanceOf(MealUsageAlreadyConfirmedException.class);
         assertThat(repository.saveCount).isEqualTo(1);
         assertThat(mealContractRepository.saveCount).isEqualTo(1);
     }
@@ -134,7 +132,7 @@ class MealUsageUseCaseTest {
             Clock.fixed(SERVER_TIME, ZoneOffset.UTC)
         );
 
-        assertThatThrownBy(() -> useCase.confirm(new ConfirmMealUsageCommand(pending.id(), "HK")))
+        assertThatThrownBy(() -> useCase.confirm(new ConfirmMealUsageCommand(pending.id(), storeId(), "HK")))
             .isInstanceOf(MealContractNotFoundException.class);
         assertThat(pending.status()).isEqualTo(MealUsageStatus.PENDING);
         assertThat(repository.saveCount).isEqualTo(1);
@@ -158,7 +156,7 @@ class MealUsageUseCaseTest {
             Clock.fixed(SERVER_TIME, ZoneOffset.UTC)
         );
 
-        assertThatThrownBy(() -> useCase.confirm(new ConfirmMealUsageCommand(pending.id(), "HK")))
+        assertThatThrownBy(() -> useCase.confirm(new ConfirmMealUsageCommand(pending.id(), storeId(), "HK")))
             .isInstanceOf(MealUsageContractScopeMismatchException.class);
         assertThat(pending.status()).isEqualTo(MealUsageStatus.PENDING);
         assertThat(mealContractRepository.findByIdForUpdate(mealContractId()).orElseThrow().prepaidBalance())

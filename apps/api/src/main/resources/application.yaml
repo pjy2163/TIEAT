@@ -11,6 +11,12 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+
+springdoc:
+  paths-to-match: /api/**
 
 management:
   endpoints:

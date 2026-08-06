@@ -2,7 +2,6 @@ package com.tieat.ledger.application;
 
 import com.tieat.ledger.domain.MealUsage;
 import com.tieat.ledger.domain.MealUsageRepository;
-import com.tieat.ledger.domain.MealUsageStatus;
 import com.tieat.ledger.domain.PrepaidAllocation;
 import com.tieat.partnership.domain.MealContract;
 import com.tieat.partnership.domain.MealContractAllocation;
@@ -35,8 +34,11 @@ public class ConfirmMealUsageUseCase {
         Objects.requireNonNull(command, "Confirm command must be supplied");
         MealUsage mealUsage = mealUsageRepository.findById(command.mealUsageId())
             .orElseThrow(() -> new MealUsageNotFoundException(command.mealUsageId()));
-        if (mealUsage.status() != MealUsageStatus.PENDING) {
-            throw new IllegalStateException("Only pending meal usages can be confirmed");
+        if (!mealUsage.storeId().equals(command.actorStoreId())) {
+            throw new MealUsageNotFoundException(command.mealUsageId());
+        }
+        if (mealUsage.status() != com.tieat.ledger.domain.MealUsageStatus.PENDING) {
+            throw new MealUsageAlreadyConfirmedException(mealUsage.id());
         }
         MealContract mealContract = mealContractRepository.findByIdForUpdate(mealUsage.mealContractId())
             .orElseThrow(() -> new MealContractNotFoundException(mealUsage.mealContractId()));
