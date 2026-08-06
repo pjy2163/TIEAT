@@ -2,26 +2,60 @@ package com.tieat.ledger.application;
 
 import com.tieat.ledger.domain.MealUsage;
 import com.tieat.ledger.domain.MealUsageRepository;
+import com.tieat.ledger.domain.MealUsageStatus;
+import com.tieat.ledger.domain.PrepaidAllocation;
+import com.tieat.partnership.domain.MealContract;
+import com.tieat.partnership.domain.MealContractAllocation;
+import com.tieat.partnership.domain.MealContractRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-public final class ConfirmMealUsageUseCase {
+@Service
+public class ConfirmMealUsageUseCase {
 
     private final MealUsageRepository mealUsageRepository;
+    private final MealContractRepository mealContractRepository;
     private final Clock clock;
 
-    public ConfirmMealUsageUseCase(MealUsageRepository mealUsageRepository, Clock clock) {
+    public ConfirmMealUsageUseCase(
+        MealUsageRepository mealUsageRepository,
+        MealContractRepository mealContractRepository,
+        Clock clock
+    ) {
         this.mealUsageRepository = Objects.requireNonNull(mealUsageRepository);
+        this.mealContractRepository = Objects.requireNonNull(mealContractRepository);
         this.clock = Objects.requireNonNull(clock);
     }
 
+    @Transactional
     public MealUsage confirm(ConfirmMealUsageCommand command) {
         Objects.requireNonNull(command, "Confirm command must be supplied");
         MealUsage mealUsage = mealUsageRepository.findById(command.mealUsageId())
             .orElseThrow(() -> new MealUsageNotFoundException(command.mealUsageId()));
+        if (mealUsage.status() != MealUsageStatus.PENDING) {
+            throw new IllegalStateException("Only pending meal usages can be confirmed");
+        }
+        MealContract mealContract = mealContractRepository.findByIdForUpdate(mealUsage.mealContractId())
+            .orElseThrow(() -> new MealContractNotFoundException(mealUsage.mealContractId()));
+        if (!mealUsage.storeId().equals(mealContract.storeId())) {
+            throw new MealUsageContractScopeMismatchException(mealUsage, mealContract);
+        }
 
-        mealUsage.confirm(command.staffInitials(), Instant.now(clock), command.availablePrepaid());
+        MealContractAllocation allocation = mealContract.allocate(mealUsage.amount());
+        mealUsage.confirm(
+            command.staffInitials(),
+            Instant.now(clock),
+            new PrepaidAllocation(
+                allocation.usageAmount(),
+                allocation.prepaidApplied(),
+                allocation.receivableCreated(),
+                allocation.remainingPrepaid()
+            )
+        );
+        mealContractRepository.save(mealContract);
         return mealUsageRepository.save(mealUsage);
     }
 }

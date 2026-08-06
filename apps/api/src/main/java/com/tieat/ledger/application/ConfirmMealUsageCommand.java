@@ -5,8 +5,7 @@ import java.util.Objects;
 
 public record ConfirmMealUsageCommand(
     MealUsageId mealUsageId,
-    String staffInitials,
-    long availablePrepaid
+    String staffInitials
 ) {
 
     public ConfirmMealUsageCommand {
@@ -14,17 +13,5 @@ public record ConfirmMealUsageCommand(
         if (staffInitials == null || staffInitials.isBlank()) {
             throw new IllegalArgumentException("Staff initials must not be blank");
         }
-        if (availablePrepaid < 0) {
-            throw new IllegalArgumentException("Available prepaid must not be negative");
-        }
-    }
-
-    /**
-     * {@code availablePrepaid} is an authoritative application value. A future web adapter must
-     * never map it from untrusted API input; it must be resolved from the applicable contract.
-     */
-    @Override
-    public long availablePrepaid() {
-        return availablePrepaid;
     }
 }

@@ -120,17 +120,16 @@ public final class MealUsage {
         );
     }
 
-    /**
-     * Records server-supplied confirmation audit data and fixes the allocation against the
-     * prepaid balance available at this moment.
-     */
-    public void confirm(String staffInitials, Instant confirmedAt, long availablePrepaid) {
+    public void confirm(String staffInitials, Instant confirmedAt, PrepaidAllocation allocation) {
         if (status != MealUsageStatus.PENDING) {
             throw new IllegalStateException("Only pending meal usages can be confirmed");
         }
 
         Confirmation nextConfirmation = new Confirmation(staffInitials, confirmedAt);
-        PrepaidAllocation nextAllocation = PrepaidAllocation.forUsage(amount, availablePrepaid);
+        PrepaidAllocation nextAllocation = Objects.requireNonNull(allocation, "Prepaid allocation must be supplied");
+        if (nextAllocation.usageAmount() != amount) {
+            throw new IllegalArgumentException("Prepaid allocation amount must match meal usage amount");
+        }
 
         this.confirmation = nextConfirmation;
         this.prepaidAllocation = nextAllocation;

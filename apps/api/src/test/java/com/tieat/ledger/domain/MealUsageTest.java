@@ -44,7 +44,7 @@ class MealUsageTest {
     void confirmsWithSufficientPrepaidAndStoresAuditAndAllocation() {
         MealUsage usage = pending(EntrySource.PARTNER_MOBILE);
 
-        usage.confirm("HK", CONFIRMED_AT, 20_000);
+        usage.confirm("HK", CONFIRMED_AT, new PrepaidAllocation(12_000, 12_000, 0, 8_000));
 
         assertThat(usage.status()).isEqualTo(MealUsageStatus.CONFIRMED);
         assertThat(usage.confirmation()).contains(new Confirmation("HK", CONFIRMED_AT));
@@ -61,7 +61,7 @@ class MealUsageTest {
     void confirmsWithInsufficientPrepaidAndCreatesReceivable() {
         MealUsage usage = pending(EntrySource.STORE_TABLET);
 
-        usage.confirm("HK", CONFIRMED_AT, 5_000);
+        usage.confirm("HK", CONFIRMED_AT, new PrepaidAllocation(12_000, 5_000, 7_000, 0));
 
         assertThat(usage.status()).isEqualTo(MealUsageStatus.CONFIRMED);
         assertThat(usage.prepaidAllocation()).contains(
@@ -74,7 +74,7 @@ class MealUsageTest {
     void confirmsWithZeroPrepaidAndCreatesFullReceivable() {
         MealUsage usage = pending(EntrySource.PARTNER_MOBILE);
 
-        usage.confirm("HK", CONFIRMED_AT, 0);
+        usage.confirm("HK", CONFIRMED_AT, new PrepaidAllocation(12_000, 0, 12_000, 0));
 
         assertThat(usage.prepaidAllocation()).contains(
             new PrepaidAllocation(12_000, 0, 12_000, 0)
@@ -85,10 +85,12 @@ class MealUsageTest {
     @Test
     void rejectsRepeatedConfirmation() {
         MealUsage usage = pending(EntrySource.PARTNER_MOBILE);
-        usage.confirm("HK", CONFIRMED_AT, 12_000);
+        usage.confirm("HK", CONFIRMED_AT, new PrepaidAllocation(12_000, 12_000, 0, 0));
 
         assertThatIllegalStateException()
-            .isThrownBy(() -> usage.confirm("HK", CONFIRMED_AT.plusSeconds(1), 12_000));
+            .isThrownBy(() -> usage.confirm(
+                "HK", CONFIRMED_AT.plusSeconds(1), new PrepaidAllocation(12_000, 12_000, 0, 0)
+            ));
         assertThat(usage.confirmation()).contains(new Confirmation("HK", CONFIRMED_AT));
         assertThat(usage.prepaidAllocation()).contains(
             new PrepaidAllocation(12_000, 12_000, 0, 0)
@@ -100,7 +102,9 @@ class MealUsageTest {
         MealUsage usage = pending(EntrySource.PARTNER_MOBILE);
 
         assertThatIllegalArgumentException()
-            .isThrownBy(() -> usage.confirm("  ", CONFIRMED_AT, 12_000));
+            .isThrownBy(() -> usage.confirm(
+                "  ", CONFIRMED_AT, new PrepaidAllocation(12_000, 12_000, 0, 0)
+            ));
         assertThat(usage.status()).isEqualTo(MealUsageStatus.PENDING);
         assertThat(usage.confirmation()).isEmpty();
         assertThat(usage.prepaidAllocation()).isEmpty();
@@ -111,7 +115,7 @@ class MealUsageTest {
         MealUsage usage = pending(EntrySource.PARTNER_MOBILE);
 
         assertThatNullPointerException()
-            .isThrownBy(() -> usage.confirm("HK", null, 12_000));
+            .isThrownBy(() -> usage.confirm("HK", null, new PrepaidAllocation(12_000, 12_000, 0, 0)));
         assertThat(usage.status()).isEqualTo(MealUsageStatus.PENDING);
         assertThat(usage.confirmation()).isEmpty();
         assertThat(usage.prepaidAllocation()).isEmpty();
@@ -149,11 +153,11 @@ class MealUsageTest {
     }
 
     @Test
-    void rejectsNegativeAvailablePrepaid() {
+    void rejectsAllocationForAnotherUsageAmount() {
         MealUsage usage = pending(EntrySource.PARTNER_MOBILE);
 
         assertThatIllegalArgumentException()
-            .isThrownBy(() -> usage.confirm("HK", CONFIRMED_AT, -1));
+            .isThrownBy(() -> usage.confirm("HK", CONFIRMED_AT, new PrepaidAllocation(1, 1, 0, 0)));
         assertThat(usage.status()).isEqualTo(MealUsageStatus.PENDING);
         assertThat(usage.confirmation()).isEmpty();
         assertThat(usage.prepaidAllocation()).isEmpty();

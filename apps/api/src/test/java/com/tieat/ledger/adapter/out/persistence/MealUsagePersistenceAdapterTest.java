@@ -30,7 +30,11 @@ class MealUsagePersistenceAdapterTest {
             12_000,
             Instant.parse("2026-08-05T09:14:30Z")
         );
-        confirmed.confirm("HK", Instant.parse("2026-08-05T09:15:30Z"), 12_000);
+        confirmed.confirm(
+            "HK",
+            Instant.parse("2026-08-05T09:15:30Z"),
+            new PrepaidAllocation(12_000, 12_000, 0, 0)
+        );
         when(jpaRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         MealUsage saved = adapter.save(confirmed);

@@ -1,18 +1,13 @@
-package com.tieat.ledger.domain;
+package com.tieat.partnership.domain;
 
-/**
- * The ledger allocation fixed when a meal usage is confirmed.
- *
- * <p>This is accounting data only; it does not initiate or represent a funds movement.</p>
- */
-public record PrepaidAllocation(
+public record MealContractAllocation(
     long usageAmount,
     long prepaidApplied,
     long receivableCreated,
     long remainingPrepaid
 ) {
 
-    public PrepaidAllocation {
+    public MealContractAllocation {
         if (usageAmount <= 0) {
             throw new IllegalArgumentException("Usage amount must be positive");
         }
@@ -23,5 +18,4 @@ public record PrepaidAllocation(
             throw new IllegalArgumentException("Prepaid and receivable allocations must equal usage amount");
         }
     }
-
 }

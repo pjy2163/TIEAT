@@ -103,7 +103,7 @@ class MealUsagePersistenceAdapterIntegrationTest {
         MealUsage confirmed = mealUsageRepository.findById(pending.id()).orElseThrow();
         Confirmation confirmation = new Confirmation("HK", Instant.parse("2026-08-05T09:15:30Z"));
         PrepaidAllocation allocation = new PrepaidAllocation(12_000, 5_000, 7_000, 0);
-        confirmed.confirm(confirmation.staffInitials(), confirmation.confirmedAt(), 5_000);
+        confirmed.confirm(confirmation.staffInitials(), confirmation.confirmedAt(), allocation);
 
         MealUsage saved = mealUsageRepository.save(confirmed);
         assertThat(saved.version()).isEqualTo(1);
@@ -131,9 +131,13 @@ class MealUsagePersistenceAdapterIntegrationTest {
         MealUsage stale = transactionTemplate.execute(status -> mealUsageRepository.findById(pending.id())
             .orElseThrow());
 
-        first.confirm("HK", Instant.parse("2026-08-05T09:15:30Z"), 12_000);
+        first.confirm(
+            "HK", Instant.parse("2026-08-05T09:15:30Z"), new PrepaidAllocation(12_000, 12_000, 0, 0)
+        );
         MealUsage updated = transactionTemplate.execute(status -> mealUsageRepository.save(first));
-        stale.confirm("JS", Instant.parse("2026-08-05T09:16:30Z"), 12_000);
+        stale.confirm(
+            "JS", Instant.parse("2026-08-05T09:16:30Z"), new PrepaidAllocation(12_000, 12_000, 0, 0)
+        );
 
         assertThat(updated.version()).isEqualTo(1);
         assertThatThrownBy(() -> transactionTemplate.execute(status -> mealUsageRepository.save(stale)))
