@@ -1,0 +1,13 @@
+export const loginStyles = {
+  page: "min-h-dvh bg-[var(--surface-subtle)] px-5 py-8 sm:px-8 sm:py-12",
+  card: "mx-auto w-full max-w-md rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[0_8px_30px_rgba(17,24,39,0.04)] sm:p-8",
+  eyebrow: "text-xs font-semibold tracking-[0.08em] text-[var(--accent)]",
+  title: "mt-3 text-2xl font-semibold tracking-[0.01em] text-[var(--text-primary)]",
+  description: "mt-2 text-sm leading-6 text-[var(--text-secondary)]",
+  form: "mt-8 space-y-5",
+  field: "space-y-2",
+  label: "block text-sm font-medium text-[var(--text-primary)]",
+  input: "block h-12 w-full rounded-lg border border-[var(--border-strong)] bg-white px-3 text-base text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
+  error: "rounded-lg border border-[#f1c7cd] bg-[#fff7f8] px-3 py-3 text-sm leading-5 text-[var(--danger)]",
+  button: "flex h-12 w-full items-center justify-center rounded-lg bg-[var(--accent)] px-4 text-base font-semibold text-white transition-colors hover:bg-[#244cda] disabled:cursor-not-allowed disabled:bg-[#9caeea]",
+};

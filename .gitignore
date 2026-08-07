@@ -38,6 +38,7 @@ scripts/verify.sh
 
 # Dependencies, caches and generated output
 node_modules/
+.next/
 .gradle/
 .venv/
 venv/
