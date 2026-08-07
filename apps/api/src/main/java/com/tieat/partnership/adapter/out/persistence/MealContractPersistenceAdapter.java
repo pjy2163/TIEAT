@@ -18,6 +18,12 @@ public class MealContractPersistenceAdapter implements MealContractRepository {
     }
 
     @Override
+    public Optional<MealContract> findById(MealContractId id) {
+        Objects.requireNonNull(id, "Meal contract id must be supplied");
+        return repository.findById(id.value()).map(this::toDomain);
+    }
+
+    @Override
     public Optional<MealContract> findByIdForUpdate(MealContractId id) {
         Objects.requireNonNull(id, "Meal contract id must be supplied");
         return repository.findByIdForUpdate(id.value()).map(this::toDomain);

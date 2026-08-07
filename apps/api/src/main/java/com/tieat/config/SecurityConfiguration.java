@@ -4,6 +4,7 @@ import com.tieat.web.ProblemDetailFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -36,6 +37,7 @@ public class SecurityConfiguration {
             ))
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/actuator/health", "/actuator/info", "/api/v1/csrf", "/api/v1/sessions", "/v3/api-docs/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/meal-usages").hasRole("STORE_STAFF")
                 .requestMatchers("/api/v1/meal-usages/*/confirmations").hasRole("STORE_STAFF")
                 .anyRequest().authenticated()
             )

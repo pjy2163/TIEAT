@@ -13,7 +13,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import java.net.URI;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
@@ -97,13 +96,4 @@ class MealUsageConfirmationController {
         }
     }
 
-    record ProblemResponse(
-        URI type,
-        String title,
-        int status,
-        String detail,
-        URI instance,
-        String errorCode
-    ) {
-    }
 }

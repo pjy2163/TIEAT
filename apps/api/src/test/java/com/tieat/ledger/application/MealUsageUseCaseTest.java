@@ -30,8 +30,11 @@ class MealUsageUseCaseTest {
     @Test
     void createsPendingUsageAndSavesIt() {
         InMemoryMealUsageRepository repository = new InMemoryMealUsageRepository();
+        InMemoryMealContractRepository mealContractRepository = new InMemoryMealContractRepository();
+        mealContractRepository.save(prepaidContract(12_000));
         CreateMealUsageUseCase useCase = new CreateMealUsageUseCase(
             repository,
+            mealContractRepository,
             Clock.fixed(SERVER_TIME, ZoneOffset.UTC)
         );
 
@@ -42,9 +45,44 @@ class MealUsageUseCaseTest {
         assertThat(created.status()).isEqualTo(MealUsageStatus.PENDING);
         assertThat(created.storeId()).isEqualTo(storeId());
         assertThat(created.mealContractId()).isEqualTo(mealContractId());
+        assertThat(created.entrySource()).isEqualTo(EntrySource.PARTNER_MOBILE);
         assertThat(created.createdAt()).isEqualTo(SERVER_TIME);
         assertThat(repository.findById(created.id())).containsSame(created);
         assertThat(repository.saveCount).isEqualTo(1);
+        assertThat(mealContractRepository.nonlockingId).isEqualTo(mealContractId());
+        assertThat(mealContractRepository.lockedId).isNull();
+        assertThat(mealContractRepository.findById(mealContractId()).orElseThrow().prepaidBalance()).isEqualTo(12_000);
+    }
+
+    @Test
+    void rejectsMissingOrCrossStoreContractWithoutSavingUsage() {
+        InMemoryMealUsageRepository repository = new InMemoryMealUsageRepository();
+        InMemoryMealContractRepository mealContractRepository = new InMemoryMealContractRepository();
+        CreateMealUsageUseCase useCase = new CreateMealUsageUseCase(
+            repository,
+            mealContractRepository,
+            Clock.fixed(SERVER_TIME, ZoneOffset.UTC)
+        );
+
+        assertThatThrownBy(() -> useCase.create(new CreateMealUsageCommand(
+            storeId(), mealContractId(), EntrySource.STORE_TABLET, 12_000
+        )))
+            .isInstanceOf(MealContractNotFoundException.class);
+        assertThat(repository.saveCount).isZero();
+
+        mealContractRepository.save(new MealContract(
+            mealContractId(),
+            new StoreId(UUID.fromString("6142be7d-0dc9-4f77-a17d-07e1e5c6e9a1")),
+            MealContractPaymentType.PREPAID_WITH_RECEIVABLE_OVERFLOW,
+            12_000
+        ));
+
+        assertThatThrownBy(() -> useCase.create(new CreateMealUsageCommand(
+            storeId(), mealContractId(), EntrySource.STORE_TABLET, 12_000
+        )))
+            .isInstanceOf(MealContractNotFoundException.class);
+        assertThat(repository.saveCount).isZero();
+        assertThat(mealContractRepository.lockedId).isNull();
     }
 
     @Test
@@ -209,8 +247,15 @@ class MealUsageUseCaseTest {
     private static final class InMemoryMealContractRepository implements MealContractRepository {
 
         private final Map<MealContractId, MealContract> mealContracts = new HashMap<>();
+        private MealContractId nonlockingId;
         private MealContractId lockedId;
         private int saveCount;
+
+        @Override
+        public Optional<MealContract> findById(MealContractId id) {
+            nonlockingId = id;
+            return Optional.ofNullable(mealContracts.get(id));
+        }
 
         @Override
         public Optional<MealContract> findByIdForUpdate(MealContractId id) {

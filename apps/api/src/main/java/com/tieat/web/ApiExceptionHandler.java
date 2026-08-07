@@ -1,6 +1,7 @@
 package com.tieat.web;
 
 import com.tieat.ledger.application.MealUsageAlreadyConfirmedException;
+import com.tieat.ledger.application.MealContractNotFoundException;
 import com.tieat.ledger.application.MealUsageNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -29,6 +30,14 @@ public class ApiExceptionHandler {
         HttpServletRequest request
     ) {
         return problem(request, HttpStatus.NOT_FOUND, "MEAL_USAGE_NOT_FOUND", "Meal usage was not found");
+    }
+
+    @ExceptionHandler(MealContractNotFoundException.class)
+    ResponseEntity<ProblemDetail> handleMealContractNotFound(
+        MealContractNotFoundException exception,
+        HttpServletRequest request
+    ) {
+        return problem(request, HttpStatus.NOT_FOUND, "MEAL_CONTRACT_NOT_FOUND", "Meal contract was not found");
     }
 
     @ExceptionHandler(MealUsageAlreadyConfirmedException.class)
