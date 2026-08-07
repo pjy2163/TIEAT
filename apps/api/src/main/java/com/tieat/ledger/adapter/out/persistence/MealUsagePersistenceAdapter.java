@@ -3,6 +3,7 @@ package com.tieat.ledger.adapter.out.persistence;
 import com.tieat.ledger.domain.MealUsage;
 import com.tieat.ledger.domain.MealUsageId;
 import com.tieat.ledger.domain.MealUsageRepository;
+import com.tieat.ledger.domain.MealUsageSlice;
 import com.tieat.ledger.domain.MealUsageStatus;
 import com.tieat.ledger.domain.PrepaidAllocation;
 import com.tieat.ledger.domain.Confirmation;
@@ -10,6 +11,8 @@ import com.tieat.partnership.domain.MealContractId;
 import com.tieat.store.domain.StoreId;
 import java.util.Objects;
 import java.util.Optional;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -31,6 +34,18 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
     public Optional<MealUsage> findById(MealUsageId id) {
         Objects.requireNonNull(id, "Meal usage id must be supplied");
         return repository.findById(id.value()).map(this::toDomain);
+    }
+
+    @Override
+    public MealUsageSlice findPendingByStoreId(StoreId storeId, int page, int size) {
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        var pageable = PageRequest.of(
+            page,
+            size,
+            Sort.by(Sort.Direction.ASC, "createdAt").and(Sort.by(Sort.Direction.ASC, "id"))
+        );
+        var result = repository.findByStoreIdAndStatus(storeId.value(), MealUsageStatus.PENDING, pageable);
+        return new MealUsageSlice(result.getContent().stream().map(this::toDomain).toList(), result.hasNext());
     }
 
     private MealUsageJpaEntity toEntity(MealUsage mealUsage) {

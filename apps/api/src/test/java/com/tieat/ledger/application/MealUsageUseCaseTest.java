@@ -8,6 +8,7 @@ import com.tieat.ledger.domain.EntrySource;
 import com.tieat.ledger.domain.MealUsage;
 import com.tieat.ledger.domain.MealUsageId;
 import com.tieat.ledger.domain.MealUsageRepository;
+import com.tieat.ledger.domain.MealUsageSlice;
 import com.tieat.ledger.domain.MealUsageStatus;
 import com.tieat.partnership.domain.MealContract;
 import com.tieat.partnership.domain.MealContractId;
@@ -18,6 +19,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -241,6 +244,18 @@ class MealUsageUseCaseTest {
         @Override
         public Optional<MealUsage> findById(MealUsageId id) {
             return Optional.ofNullable(mealUsages.get(id));
+        }
+
+        @Override
+        public MealUsageSlice findPendingByStoreId(StoreId storeId, int page, int size) {
+            List<MealUsage> pending = mealUsages.values().stream()
+                .filter(usage -> usage.storeId().equals(storeId))
+                .filter(usage -> usage.status() == MealUsageStatus.PENDING)
+                .sorted(Comparator.comparing(MealUsage::createdAt).thenComparing(usage -> usage.id().value().toString()))
+                .toList();
+            int fromIndex = Math.min(page * size, pending.size());
+            int toIndex = Math.min(fromIndex + size, pending.size());
+            return new MealUsageSlice(pending.subList(fromIndex, toIndex), toIndex < pending.size());
         }
     }
 

@@ -38,6 +38,7 @@ public class SecurityConfiguration {
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/actuator/health", "/actuator/info", "/api/v1/csrf", "/api/v1/sessions", "/v3/api-docs/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/meal-usages").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/v1/meal-usages").hasRole("STORE_STAFF")
                 .requestMatchers("/api/v1/meal-usages/*/confirmations").hasRole("STORE_STAFF")
                 .anyRequest().authenticated()
             )

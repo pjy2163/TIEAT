@@ -3,6 +3,7 @@ package com.tieat.web;
 import com.tieat.ledger.application.MealUsageAlreadyConfirmedException;
 import com.tieat.ledger.application.MealContractNotFoundException;
 import com.tieat.ledger.application.MealUsageNotFoundException;
+import com.tieat.ledger.application.InvalidPendingMealUsageQueryException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -65,7 +67,9 @@ public class ApiExceptionHandler {
         BindException.class,
         HttpMessageNotReadableException.class,
         MethodArgumentNotValidException.class,
-        MethodArgumentTypeMismatchException.class
+        MethodArgumentTypeMismatchException.class,
+        MissingServletRequestParameterException.class,
+        InvalidPendingMealUsageQueryException.class
     })
     ResponseEntity<ProblemDetail> handleValidation(Exception exception, HttpServletRequest request) {
         return problem(request, HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Request validation failed");
