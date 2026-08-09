@@ -19,6 +19,7 @@ import org.springframework.security.web.authentication.session.ChangeSessionIdAu
 import org.springframework.security.web.csrf.InvalidCsrfTokenException;
 import org.springframework.security.web.csrf.MissingCsrfTokenException;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 @Configuration
 public class SecurityConfiguration {
@@ -31,15 +32,23 @@ public class SecurityConfiguration {
     ) throws Exception {
         return http
             .authenticationProvider(storeAccountAuthenticationProvider)
-            .csrf(csrf -> csrf.csrfTokenRepository(new HttpSessionCsrfTokenRepository()))
+            .csrf(csrf -> csrf
+                .csrfTokenRepository(new HttpSessionCsrfTokenRepository())
+                .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(
+                    HttpMethod.POST, "/api/v1/public/meal-usage-qr/{token}/meal-usages"
+                ))
+            )
             .sessionManagement(session -> session.sessionAuthenticationStrategy(
                 new ChangeSessionIdAuthenticationStrategy()
             ))
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/actuator/health", "/actuator/info", "/api/v1/csrf", "/api/v1/sessions", "/v3/api-docs/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/public/meal-usage-qr/*").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/public/meal-usage-qr/*/meal-usages").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/meal-usages").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.GET, "/api/v1/meal-usages").hasRole("STORE_STAFF")
                 .requestMatchers("/api/v1/meal-usages/*/confirmations").hasRole("STORE_STAFF")
+                .requestMatchers("/api/v1/meal-usages/*/rejections").hasRole("STORE_STAFF")
                 .anyRequest().authenticated()
             )
             .formLogin(login -> login

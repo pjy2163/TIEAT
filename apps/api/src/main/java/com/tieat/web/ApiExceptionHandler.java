@@ -1,21 +1,29 @@
 package com.tieat.web;
 
 import com.tieat.ledger.application.MealUsageAlreadyConfirmedException;
+import com.tieat.ledger.application.MealUsageNotPendingException;
 import com.tieat.ledger.application.MealContractNotFoundException;
+import com.tieat.ledger.application.PublicMealUsageIdempotencyConflictException;
+import com.tieat.ledger.application.PublicMealUsageRateLimitExceededException;
+import com.tieat.ledger.application.PublicQrMealContractNotFoundException;
 import com.tieat.ledger.application.MealUsageNotFoundException;
 import com.tieat.ledger.application.InvalidPendingMealUsageQueryException;
+import com.tieat.qr.application.PublicMealUsageQrNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -42,12 +50,41 @@ public class ApiExceptionHandler {
         return problem(request, HttpStatus.NOT_FOUND, "MEAL_CONTRACT_NOT_FOUND", "Meal contract was not found");
     }
 
+    @ExceptionHandler({PublicMealUsageQrNotFoundException.class, PublicQrMealContractNotFoundException.class})
+    ResponseEntity<ProblemDetail> handlePublicQrNotFound(RuntimeException exception, HttpServletRequest request) {
+        return problem(request, HttpStatus.NOT_FOUND, "PUBLIC_MEAL_USAGE_QR_NOT_FOUND", "Public meal usage QR was not found");
+    }
+
     @ExceptionHandler(MealUsageAlreadyConfirmedException.class)
     ResponseEntity<ProblemDetail> handleAlreadyConfirmed(
         MealUsageAlreadyConfirmedException exception,
         HttpServletRequest request
     ) {
         return problem(request, HttpStatus.CONFLICT, "MEAL_USAGE_ALREADY_CONFIRMED", "Meal usage is already confirmed");
+    }
+
+    @ExceptionHandler(MealUsageNotPendingException.class)
+    ResponseEntity<ProblemDetail> handleMealUsageNotPending(
+        MealUsageNotPendingException exception,
+        HttpServletRequest request
+    ) {
+        return problem(request, HttpStatus.CONFLICT, "MEAL_USAGE_NOT_PENDING", "Meal usage is no longer pending");
+    }
+
+    @ExceptionHandler(PublicMealUsageIdempotencyConflictException.class)
+    ResponseEntity<ProblemDetail> handlePublicIdempotencyConflict(
+        PublicMealUsageIdempotencyConflictException exception,
+        HttpServletRequest request
+    ) {
+        return problem(request, HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED", "Idempotency key was already used with a different request payload");
+    }
+
+    @ExceptionHandler(PublicMealUsageRateLimitExceededException.class)
+    ResponseEntity<ProblemDetail> handlePublicRateLimit(
+        PublicMealUsageRateLimitExceededException exception,
+        HttpServletRequest request
+    ) {
+        return problem(request, HttpStatus.TOO_MANY_REQUESTS, "PUBLIC_QR_RATE_LIMITED", "Public QR request rate limit was exceeded");
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
@@ -69,10 +106,16 @@ public class ApiExceptionHandler {
         MethodArgumentNotValidException.class,
         MethodArgumentTypeMismatchException.class,
         MissingServletRequestParameterException.class,
+        MissingRequestHeaderException.class,
         InvalidPendingMealUsageQueryException.class
     })
     ResponseEntity<ProblemDetail> handleValidation(Exception exception, HttpServletRequest request) {
         return problem(request, HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Request validation failed");
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    ResponseEntity<ProblemDetail> handleUnsupportedMediaType(Exception exception, HttpServletRequest request) {
+        return problem(request, HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE", "Request content type is unsupported");
     }
 
     @ExceptionHandler(Exception.class)
@@ -86,6 +129,10 @@ public class ApiExceptionHandler {
         String errorCode,
         String detail
     ) {
-        return ResponseEntity.status(status).body(problemDetailFactory.create(request, status, errorCode, detail));
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(status);
+        if (problemDetailFactory.isPublicMealUsageQrRequest(request)) {
+            response.cacheControl(CacheControl.noStore());
+        }
+        return response.body(problemDetailFactory.create(request, status, errorCode, detail));
     }
 }
