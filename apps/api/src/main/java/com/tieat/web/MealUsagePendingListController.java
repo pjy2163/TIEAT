@@ -71,6 +71,7 @@ class MealUsagePendingListController {
         UUID mealUsageId,
         String status,
         String entrySource,
+        String partnerDisplayName,
         long amountMinor,
         Instant createdAt
     ) {
@@ -79,6 +80,7 @@ class MealUsagePendingListController {
                 mealUsage.id().value(),
                 mealUsage.status().name(),
                 mealUsage.entrySource().name(),
+                mealUsage.partnerDisplayNameSnapshot().orElse(null),
                 mealUsage.amount(),
                 mealUsage.createdAt()
             );

@@ -104,6 +104,7 @@ class MealUsagePendingListHttpIntegrationTest {
             .andExpect(jsonPath("$.items[1].mealUsageId").value(sameTimeFirst.id().value().toString()))
             .andExpect(jsonPath("$.items[0].status").value("PENDING"))
             .andExpect(jsonPath("$.items[0].entrySource").value("STORE_TABLET"))
+            .andExpect(jsonPath("$.items[0].partnerDisplayName").value(org.hamcrest.Matchers.nullValue()))
             .andExpect(jsonPath("$.items[0].amountMinor").value(12_000))
             .andExpect(jsonPath("$.items[0].createdAt").value("2026-08-05T01:00:00Z"))
             .andExpect(jsonPath("$.page").value(0))
@@ -113,7 +114,7 @@ class MealUsagePendingListHttpIntegrationTest {
         JsonNode firstPageJson = objectMapper.readTree(firstPage.getResponse().getContentAsString());
         assertThat(fieldNames(firstPageJson)).containsExactlyInAnyOrder("items", "page", "size", "hasNext");
         assertThat(fieldNames(firstPageJson.get("items").get(0)))
-            .containsExactlyInAnyOrder("mealUsageId", "status", "entrySource", "amountMinor", "createdAt");
+            .containsExactlyInAnyOrder("mealUsageId", "status", "entrySource", "partnerDisplayName", "amountMinor", "createdAt");
         mockMvc.perform(listRequest(session, "PENDING", 1, 2))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.items.length()").value(1))
@@ -180,7 +181,29 @@ class MealUsagePendingListHttpIntegrationTest {
         assertThat(fieldNames(document.at("/components/schemas/PendingMealUsageListResponse/properties")))
             .containsExactlyInAnyOrder("items", "page", "size", "hasNext");
         assertThat(fieldNames(document.at("/components/schemas/PendingMealUsageItemResponse/properties")))
-            .containsExactlyInAnyOrder("mealUsageId", "status", "entrySource", "amountMinor", "createdAt");
+            .containsExactlyInAnyOrder("mealUsageId", "status", "entrySource", "partnerDisplayName", "amountMinor", "createdAt");
+    }
+
+    @Test
+    void returnsPartnerDisplayNameSnapshotForTheAuthenticatedStorePendingItem() throws Exception {
+        seedAccount("store-hk", "correct-password", STORE_ID);
+        MealUsage usage = MealUsage.restorePending(
+            new MealUsageId(UUID.fromString("c89c2660-84f0-4a8c-a7ff-0eec1725ab5b")),
+            STORE_ID,
+            new MealContractId(UUID.fromString("8cb73a47-d5c5-4f7a-8db0-b61e171c4f0a")),
+            EntrySource.PARTNER_MOBILE,
+            12_000,
+            Instant.parse("2026-08-06T01:00:00Z"),
+            0,
+            "협력사 A",
+            null
+        );
+        mealUsageRepository.save(usage);
+        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+
+        mockMvc.perform(listRequest(session, "PENDING", 0, 50))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[0].partnerDisplayName").value("협력사 A"));
     }
 
     private MockHttpSession authenticatedSession(String loginId, String password) throws Exception {
