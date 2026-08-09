@@ -1,6 +1,7 @@
 package com.tieat.ledger.domain;
 
 import com.tieat.partnership.domain.MealContractId;
+import com.tieat.qr.domain.MealUsageQrContextId;
 import com.tieat.store.domain.StoreId;
 import java.time.Instant;
 import java.util.Objects;
@@ -15,9 +16,12 @@ public final class MealUsage {
     private final long amount;
     private final Instant createdAt;
     private final long version;
+    private final String partnerDisplayNameSnapshot;
+    private final MealUsageQrContextId publicQrContextId;
     private MealUsageStatus status;
     private Confirmation confirmation;
     private PrepaidAllocation prepaidAllocation;
+    private Rejection rejection;
 
     private MealUsage(
         MealUsageId id,
@@ -27,9 +31,12 @@ public final class MealUsage {
         long amount,
         Instant createdAt,
         long version,
+        String partnerDisplayNameSnapshot,
+        MealUsageQrContextId publicQrContextId,
         MealUsageStatus status,
         Confirmation confirmation,
-        PrepaidAllocation prepaidAllocation
+        PrepaidAllocation prepaidAllocation,
+        Rejection rejection
     ) {
         this.id = Objects.requireNonNull(id, "Meal usage id must be supplied");
         this.storeId = Objects.requireNonNull(storeId, "Store id must be supplied");
@@ -44,9 +51,15 @@ public final class MealUsage {
             throw new IllegalArgumentException("Meal usage version must not be negative");
         }
         this.version = version;
+        if (partnerDisplayNameSnapshot != null && partnerDisplayNameSnapshot.isBlank()) {
+            throw new IllegalArgumentException("Partner display name snapshot must not be blank");
+        }
+        this.partnerDisplayNameSnapshot = partnerDisplayNameSnapshot;
+        this.publicQrContextId = publicQrContextId;
         this.status = Objects.requireNonNull(status, "Meal usage status must be supplied");
         this.confirmation = confirmation;
         this.prepaidAllocation = prepaidAllocation;
+        this.rejection = rejection;
         validateLifecycleState();
     }
 
@@ -66,7 +79,36 @@ public final class MealUsage {
             amount,
             createdAt,
             0,
+            null,
+            null,
             MealUsageStatus.PENDING,
+            null,
+            null,
+            null
+        );
+    }
+
+    public static MealUsage pendingFromPublicQr(
+        MealUsageId id,
+        StoreId storeId,
+        MealContractId mealContractId,
+        MealUsageQrContextId publicQrContextId,
+        String partnerDisplayNameSnapshot,
+        long amount,
+        Instant createdAt
+    ) {
+        return new MealUsage(
+            id,
+            storeId,
+            mealContractId,
+            EntrySource.PARTNER_MOBILE,
+            amount,
+            createdAt,
+            0,
+            partnerDisplayNameSnapshot,
+            Objects.requireNonNull(publicQrContextId, "Public QR context id must be supplied"),
+            MealUsageStatus.PENDING,
+            null,
             null,
             null
         );
@@ -81,6 +123,20 @@ public final class MealUsage {
         Instant createdAt,
         long version
     ) {
+        return restorePending(id, storeId, mealContractId, entrySource, amount, createdAt, version, null, null);
+    }
+
+    public static MealUsage restorePending(
+        MealUsageId id,
+        StoreId storeId,
+        MealContractId mealContractId,
+        EntrySource entrySource,
+        long amount,
+        Instant createdAt,
+        long version,
+        String partnerDisplayNameSnapshot,
+        MealUsageQrContextId publicQrContextId
+    ) {
         return new MealUsage(
             id,
             storeId,
@@ -89,7 +145,10 @@ public final class MealUsage {
             amount,
             createdAt,
             version,
+            partnerDisplayNameSnapshot,
+            publicQrContextId,
             MealUsageStatus.PENDING,
+            null,
             null,
             null
         );
@@ -106,6 +165,24 @@ public final class MealUsage {
         Confirmation confirmation,
         PrepaidAllocation prepaidAllocation
     ) {
+        return restoreConfirmed(
+            id, storeId, mealContractId, entrySource, amount, createdAt, version, confirmation, prepaidAllocation, null, null
+        );
+    }
+
+    public static MealUsage restoreConfirmed(
+        MealUsageId id,
+        StoreId storeId,
+        MealContractId mealContractId,
+        EntrySource entrySource,
+        long amount,
+        Instant createdAt,
+        long version,
+        Confirmation confirmation,
+        PrepaidAllocation prepaidAllocation,
+        String partnerDisplayNameSnapshot,
+        MealUsageQrContextId publicQrContextId
+    ) {
         return new MealUsage(
             id,
             storeId,
@@ -114,9 +191,41 @@ public final class MealUsage {
             amount,
             createdAt,
             version,
+            partnerDisplayNameSnapshot,
+            publicQrContextId,
             MealUsageStatus.CONFIRMED,
             confirmation,
-            prepaidAllocation
+            prepaidAllocation,
+            null
+        );
+    }
+
+    public static MealUsage restoreRejected(
+        MealUsageId id,
+        StoreId storeId,
+        MealContractId mealContractId,
+        EntrySource entrySource,
+        long amount,
+        Instant createdAt,
+        long version,
+        Rejection rejection,
+        String partnerDisplayNameSnapshot,
+        MealUsageQrContextId publicQrContextId
+    ) {
+        return new MealUsage(
+            id,
+            storeId,
+            mealContractId,
+            entrySource,
+            amount,
+            createdAt,
+            version,
+            partnerDisplayNameSnapshot,
+            publicQrContextId,
+            MealUsageStatus.REJECTED,
+            null,
+            null,
+            rejection
         );
     }
 
@@ -134,6 +243,14 @@ public final class MealUsage {
         this.confirmation = nextConfirmation;
         this.prepaidAllocation = nextAllocation;
         this.status = MealUsageStatus.CONFIRMED;
+    }
+
+    public void reject(String staffLoginId, Instant rejectedAt) {
+        if (status != MealUsageStatus.PENDING) {
+            throw new IllegalStateException("Only pending meal usages can be rejected");
+        }
+        this.rejection = new Rejection(staffLoginId, rejectedAt);
+        this.status = MealUsageStatus.REJECTED;
     }
 
     public EntrySource entrySource() {
@@ -164,6 +281,14 @@ public final class MealUsage {
         return version;
     }
 
+    public Optional<String> partnerDisplayNameSnapshot() {
+        return Optional.ofNullable(partnerDisplayNameSnapshot);
+    }
+
+    public Optional<MealUsageQrContextId> publicQrContextId() {
+        return Optional.ofNullable(publicQrContextId);
+    }
+
     public MealUsageStatus status() {
         return status;
     }
@@ -176,12 +301,25 @@ public final class MealUsage {
         return Optional.ofNullable(prepaidAllocation);
     }
 
+    public Optional<Rejection> rejection() {
+        return Optional.ofNullable(rejection);
+    }
+
     private void validateLifecycleState() {
-        if (status == MealUsageStatus.PENDING && (confirmation != null || prepaidAllocation != null)) {
-            throw new IllegalArgumentException("Pending meal usages must not have confirmation data");
+        if (publicQrContextId != null && entrySource != EntrySource.PARTNER_MOBILE) {
+            throw new IllegalArgumentException("Public QR context requires partner mobile entry source");
         }
-        if (status == MealUsageStatus.CONFIRMED && (confirmation == null || prepaidAllocation == null)) {
+        if (publicQrContextId != null && partnerDisplayNameSnapshot == null) {
+            throw new IllegalArgumentException("Public QR context requires partner display name snapshot");
+        }
+        if (status == MealUsageStatus.PENDING && (confirmation != null || prepaidAllocation != null || rejection != null)) {
+            throw new IllegalArgumentException("Pending meal usages must not have terminal data");
+        }
+        if (status == MealUsageStatus.CONFIRMED && (confirmation == null || prepaidAllocation == null || rejection != null)) {
             throw new IllegalArgumentException("Confirmed meal usages require confirmation and allocation data");
+        }
+        if (status == MealUsageStatus.REJECTED && (confirmation != null || prepaidAllocation != null || rejection == null)) {
+            throw new IllegalArgumentException("Rejected meal usages require rejection audit data only");
         }
         if (prepaidAllocation != null && prepaidAllocation.usageAmount() != amount) {
             throw new IllegalArgumentException("Prepaid allocation amount must match meal usage amount");

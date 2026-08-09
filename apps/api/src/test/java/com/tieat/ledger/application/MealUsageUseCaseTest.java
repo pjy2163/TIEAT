@@ -10,10 +10,18 @@ import com.tieat.ledger.domain.MealUsageId;
 import com.tieat.ledger.domain.MealUsageRepository;
 import com.tieat.ledger.domain.MealUsageSlice;
 import com.tieat.ledger.domain.MealUsageStatus;
+import com.tieat.ledger.domain.PublicMealUsageIdempotency;
+import com.tieat.ledger.domain.PublicMealUsageIdempotencyRepository;
 import com.tieat.partnership.domain.MealContract;
 import com.tieat.partnership.domain.MealContractId;
 import com.tieat.partnership.domain.MealContractPaymentType;
 import com.tieat.partnership.domain.MealContractRepository;
+import com.tieat.partnership.domain.QrSelectableMealContract;
+import com.tieat.partnership.domain.PartnerOrganizationId;
+import com.tieat.qr.domain.MealUsageQrContext;
+import com.tieat.qr.domain.MealUsageQrContextId;
+import com.tieat.qr.domain.MealUsageQrContextRepository;
+import com.tieat.qr.domain.MealUsageQrToken;
 import com.tieat.store.domain.StoreId;
 import java.time.Clock;
 import java.time.Instant;
@@ -204,6 +212,85 @@ class MealUsageUseCaseTest {
             .isEqualTo(12_000);
     }
 
+    @Test
+    void createsPublicQrPendingUsageOnceWithServerScopeAndPartnerSnapshot() {
+        InMemoryMealUsageRepository usageRepository = new InMemoryMealUsageRepository();
+        InMemoryMealContractRepository contractRepository = new InMemoryMealContractRepository();
+        InMemoryMealUsageQrContextRepository qrContextRepository = new InMemoryMealUsageQrContextRepository();
+        InMemoryPublicMealUsageIdempotencyRepository idempotencyRepository = new InMemoryPublicMealUsageIdempotencyRepository();
+        PartnerOrganizationId partnerOrganizationId = new PartnerOrganizationId(UUID.fromString("bd4fdd71-5263-44c7-bcfd-48a19cbd647d"));
+        contractRepository.save(new MealContract(
+            mealContractId(),
+            storeId(),
+            MealContractPaymentType.PREPAID_WITH_RECEIVABLE_OVERFLOW,
+            12_000,
+            partnerOrganizationId,
+            true
+        ));
+        String token = MealUsageQrToken.generate();
+        MealUsageQrContextId qrContextId = new MealUsageQrContextId(UUID.fromString("e7f94de9-97d2-47ad-8db0-23d0bdd799d4"));
+        qrContextRepository.add(new MealUsageQrContext(
+            qrContextId,
+            storeId(),
+            "강남점",
+            MealUsageQrToken.sha256Hash(token),
+            SERVER_TIME.plusSeconds(60),
+            null
+        ));
+        CreatePublicMealUsageUseCase useCase = new CreatePublicMealUsageUseCase(
+            qrContextRepository,
+            contractRepository,
+            usageRepository,
+            idempotencyRepository,
+            Clock.fixed(SERVER_TIME, ZoneOffset.UTC)
+        );
+        UUID idempotencyKey = UUID.fromString("3279f750-a0d5-4978-81d5-a5da1a8d7b5a");
+        CreatePublicMealUsageCommand command = new CreatePublicMealUsageCommand(
+            token, idempotencyKey, mealContractId(), 12_000
+        );
+
+        MealUsage created = useCase.create(command);
+        MealUsage replayed = useCase.create(command);
+
+        assertThat(created.id()).isEqualTo(replayed.id());
+        assertThat(created.status()).isEqualTo(MealUsageStatus.PENDING);
+        assertThat(created.storeId()).isEqualTo(storeId());
+        assertThat(created.entrySource()).isEqualTo(EntrySource.PARTNER_MOBILE);
+        assertThat(created.createdAt()).isEqualTo(SERVER_TIME);
+        assertThat(created.publicQrContextId()).contains(qrContextId);
+        assertThat(created.partnerDisplayNameSnapshot()).isPresent();
+        assertThat(usageRepository.saveCount).isEqualTo(1);
+        assertThat(idempotencyRepository.saveCount).isEqualTo(1);
+        assertThat(contractRepository.findById(mealContractId()).orElseThrow().prepaidBalance()).isEqualTo(12_000);
+
+        assertThatThrownBy(() -> useCase.create(new CreatePublicMealUsageCommand(
+            token, idempotencyKey, mealContractId(), 12_001
+        ))).isInstanceOf(PublicMealUsageIdempotencyConflictException.class);
+    }
+
+    @Test
+    void rejectsPendingUsageWithoutChangingItsContractBalance() {
+        InMemoryMealUsageRepository usageRepository = new InMemoryMealUsageRepository();
+        InMemoryMealContractRepository contractRepository = new InMemoryMealContractRepository();
+        MealUsage pending = pendingUsage();
+        usageRepository.save(pending);
+        contractRepository.save(prepaidContract(12_000));
+        RejectMealUsageUseCase useCase = new RejectMealUsageUseCase(
+            usageRepository,
+            Clock.fixed(SERVER_TIME, ZoneOffset.UTC)
+        );
+
+        MealUsage rejected = useCase.reject(new RejectMealUsageCommand(pending.id(), storeId(), "store-hk"));
+
+        assertThat(rejected.status()).isEqualTo(MealUsageStatus.REJECTED);
+        assertThat(rejected.rejection()).contains(new com.tieat.ledger.domain.Rejection("store-hk", SERVER_TIME));
+        assertThat(rejected.confirmation()).isEmpty();
+        assertThat(rejected.prepaidAllocation()).isEmpty();
+        assertThat(contractRepository.findById(mealContractId()).orElseThrow().prepaidBalance()).isEqualTo(12_000);
+        assertThatThrownBy(() -> useCase.reject(new RejectMealUsageCommand(pending.id(), storeId(), "store-hk")))
+            .isInstanceOf(MealUsageNotPendingException.class);
+    }
+
     private MealUsage pendingUsage() {
         return MealUsage.pending(
             new MealUsageId(UUID.fromString("d9ef1fd5-2a3c-4fce-bb20-0d1b26a634ab")),
@@ -257,6 +344,17 @@ class MealUsageUseCaseTest {
             int toIndex = Math.min(fromIndex + size, pending.size());
             return new MealUsageSlice(pending.subList(fromIndex, toIndex), toIndex < pending.size());
         }
+
+        @Override
+        public long countPublicQrCreatedSince(
+            com.tieat.qr.domain.MealUsageQrContextId qrContextId,
+            java.time.Instant since
+        ) {
+            return mealUsages.values().stream()
+                .filter(usage -> usage.publicQrContextId().filter(qrContextId::equals).isPresent())
+                .filter(usage -> !usage.createdAt().isBefore(since))
+                .count();
+        }
     }
 
     private static final class InMemoryMealContractRepository implements MealContractRepository {
@@ -279,10 +377,61 @@ class MealUsageUseCaseTest {
         }
 
         @Override
+        public List<QrSelectableMealContract> findQrSelectableByStoreId(StoreId storeId) {
+            return mealContracts.values().stream()
+                .filter(contract -> contract.storeId().equals(storeId))
+                .filter(MealContract::isQrSelectable)
+                .flatMap(contract -> contract.partnerOrganizationId().stream().map(partnerId ->
+                    new QrSelectableMealContract(contract.id(), partnerId.value().toString())
+                ))
+                .toList();
+        }
+
+        @Override
         public MealContract save(MealContract mealContract) {
             mealContracts.put(mealContract.id(), mealContract);
             saveCount++;
             return mealContract;
+        }
+    }
+
+    private static final class InMemoryMealUsageQrContextRepository implements MealUsageQrContextRepository {
+
+        private final Map<String, MealUsageQrContext> contextsByTokenHash = new HashMap<>();
+
+        void add(MealUsageQrContext context) {
+            contextsByTokenHash.put(context.tokenHash(), context);
+        }
+
+        @Override
+        public Optional<MealUsageQrContext> findByTokenHash(String tokenHash) {
+            return Optional.ofNullable(contextsByTokenHash.get(tokenHash));
+        }
+
+        @Override
+        public Optional<MealUsageQrContext> findByTokenHashForUpdate(String tokenHash) {
+            return findByTokenHash(tokenHash);
+        }
+    }
+
+    private static final class InMemoryPublicMealUsageIdempotencyRepository implements PublicMealUsageIdempotencyRepository {
+
+        private final Map<String, PublicMealUsageIdempotency> idempotencyRecords = new HashMap<>();
+        private int saveCount;
+
+        @Override
+        public Optional<PublicMealUsageIdempotency> findByQrContextIdAndKey(
+            MealUsageQrContextId qrContextId,
+            UUID idempotencyKey
+        ) {
+            return Optional.ofNullable(idempotencyRecords.get(qrContextId.value() + ":" + idempotencyKey));
+        }
+
+        @Override
+        public PublicMealUsageIdempotency save(PublicMealUsageIdempotency idempotency) {
+            idempotencyRecords.put(idempotency.qrContextId().value() + ":" + idempotency.idempotencyKey(), idempotency);
+            saveCount++;
+            return idempotency;
         }
     }
 }

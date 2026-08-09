@@ -7,8 +7,11 @@ import com.tieat.ledger.domain.MealUsageSlice;
 import com.tieat.ledger.domain.MealUsageStatus;
 import com.tieat.ledger.domain.PrepaidAllocation;
 import com.tieat.ledger.domain.Confirmation;
+import com.tieat.ledger.domain.Rejection;
 import com.tieat.partnership.domain.MealContractId;
 import com.tieat.store.domain.StoreId;
+import com.tieat.qr.domain.MealUsageQrContextId;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.data.domain.PageRequest;
@@ -48,9 +51,17 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
         return new MealUsageSlice(result.getContent().stream().map(this::toDomain).toList(), result.hasNext());
     }
 
+    @Override
+    public long countPublicQrCreatedSince(MealUsageQrContextId qrContextId, Instant since) {
+        Objects.requireNonNull(qrContextId, "Meal usage QR context id must be supplied");
+        Objects.requireNonNull(since, "Public QR rate limit time must be supplied");
+        return repository.countByPublicQrContextIdAndCreatedAtGreaterThanEqual(qrContextId.value(), since);
+    }
+
     private MealUsageJpaEntity toEntity(MealUsage mealUsage) {
         Confirmation confirmation = mealUsage.confirmation().orElse(null);
         PrepaidAllocation prepaidAllocation = mealUsage.prepaidAllocation().orElse(null);
+        Rejection rejection = mealUsage.rejection().orElse(null);
         return new MealUsageJpaEntity(
             mealUsage.id().value(),
             mealUsage.storeId().value(),
@@ -58,13 +69,17 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
             mealUsage.entrySource(),
             mealUsage.amount(),
             mealUsage.createdAt(),
+            mealUsage.partnerDisplayNameSnapshot().orElse(null),
+            mealUsage.publicQrContextId().map(MealUsageQrContextId::value).orElse(null),
             mealUsage.version(),
             mealUsage.status(),
             confirmation == null ? null : confirmation.staffInitials(),
             confirmation == null ? null : confirmation.confirmedAt(),
             prepaidAllocation == null ? null : prepaidAllocation.prepaidApplied(),
             prepaidAllocation == null ? null : prepaidAllocation.receivableCreated(),
-            prepaidAllocation == null ? null : prepaidAllocation.remainingPrepaid()
+            prepaidAllocation == null ? null : prepaidAllocation.remainingPrepaid(),
+            rejection == null ? null : rejection.staffLoginId(),
+            rejection == null ? null : rejection.rejectedAt()
         );
     }
 
@@ -77,7 +92,9 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
                 entity.entrySource(),
                 entity.amount(),
                 entity.createdAt(),
-                entity.version()
+                entity.version(),
+                entity.partnerDisplayName(),
+                qrContextId(entity)
             );
         }
         if (entity.status() == MealUsageStatus.CONFIRMED) {
@@ -95,7 +112,23 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
                     requiredAllocationValue(entity.prepaidApplied(), "prepaid applied"),
                     requiredAllocationValue(entity.receivableCreated(), "receivable created"),
                     requiredAllocationValue(entity.remainingPrepaid(), "remaining prepaid")
-                )
+                ),
+                entity.partnerDisplayName(),
+                qrContextId(entity)
+            );
+        }
+        if (entity.status() == MealUsageStatus.REJECTED) {
+            return MealUsage.restoreRejected(
+                new MealUsageId(entity.id()),
+                new StoreId(entity.storeId()),
+                new MealContractId(entity.mealContractId()),
+                entity.entrySource(),
+                entity.amount(),
+                entity.createdAt(),
+                entity.version(),
+                new Rejection(entity.rejectedStaffLoginId(), entity.rejectedAt()),
+                entity.partnerDisplayName(),
+                qrContextId(entity)
             );
         }
         throw new IllegalStateException("Unsupported meal usage status: " + entity.status());
@@ -106,5 +139,9 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
             throw new IllegalStateException("Confirmed meal usage is missing " + fieldName);
         }
         return value;
+    }
+
+    private MealUsageQrContextId qrContextId(MealUsageJpaEntity entity) {
+        return entity.publicQrContextId() == null ? null : new MealUsageQrContextId(entity.publicQrContextId());
     }
 }

@@ -35,6 +35,12 @@ class MealUsageJpaEntity {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "partner_display_name", columnDefinition = "TEXT")
+    private String partnerDisplayName;
+
+    @Column(name = "public_qr_context_id")
+    private UUID publicQrContextId;
+
     @Version
     @Column(nullable = false)
     private long version;
@@ -58,6 +64,12 @@ class MealUsageJpaEntity {
     @Column(name = "remaining_prepaid")
     private Long remainingPrepaid;
 
+    @Column(name = "rejected_staff_login_id", length = 120)
+    private String rejectedStaffLoginId;
+
+    @Column(name = "rejected_at")
+    private Instant rejectedAt;
+
     protected MealUsageJpaEntity() {
     }
 
@@ -68,13 +80,17 @@ class MealUsageJpaEntity {
         EntrySource entrySource,
         long amount,
         Instant createdAt,
+        String partnerDisplayName,
+        UUID publicQrContextId,
         long version,
         MealUsageStatus status,
         String confirmedStaffInitials,
         Instant confirmedAt,
         Long prepaidApplied,
         Long receivableCreated,
-        Long remainingPrepaid
+        Long remainingPrepaid,
+        String rejectedStaffLoginId,
+        Instant rejectedAt
     ) {
         this.id = id;
         this.storeId = storeId;
@@ -82,6 +98,8 @@ class MealUsageJpaEntity {
         this.entrySource = entrySource;
         this.amount = amount;
         this.createdAt = createdAt;
+        this.partnerDisplayName = partnerDisplayName;
+        this.publicQrContextId = publicQrContextId;
         this.version = version;
         this.status = status;
         this.confirmedStaffInitials = confirmedStaffInitials;
@@ -89,6 +107,8 @@ class MealUsageJpaEntity {
         this.prepaidApplied = prepaidApplied;
         this.receivableCreated = receivableCreated;
         this.remainingPrepaid = remainingPrepaid;
+        this.rejectedStaffLoginId = rejectedStaffLoginId;
+        this.rejectedAt = rejectedAt;
     }
 
     UUID id() {
@@ -113,6 +133,14 @@ class MealUsageJpaEntity {
 
     Instant createdAt() {
         return createdAt;
+    }
+
+    String partnerDisplayName() {
+        return partnerDisplayName;
+    }
+
+    UUID publicQrContextId() {
+        return publicQrContextId;
     }
 
     long version() {
@@ -141,5 +169,13 @@ class MealUsageJpaEntity {
 
     Long remainingPrepaid() {
         return remainingPrepaid;
+    }
+
+    String rejectedStaffLoginId() {
+        return rejectedStaffLoginId;
+    }
+
+    Instant rejectedAt() {
+        return rejectedAt;
     }
 }

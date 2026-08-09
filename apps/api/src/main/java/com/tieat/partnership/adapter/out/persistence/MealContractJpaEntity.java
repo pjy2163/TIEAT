@@ -6,6 +6,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.util.UUID;
 
@@ -26,6 +29,16 @@ class MealContractJpaEntity {
     @Column(name = "prepaid_balance", nullable = false)
     private long prepaidBalance;
 
+    @Column(name = "partner_organization_id")
+    private UUID partnerOrganizationId;
+
+    @Column(name = "qr_selectable", nullable = false)
+    private boolean qrSelectable;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "partner_organization_id", insertable = false, updatable = false)
+    private PartnerOrganizationJpaEntity partnerOrganization;
+
     protected MealContractJpaEntity() {
     }
 
@@ -33,12 +46,16 @@ class MealContractJpaEntity {
         UUID id,
         UUID storeId,
         MealContractPaymentType paymentType,
-        long prepaidBalance
+        long prepaidBalance,
+        UUID partnerOrganizationId,
+        boolean qrSelectable
     ) {
         this.id = id;
         this.storeId = storeId;
         this.paymentType = paymentType;
         this.prepaidBalance = prepaidBalance;
+        this.partnerOrganizationId = partnerOrganizationId;
+        this.qrSelectable = qrSelectable;
     }
 
     UUID id() {
@@ -55,5 +72,17 @@ class MealContractJpaEntity {
 
     long prepaidBalance() {
         return prepaidBalance;
+    }
+
+    UUID partnerOrganizationId() {
+        return partnerOrganizationId;
+    }
+
+    boolean qrSelectable() {
+        return qrSelectable;
+    }
+
+    String partnerDisplayName() {
+        return partnerOrganization == null ? null : partnerOrganization.displayName();
     }
 }

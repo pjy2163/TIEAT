@@ -37,8 +37,11 @@ public class ConfirmMealUsageUseCase {
         if (!mealUsage.storeId().equals(command.actorStoreId())) {
             throw new MealUsageNotFoundException(command.mealUsageId());
         }
-        if (mealUsage.status() != com.tieat.ledger.domain.MealUsageStatus.PENDING) {
+        if (mealUsage.status() == com.tieat.ledger.domain.MealUsageStatus.CONFIRMED) {
             throw new MealUsageAlreadyConfirmedException(mealUsage.id());
+        }
+        if (mealUsage.status() != com.tieat.ledger.domain.MealUsageStatus.PENDING) {
+            throw new MealUsageNotPendingException(mealUsage.id());
         }
         MealContract mealContract = mealContractRepository.findByIdForUpdate(mealUsage.mealContractId())
             .orElseThrow(() -> new MealContractNotFoundException(mealUsage.mealContractId()));

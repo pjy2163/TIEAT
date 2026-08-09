@@ -2,12 +2,15 @@ package com.tieat.partnership.domain;
 
 import com.tieat.store.domain.StoreId;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class MealContract {
 
     private final MealContractId id;
     private final StoreId storeId;
     private final MealContractPaymentType paymentType;
+    private final PartnerOrganizationId partnerOrganizationId;
+    private final boolean qrSelectable;
     private long prepaidBalance;
 
     public MealContract(
@@ -15,6 +18,17 @@ public final class MealContract {
         StoreId storeId,
         MealContractPaymentType paymentType,
         long prepaidBalance
+    ) {
+        this(id, storeId, paymentType, prepaidBalance, null, false);
+    }
+
+    public MealContract(
+        MealContractId id,
+        StoreId storeId,
+        MealContractPaymentType paymentType,
+        long prepaidBalance,
+        PartnerOrganizationId partnerOrganizationId,
+        boolean qrSelectable
     ) {
         this.id = Objects.requireNonNull(id, "Meal contract id must be supplied");
         this.storeId = Objects.requireNonNull(storeId, "Store id must be supplied");
@@ -25,7 +39,12 @@ public final class MealContract {
         if (paymentType == MealContractPaymentType.POSTPAID && prepaidBalance != 0) {
             throw new IllegalArgumentException("Postpaid contracts must have zero prepaid balance");
         }
+        if (qrSelectable && partnerOrganizationId == null) {
+            throw new IllegalArgumentException("QR-selectable contracts require a partner organization");
+        }
         this.prepaidBalance = prepaidBalance;
+        this.partnerOrganizationId = partnerOrganizationId;
+        this.qrSelectable = qrSelectable;
     }
 
     public MealContractAllocation allocate(long usageAmount) {
@@ -51,6 +70,14 @@ public final class MealContract {
 
     public MealContractPaymentType paymentType() {
         return paymentType;
+    }
+
+    public Optional<PartnerOrganizationId> partnerOrganizationId() {
+        return Optional.ofNullable(partnerOrganizationId);
+    }
+
+    public boolean isQrSelectable() {
+        return qrSelectable;
     }
 
     public long prepaidBalance() {

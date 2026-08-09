@@ -8,6 +8,8 @@ import com.tieat.ledger.application.ConfirmMealUsageUseCase;
 import com.tieat.ledger.application.MealContractNotFoundException;
 import com.tieat.ledger.application.MealUsageAlreadyConfirmedException;
 import com.tieat.ledger.application.MealUsageContractScopeMismatchException;
+import com.tieat.ledger.application.RejectMealUsageCommand;
+import com.tieat.ledger.application.RejectMealUsageUseCase;
 import com.tieat.ledger.domain.EntrySource;
 import com.tieat.ledger.domain.MealUsage;
 import com.tieat.ledger.domain.MealUsageId;
@@ -24,6 +26,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +60,9 @@ class ContractBalanceConfirmationIntegrationTest {
 
     @Autowired
     private ConfirmMealUsageUseCase confirmMealUsageUseCase;
+
+    @Autowired
+    private RejectMealUsageUseCase rejectMealUsageUseCase;
 
     @Autowired
     private MealUsageRepository mealUsageRepository;
@@ -278,6 +284,49 @@ class ContractBalanceConfirmationIntegrationTest {
         );
     }
 
+    @Test
+    void confirmationAndRejectionRaceLeavesExactlyOneTerminalTransitionAndNoPartialAllocation() throws Exception {
+        MealContract contract = prepaidContract(10_000);
+        MealUsage usage = pendingUsage(contract.id(), STORE_ID, 8_000);
+        mealContractRepository.save(contract);
+        mealUsageRepository.save(usage);
+
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<MealUsage> confirmation = executor.submit(() -> {
+                await(start);
+                return confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), STORE_ID, "HK"));
+            });
+            Future<MealUsage> rejection = executor.submit(() -> {
+                await(start);
+                return rejectMealUsageUseCase.reject(new RejectMealUsageCommand(usage.id(), STORE_ID, "store-hk"));
+            });
+            start.countDown();
+
+            int successfulTransitions = (completedSuccessfully(confirmation) ? 1 : 0)
+                + (completedSuccessfully(rejection) ? 1 : 0);
+            assertThat(successfulTransitions).isEqualTo(1);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+
+        MealUsage finalUsage = reloadUsage(usage.id());
+        assertThat(finalUsage.status()).isIn(MealUsageStatus.CONFIRMED, MealUsageStatus.REJECTED);
+        if (finalUsage.status() == MealUsageStatus.CONFIRMED) {
+            assertThat(finalUsage.prepaidAllocation()).hasValueSatisfying(allocation -> {
+                assertThat(allocation.prepaidApplied()).isEqualTo(8_000);
+                assertThat(allocation.receivableCreated()).isZero();
+            });
+            assertThat(reloadContract(contract.id()).prepaidBalance()).isEqualTo(2_000);
+        } else {
+            assertThat(finalUsage.rejection()).hasValueSatisfying(audit -> assertThat(audit.staffLoginId()).isEqualTo("store-hk"));
+            assertThat(finalUsage.prepaidAllocation()).isEmpty();
+            assertThat(reloadContract(contract.id()).prepaidBalance()).isEqualTo(10_000);
+        }
+    }
+
     private MealUsage reloadUsage(MealUsageId id) {
         return transactionTemplate.execute(status -> mealUsageRepository.findById(id).orElseThrow());
     }
@@ -319,6 +368,15 @@ class ContractBalanceConfirmationIntegrationTest {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while coordinating test transaction", exception);
+        }
+    }
+
+    private boolean completedSuccessfully(Future<?> future) throws Exception {
+        try {
+            future.get(5, TimeUnit.SECONDS);
+            return true;
+        } catch (ExecutionException exception) {
+            return false;
         }
     }
 }

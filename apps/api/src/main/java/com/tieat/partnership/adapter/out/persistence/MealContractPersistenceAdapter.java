@@ -3,7 +3,10 @@ package com.tieat.partnership.adapter.out.persistence;
 import com.tieat.partnership.domain.MealContract;
 import com.tieat.partnership.domain.MealContractId;
 import com.tieat.partnership.domain.MealContractRepository;
+import com.tieat.partnership.domain.PartnerOrganizationId;
+import com.tieat.partnership.domain.QrSelectableMealContract;
 import com.tieat.store.domain.StoreId;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -30,6 +33,17 @@ public class MealContractPersistenceAdapter implements MealContractRepository {
     }
 
     @Override
+    public List<QrSelectableMealContract> findQrSelectableByStoreId(StoreId storeId) {
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        return repository.findQrSelectableByStoreId(storeId.value()).stream()
+            .map(entity -> new QrSelectableMealContract(
+                new MealContractId(entity.id()),
+                entity.partnerDisplayName()
+            ))
+            .toList();
+    }
+
+    @Override
     public MealContract save(MealContract mealContract) {
         Objects.requireNonNull(mealContract, "Meal contract must be supplied");
         return toDomain(repository.saveAndFlush(toEntity(mealContract)));
@@ -40,7 +54,9 @@ public class MealContractPersistenceAdapter implements MealContractRepository {
             mealContract.id().value(),
             mealContract.storeId().value(),
             mealContract.paymentType(),
-            mealContract.prepaidBalance()
+            mealContract.prepaidBalance(),
+            mealContract.partnerOrganizationId().map(PartnerOrganizationId::value).orElse(null),
+            mealContract.isQrSelectable()
         );
     }
 
@@ -49,7 +65,9 @@ public class MealContractPersistenceAdapter implements MealContractRepository {
             new MealContractId(entity.id()),
             new StoreId(entity.storeId()),
             entity.paymentType(),
-            entity.prepaidBalance()
+            entity.prepaidBalance(),
+            entity.partnerOrganizationId() == null ? null : new PartnerOrganizationId(entity.partnerOrganizationId()),
+            entity.qrSelectable()
         );
     }
 }
