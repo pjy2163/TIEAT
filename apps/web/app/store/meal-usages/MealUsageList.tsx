@@ -6,9 +6,11 @@ import {
   ApiError,
   confirmMealUsage,
   getPendingMealUsages,
+  rejectMealUsage,
   type PendingMealUsage,
   type PendingMealUsagePage,
   UnexpectedConfirmationResponseError,
+  UnexpectedRejectionResponseError,
 } from "@/lib/store-api";
 import { mealUsageListStyles } from "./MealUsageList.styles";
 
@@ -107,6 +109,7 @@ export function MealUsageList() {
   const [confirmationNotice, setConfirmationNotice] = useState<string | null>(null);
   const [successfulConfirmation, setSuccessfulConfirmation] = useState<SuccessfulConfirmation | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
   const [isReconciling, setIsReconciling] = useState(false);
   const [requiresReconciliation, setRequiresReconciliation] = useState(false);
   const [reconciliationMode, setReconciliationMode] = useState<ReconciliationMode | null>(null);
@@ -413,9 +416,7 @@ export function MealUsageList() {
       if (applied === "selection-cleared" && successfulConfirmationRef.current !== null) {
         setConfirmationNotice(null);
       } else {
-        setConfirmationNotice(applied === "ambiguous-pending" || applied === "pending"
-          ? notice
-          : "목록을 최신 상태로 반영했습니다.");
+        setConfirmationNotice(notice);
       }
     } catch (error) {
       if (!isCurrentPendingRequest(epoch)) return;
@@ -465,6 +466,7 @@ export function MealUsageList() {
     if (!currentSelection
       || !canPoll()
       || confirmationInFlightRef.current
+      || isRejecting
       || pendingPageRequestInFlightRef.current
       || requiresReconciliation) return;
 
@@ -541,7 +543,67 @@ export function MealUsageList() {
       confirmationNeedsPollingResumeRef.current = false;
       flushRealtimeRefreshRef.current();
     }
-  }, [canPoll, clearScheduledPolling, denyAccess, initials, reconcileAfterConfirmation, redirectToLogin, requiresReconciliation]);
+  }, [canPoll, clearScheduledPolling, denyAccess, initials, isRejecting, reconcileAfterConfirmation, redirectToLogin, requiresReconciliation]);
+
+  const handleRejection = useCallback(async () => {
+    const currentSelection = selectedMealUsageRef.current;
+    if (!currentSelection
+      || !canPoll()
+      || confirmationInFlightRef.current
+      || pendingPageRequestInFlightRef.current
+      || requiresReconciliation) return;
+
+    confirmationInFlightRef.current = true;
+    confirmationNeedsPollingResumeRef.current = true;
+    clearScheduledPolling();
+    setIsRejecting(true);
+    setConfirmationError(null);
+    setConfirmationNotice(null);
+    setRefreshError(null);
+    clearSuccessfulConfirmation();
+
+    try {
+      await rejectMealUsage(currentSelection.mealUsageId);
+      if (!mountedRef.current) return;
+      await reconcileAfterConfirmation("terminal", "거절을 반영해 목록을 다시 불러왔습니다.");
+    } catch (error) {
+      if (!mountedRef.current) return;
+      if (error instanceof UnexpectedRejectionResponseError) {
+        await reconcileAfterConfirmation("terminal", "거절 응답을 목록으로 다시 확인했습니다.");
+        return;
+      }
+      if (error instanceof ApiError && error.status === 401) {
+        redirectToLogin();
+        return;
+      }
+      if (error instanceof ApiError && error.status === 403) {
+        if (error.errorCode === "CSRF_TOKEN_INVALID") {
+          setConfirmationError("보안 확인이 만료되었습니다. 다시 거절할 수 있습니다.");
+        } else {
+          denyAccess();
+        }
+        return;
+      }
+      if (error instanceof ApiError
+        && (error.status === 404 || error.status === 409 || (error.status > 0 && error.status < 500))) {
+        await reconcileAfterConfirmation("terminal", "이미 처리된 거래인지 목록으로 다시 확인했습니다.");
+        return;
+      }
+      await reconcileAfterConfirmation("ambiguous", "거절 결과를 목록으로 확인했습니다. 거래가 아직 확인 대기이면 다시 거절할 수 있습니다.");
+    } finally {
+      confirmationInFlightRef.current = false;
+      if (mountedRef.current) {
+        setIsRejecting(false);
+      }
+      if (confirmationNeedsPollingResumeRef.current && canPoll()) {
+        settledRequestCanScheduleRef.current = true;
+        settledRequestFailedRef.current = false;
+        nextPollingDelayRef.current = POLLING_INTERVAL_MILLIS;
+      }
+      confirmationNeedsPollingResumeRef.current = false;
+      flushRealtimeRefreshRef.current();
+    }
+  }, [canPoll, clearScheduledPolling, clearSuccessfulConfirmation, denyAccess, reconcileAfterConfirmation, redirectToLogin, requiresReconciliation]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -608,7 +670,7 @@ export function MealUsageList() {
     return <StatePanel title="목록을 불러오지 못했습니다" description="네트워크 상태를 확인한 뒤 다시 시도해 주세요." onRetry={() => void load("initial")} />;
   }
 
-  const rowActionDisabled = isPendingPageLoading || isConfirming || isReconciling || isRefreshing || requiresReconciliation;
+  const rowActionDisabled = isPendingPageLoading || isConfirming || isRejecting || isReconciling || isRefreshing || requiresReconciliation;
 
   return (
     <main className={mealUsageListStyles.page}>
@@ -664,6 +726,9 @@ export function MealUsageList() {
                             <SourceIcon source={item.entrySource} />
                             <span>{entrySourceLabel(item.entrySource)}</span>
                           </span>
+                          <span className={mealUsageListStyles.partner}>
+                            {item.partnerDisplayName ? `협력사 · ${item.partnerDisplayName}` : "협력사 미지정"}
+                          </span>
                           <time className={mealUsageListStyles.createdAt} dateTime={item.createdAt}>{dateFormatter.format(new Date(item.createdAt))}</time>
                         </span>
                         <strong className={mealUsageListStyles.amount}>{amountFormatter.format(item.amountMinor)}</strong>
@@ -685,6 +750,10 @@ export function MealUsageList() {
                       <dd>{entrySourceLabel(selectedMealUsage.entrySource)}</dd>
                     </div>
                     <div>
+                      <dt>협력사</dt>
+                      <dd>{selectedMealUsage.partnerDisplayName ?? "미지정"}</dd>
+                    </div>
+                    <div>
                       <dt>입력 시각</dt>
                       <dd><time dateTime={selectedMealUsage.createdAt}>{dateFormatter.format(new Date(selectedMealUsage.createdAt))}</time></dd>
                     </div>
@@ -703,7 +772,7 @@ export function MealUsageList() {
                       aria-describedby={confirmationError ? "confirmation-error" : undefined}
                       aria-invalid={Boolean(confirmationError)}
                       className={mealUsageListStyles.initialsInput}
-                      disabled={isPendingPageLoading || isConfirming || isReconciling}
+                      disabled={isPendingPageLoading || isConfirming || isRejecting || isReconciling}
                       id="confirmer-initials"
                       onChange={(event) => setInitials(event.target.value)}
                       ref={initialsInputRef}
@@ -716,9 +785,17 @@ export function MealUsageList() {
                         {isReconciling ? "목록 확인 중…" : "목록 다시 불러오기"}
                       </button>
                     ) : (
-                      <button className={mealUsageListStyles.confirm} disabled={isPendingPageLoading || isConfirming || isReconciling || isRefreshing} type="submit">
-                        {isConfirming || isReconciling ? "확정 처리 중…" : "이니셜로 확정"}
-                      </button>
+                      <>
+                        <div className={mealUsageListStyles.terminalActions}>
+                          <button className={mealUsageListStyles.confirmInActionGroup} disabled={isPendingPageLoading || isConfirming || isRejecting || isReconciling || isRefreshing} type="submit">
+                            {isConfirming || isReconciling ? "확정 처리 중…" : "이니셜로 확정"}
+                          </button>
+                          <button className={mealUsageListStyles.reject} disabled={isPendingPageLoading || isConfirming || isRejecting || isReconciling || isRefreshing} onClick={() => void handleRejection()} type="button">
+                            {isRejecting || isReconciling ? "거절 처리 중…" : "거절"}
+                          </button>
+                        </div>
+                        <p className={mealUsageListStyles.initialsHint}>거절하면 이 거래는 확정되지 않고 잔액도 바뀌지 않습니다.</p>
+                      </>
                     )}
                   </form>
                 </section>

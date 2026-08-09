@@ -2,6 +2,7 @@ export type PendingMealUsage = {
   mealUsageId: string;
   status: "PENDING";
   entrySource: "STORE_TABLET" | "PARTNER_MOBILE";
+  partnerDisplayName: string | null;
   amountMinor: number;
   createdAt: string;
 };
@@ -40,11 +41,21 @@ export class UnexpectedConfirmationResponseError extends ApiError {
   }
 }
 
+export class UnexpectedRejectionResponseError extends ApiError {
+  constructor() {
+    super(0, "UNEXPECTED_REJECTION_RESPONSE");
+  }
+}
+
 const API_PATH = "/api/v1";
 const PENDING_LIST_PATH = `${API_PATH}/meal-usages?status=PENDING&page=0&size=50`;
 
 function confirmationPath(mealUsageId: string): string {
   return `${API_PATH}/meal-usages/${mealUsageId}/confirmations`;
+}
+
+function rejectionPath(mealUsageId: string): string {
+  return `${API_PATH}/meal-usages/${mealUsageId}/rejections`;
 }
 
 async function apiError(response: Response): Promise<ApiError> {
@@ -97,6 +108,7 @@ function parsePendingMealUsage(value: unknown): PendingMealUsage {
     || !isUuid(value.mealUsageId)
     || value.status !== "PENDING"
     || (value.entrySource !== "STORE_TABLET" && value.entrySource !== "PARTNER_MOBILE")
+    || (value.partnerDisplayName !== null && !isNonEmptyString(value.partnerDisplayName))
     || typeof value.amountMinor !== "number"
     || !Number.isSafeInteger(value.amountMinor)
     || value.amountMinor <= 0
@@ -107,6 +119,7 @@ function parsePendingMealUsage(value: unknown): PendingMealUsage {
     mealUsageId: value.mealUsageId,
     status: value.status,
     entrySource: value.entrySource,
+    partnerDisplayName: value.partnerDisplayName,
     amountMinor: value.amountMinor,
     createdAt: value.createdAt,
   };
@@ -194,6 +207,34 @@ export async function confirmMealUsage(mealUsageId: string, confirmerInitials: s
   if (response.status !== 201) {
     if (response.ok) {
       throw new UnexpectedConfirmationResponseError();
+    }
+    throw await apiError(response);
+  }
+}
+
+export async function rejectMealUsage(mealUsageId: string): Promise<void> {
+  const csrfResponse = await fetch(`${API_PATH}/csrf`, {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+
+  if (!csrfResponse.ok) {
+    throw await apiError(csrfResponse);
+  }
+
+  const csrf = parseCsrfToken(await csrfResponse.json() as unknown);
+  const response = await fetch(rejectionPath(mealUsageId), {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: {
+      [csrf.headerName]: csrf.token,
+    },
+  });
+
+  if (response.status !== 201) {
+    if (response.ok) {
+      throw new UnexpectedRejectionResponseError();
     }
     throw await apiError(response);
   }

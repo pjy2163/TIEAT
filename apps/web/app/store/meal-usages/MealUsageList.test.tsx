@@ -1,7 +1,13 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, confirmMealUsage, getPendingMealUsages, UnexpectedConfirmationResponseError } from "@/lib/store-api";
+import {
+  ApiError,
+  confirmMealUsage,
+  getPendingMealUsages,
+  rejectMealUsage,
+  UnexpectedConfirmationResponseError,
+} from "@/lib/store-api";
 import { MealUsageList } from "./MealUsageList";
 
 const replace = vi.fn();
@@ -13,15 +19,17 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/store-api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/store-api")>();
-  return { ...original, confirmMealUsage: vi.fn(), getPendingMealUsages: vi.fn() };
+  return { ...original, confirmMealUsage: vi.fn(), getPendingMealUsages: vi.fn(), rejectMealUsage: vi.fn() };
 });
 
 const confirmMealUsageMock = vi.mocked(confirmMealUsage);
 const getPendingMealUsagesMock = vi.mocked(getPendingMealUsages);
+const rejectMealUsageMock = vi.mocked(rejectMealUsage);
 const pendingItem = {
   mealUsageId: "00000000-0000-0000-0000-000000000001",
   status: "PENDING" as const,
   entrySource: "STORE_TABLET" as const,
+  partnerDisplayName: "협력사 A",
   amountMinor: 12000,
   createdAt: "2026-08-05T01:00:00Z",
 };
@@ -30,6 +38,7 @@ const partnerMobilePendingItem = {
   ...pendingItem,
   mealUsageId: "00000000-0000-0000-0000-000000000002",
   entrySource: "PARTNER_MOBILE" as const,
+  partnerDisplayName: "협력사 B",
   amountMinor: 1234567,
 };
 
@@ -70,6 +79,8 @@ describe("MealUsageList", () => {
     expect(screen.getByText("₩12,000")).toBeVisible();
     expect(screen.getByText("₩1,234,567")).toBeVisible();
     expect(screen.getAllByText(/2026\. 8\. 5\./)).toHaveLength(2);
+    expect(screen.getByText("협력사 · 협력사 A")).toBeVisible();
+    expect(screen.getByText("협력사 · 협력사 B")).toBeVisible();
 
     const [tabletRow, partnerMobileRow] = screen.getAllByRole("listitem");
     const tabletButton = tabletRow.querySelector("button");
@@ -735,5 +746,23 @@ describe("MealUsageList", () => {
     await user.click(screen.getByRole("button", { name: "이니셜로 확정" }));
     expect(await screen.findByText("접근 권한이 없습니다")).toBeVisible();
     expect(screen.queryByText("₩12,000")).not.toBeInTheDocument();
+  });
+
+  it("shows the partner snapshot and lets staff reject through authoritative reconciliation", async () => {
+    const user = userEvent.setup();
+    rejectMealUsageMock.mockResolvedValue();
+    getPendingMealUsagesMock
+      .mockResolvedValueOnce({ items: [partnerMobilePendingItem], page: 0, size: 50, hasNext: false })
+      .mockResolvedValueOnce({ items: [], page: 0, size: 50, hasNext: false });
+
+    render(<MealUsageList />);
+    await user.click(await screen.findByRole("button", { name: /모바일 QR 입력/ }));
+    expect(screen.getByText("협력사 B")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "거절" }));
+
+    await waitFor(() => expect(rejectMealUsageMock).toHaveBeenCalledWith(partnerMobilePendingItem.mealUsageId));
+    expect(screen.getByText("확인 대기 거래가 없습니다")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("거절을 반영해 목록을 다시 불러왔습니다");
+    expect(screen.queryByText(/거래 확정 완료/)).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, confirmMealUsage, getPendingMealUsages, login, UnexpectedConfirmationResponseError } from "./store-api";
+import {
+  ApiError,
+  confirmMealUsage,
+  getPendingMealUsages,
+  login,
+  rejectMealUsage,
+  UnexpectedConfirmationResponseError,
+  UnexpectedRejectionResponseError,
+} from "./store-api";
 
 function response(status: number, body?: unknown): Response {
   return {
@@ -106,6 +114,28 @@ describe("store API", () => {
       .rejects.toEqual(new UnexpectedConfirmationResponseError());
   });
 
+  it("gets fresh CSRF before staff rejection and rejects unexpected successful statuses", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "fresh-csrf", headerName: "X-CSRF-TOKEN", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(201));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await rejectMealUsage("00000000-0000-0000-0000-000000000001");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/meal-usages/00000000-0000-0000-0000-000000000001/rejections", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { "X-CSRF-TOKEN": "fresh-csrf" },
+    });
+
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "fresh-csrf", headerName: "X-CSRF-TOKEN", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(204)));
+    await expect(rejectMealUsage("00000000-0000-0000-0000-000000000001"))
+      .rejects.toEqual(new UnexpectedRejectionResponseError());
+  });
+
   it("rejects malformed CSRF and pending list responses as a stable API error", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response(200, { token: "csrf", headerName: "X-CSRF-TOKEN" }))
@@ -113,7 +143,8 @@ describe("store API", () => {
         items: [{
           mealUsageId: "00000000-0000-0000-0000-000000000001",
           status: "PENDING",
-          entrySource: "STORE_TABLET",
+        entrySource: "STORE_TABLET",
+        partnerDisplayName: null,
           amountMinor: 12_000.5,
           createdAt: "not-a-date",
         }],
@@ -139,6 +170,7 @@ describe("store API", () => {
         mealUsageId: "00000000-0000-0000-0000-000000000001",
         status: "PENDING",
         entrySource: "PARTNER_MOBILE",
+        partnerDisplayName: "협력사 A",
         amountMinor: 12_000,
         createdAt: "2026-08-05T01:00:00Z",
         additiveField: "ignored",
@@ -155,6 +187,7 @@ describe("store API", () => {
         mealUsageId: "00000000-0000-0000-0000-000000000001",
         status: "PENDING",
         entrySource: "PARTNER_MOBILE",
+        partnerDisplayName: "협력사 A",
         amountMinor: 12_000,
         createdAt: "2026-08-05T01:00:00Z",
       }],
@@ -191,6 +224,7 @@ function validPendingItem() {
     mealUsageId: "00000000-0000-0000-0000-000000000001",
     status: "PENDING",
     entrySource: "STORE_TABLET",
+    partnerDisplayName: null,
     amountMinor: 12_000,
     createdAt: "2026-08-05T01:00:00Z",
   };
