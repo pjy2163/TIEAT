@@ -14,7 +14,12 @@ import { mealUsageListStyles } from "./MealUsageList.styles";
 
 type ViewState = "loading" | "ready" | "empty" | "forbidden" | "error";
 type ReconciliationMode = "terminal" | "ambiguous";
+type LoadReason = "initial" | "manual" | "automatic";
 type SuccessfulConfirmation = Pick<PendingMealUsage, "mealUsageId" | "amountMinor" | "entrySource">;
+type PendingPageApplication = "no-selection" | "selection-cleared" | "terminal-pending" | "ambiguous-pending" | "pending";
+
+const POLLING_INTERVAL_MILLIS = 2_000;
+const MAX_POLLING_RETRY_MILLIS = 30_000;
 
 const amountFormatter = new Intl.NumberFormat("ko-KR", {
   style: "currency",
@@ -93,6 +98,7 @@ export function MealUsageList() {
   const router = useRouter();
   const [items, setItems] = useState<PendingMealUsage[]>([]);
   const [viewState, setViewState] = useState<ViewState>("loading");
+  const [isPendingPageLoading, setIsPendingPageLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [selectedMealUsage, setSelectedMealUsage] = useState<PendingMealUsage | null>(null);
@@ -105,13 +111,37 @@ export function MealUsageList() {
   const [requiresReconciliation, setRequiresReconciliation] = useState(false);
   const [reconciliationMode, setReconciliationMode] = useState<ReconciliationMode | null>(null);
   const hasItemsRef = useRef(false);
+  const hasAuthoritativePendingPageRef = useRef(false);
   const selectedMealUsageRef = useRef<PendingMealUsage | null>(null);
   const confirmationInFlightRef = useRef(false);
   const successfulConfirmationRef = useRef<SuccessfulConfirmation | null>(null);
+  const reconciliationModeRef = useRef<ReconciliationMode | null>(null);
   const pendingPageRequestInFlightRef = useRef(false);
+  const realtimeRefreshDirtyRef = useRef(false);
+  const realtimeRefreshReasonRef = useRef<LoadReason>("automatic");
+  const flushRealtimeRefreshRef = useRef<() => void>(() => undefined);
+  const requestRealtimeRefreshRef = useRef<() => void>(() => undefined);
+  const pollTimerRef = useRef<number | null>(null);
+  const visibleRef = useRef(false);
+  const pollingStoppedRef = useRef(false);
+  const pollingFailureCountRef = useRef(0);
+  const nextPollingDelayRef = useRef(POLLING_INTERVAL_MILLIS);
+  const settledRequestCanScheduleRef = useRef(false);
+  const settledRequestFailedRef = useRef(false);
+  const confirmationNeedsPollingResumeRef = useRef(false);
   const initialsInputRef = useRef<HTMLInputElement>(null);
-  const mountedRef = useRef(true);
+  const mountedRef = useRef(false);
   const requestEpochRef = useRef(0);
+
+  const clearScheduledPolling = useCallback(() => {
+    if (pollTimerRef.current === null) return;
+    window.clearTimeout(pollTimerRef.current);
+    pollTimerRef.current = null;
+  }, []);
+
+  const canPoll = useCallback(() => (
+    mountedRef.current && visibleRef.current && !pollingStoppedRef.current
+  ), []);
 
   const beginPendingRequest = useCallback(() => {
     requestEpochRef.current += 1;
@@ -119,12 +149,19 @@ export function MealUsageList() {
   }, []);
 
   const isCurrentPendingRequest = useCallback((epoch: number) => (
-    mountedRef.current && requestEpochRef.current === epoch
-  ), []);
+    canPoll() && requestEpochRef.current === epoch
+  ), [canPoll]);
 
   const invalidatePendingRequests = useCallback(() => {
     requestEpochRef.current += 1;
   }, []);
+
+  const stopPolling = useCallback(() => {
+    pollingStoppedRef.current = true;
+    realtimeRefreshDirtyRef.current = false;
+    settledRequestCanScheduleRef.current = false;
+    clearScheduledPolling();
+  }, [clearScheduledPolling]);
 
   const clearSelection = useCallback(() => {
     selectedMealUsageRef.current = null;
@@ -133,6 +170,7 @@ export function MealUsageList() {
     setConfirmationError(null);
     setRequiresReconciliation(false);
     setReconciliationMode(null);
+    reconciliationModeRef.current = null;
   }, []);
 
   const clearSuccessfulConfirmation = useCallback(() => {
@@ -149,6 +187,7 @@ export function MealUsageList() {
     setRefreshError(null);
     setRequiresReconciliation(false);
     setReconciliationMode(null);
+    reconciliationModeRef.current = null;
     clearSuccessfulConfirmation();
   }, [clearSuccessfulConfirmation]);
 
@@ -161,51 +200,103 @@ export function MealUsageList() {
     clearSelection();
   }, [clearSelection, clearSuccessfulConfirmation]);
 
-  const applyPendingPage = useCallback((result: PendingMealUsagePage) => {
+  const applyPendingPage = useCallback((result: PendingMealUsagePage): PendingPageApplication => {
+    hasAuthoritativePendingPageRef.current = true;
     setItems(result.items);
     hasItemsRef.current = result.items.length > 0;
     setViewState(result.items.length === 0 ? "empty" : "ready");
+    setRefreshError(null);
 
     const selectedId = selectedMealUsageRef.current?.mealUsageId;
-    if (!selectedId) return;
+    const successfulConfirmationWasOmitted = successfulConfirmationRef.current
+      && !result.items.some((item) => item.mealUsageId === successfulConfirmationRef.current?.mealUsageId);
+    if (successfulConfirmationWasOmitted) {
+      setSuccessfulConfirmation(successfulConfirmationRef.current);
+      setRefreshError(null);
+      setConfirmationError(null);
+      setConfirmationNotice(null);
+    }
+
+    if (!selectedId) return "no-selection";
 
     const currentSelection = result.items.find((item) => item.mealUsageId === selectedId);
     if (!currentSelection) {
       clearSelection();
-      return;
+      return "selection-cleared";
     }
     selectedMealUsageRef.current = currentSelection;
     setSelectedMealUsage(currentSelection);
+    if (reconciliationModeRef.current === "terminal") {
+      setRequiresReconciliation(true);
+      setConfirmationNotice(null);
+      setConfirmationError("확정 상태를 다시 확인해야 합니다. 목록 다시 불러오기로만 확인할 수 있습니다.");
+      return "terminal-pending";
+    }
+    if (reconciliationModeRef.current === "ambiguous") {
+      reconciliationModeRef.current = null;
+      setReconciliationMode(null);
+      setRequiresReconciliation(false);
+      setConfirmationError(null);
+      return "ambiguous-pending";
+    }
+    return "pending";
   }, [clearSelection]);
 
   const redirectToLogin = useCallback(() => {
+    stopPolling();
     invalidatePendingRequests();
     clearSensitiveRows();
     setViewState("loading");
     router.replace("/store/login?next=/store/meal-usages");
-  }, [clearSensitiveRows, invalidatePendingRequests, router]);
+  }, [clearSensitiveRows, invalidatePendingRequests, router, stopPolling]);
 
   const denyAccess = useCallback(() => {
+    stopPolling();
     invalidatePendingRequests();
     clearSensitiveRows();
     setViewState("forbidden");
-  }, [clearSensitiveRows, invalidatePendingRequests]);
+  }, [clearSensitiveRows, invalidatePendingRequests, stopPolling]);
 
-  const load = useCallback(async (isRefresh = false) => {
-    if (pendingPageRequestInFlightRef.current || confirmationInFlightRef.current) return;
-    pendingPageRequestInFlightRef.current = true;
-    const epoch = beginPendingRequest();
-    if (isRefresh) {
+  const scheduleNextPolling = useCallback((delay: number) => {
+    clearScheduledPolling();
+    if (!canPoll()) return;
+    pollTimerRef.current = window.setTimeout(() => {
+      pollTimerRef.current = null;
+      requestRealtimeRefreshRef.current();
+    }, delay);
+  }, [canPoll, clearScheduledPolling]);
+
+  const load = useCallback(async (reason: LoadReason) => {
+    if (!canPoll()) return;
+    if (reason === "manual") {
       setIsRefreshing(true);
       setRefreshError(null);
       setConfirmationError(null);
       setConfirmationNotice(null);
       clearSuccessfulConfirmation();
     }
+    if (pendingPageRequestInFlightRef.current || confirmationInFlightRef.current) {
+      realtimeRefreshDirtyRef.current = true;
+      if (reason === "manual") {
+        realtimeRefreshReasonRef.current = "manual";
+      }
+      return;
+    }
+
+    clearScheduledPolling();
+    settledRequestCanScheduleRef.current = false;
+    pendingPageRequestInFlightRef.current = true;
+    setIsPendingPageLoading(true);
+    const epoch = beginPendingRequest();
+    let requestCanSchedule = false;
+    let requestFailed = false;
 
     try {
       const result = await getPendingMealUsages();
       if (!isCurrentPendingRequest(epoch)) return;
+      pollingFailureCountRef.current = 0;
+      nextPollingDelayRef.current = POLLING_INTERVAL_MILLIS;
+      requestCanSchedule = true;
       applyPendingPage(result);
     } catch (error) {
       if (!isCurrentPendingRequest(epoch)) return;
@@ -217,54 +308,114 @@ export function MealUsageList() {
         denyAccess();
         return;
       }
-      if (isRefresh && hasItemsRef.current) {
+      const failureExponent = Math.min(pollingFailureCountRef.current, 4);
+      nextPollingDelayRef.current = Math.min(
+        POLLING_INTERVAL_MILLIS * (2 ** failureExponent),
+        MAX_POLLING_RETRY_MILLIS,
+      );
+      pollingFailureCountRef.current = Math.min(failureExponent + 1, 4);
+      requestCanSchedule = true;
+      requestFailed = true;
+      if (reason === "manual" && hasItemsRef.current) {
         setRefreshError(errorMessage(error));
+      } else if (reason === "automatic" && hasAuthoritativePendingPageRef.current) {
+        return;
       } else {
         setViewState("error");
       }
     } finally {
       pendingPageRequestInFlightRef.current = false;
-      if (isRefresh && isCurrentPendingRequest(epoch)) {
+      if (mountedRef.current) {
+        setIsPendingPageLoading(false);
+      }
+      if (reason === "manual" && mountedRef.current) {
         setIsRefreshing(false);
       }
+      if (isCurrentPendingRequest(epoch)) {
+        settledRequestCanScheduleRef.current = requestCanSchedule;
+        settledRequestFailedRef.current = requestFailed;
+      }
+      flushRealtimeRefreshRef.current();
     }
-  }, [applyPendingPage, beginPendingRequest, clearSuccessfulConfirmation, denyAccess, isCurrentPendingRequest, redirectToLogin]);
+  }, [applyPendingPage, beginPendingRequest, canPoll, clearScheduledPolling, clearSuccessfulConfirmation, denyAccess, isCurrentPendingRequest, redirectToLogin]);
+
+  const requestRealtimeRefresh = useCallback(() => {
+    if (!canPoll()) return;
+    if (pendingPageRequestInFlightRef.current || confirmationInFlightRef.current) {
+      realtimeRefreshDirtyRef.current = true;
+      return;
+    }
+    void load("automatic");
+  }, [canPoll, load]);
+
+  const flushRealtimeRefresh = useCallback(() => {
+    if (!canPoll()
+      || pendingPageRequestInFlightRef.current
+      || confirmationInFlightRef.current) return;
+
+    const requestCanSchedule = settledRequestCanScheduleRef.current;
+    const requestFailed = settledRequestFailedRef.current;
+    settledRequestCanScheduleRef.current = false;
+    settledRequestFailedRef.current = false;
+
+    if (realtimeRefreshDirtyRef.current) {
+      const reason = realtimeRefreshReasonRef.current;
+      realtimeRefreshDirtyRef.current = false;
+      realtimeRefreshReasonRef.current = "automatic";
+      if (requestCanSchedule && requestFailed && reason !== "manual") {
+        scheduleNextPolling(nextPollingDelayRef.current);
+        return;
+      }
+      void load(reason);
+      return;
+    }
+
+    if (requestCanSchedule) {
+      scheduleNextPolling(nextPollingDelayRef.current);
+    }
+  }, [canPoll, load, scheduleNextPolling]);
+
+  useEffect(() => {
+    flushRealtimeRefreshRef.current = flushRealtimeRefresh;
+    requestRealtimeRefreshRef.current = requestRealtimeRefresh;
+  }, [flushRealtimeRefresh, requestRealtimeRefresh]);
 
   const reconcileAfterConfirmation = useCallback(async (mode: ReconciliationMode, notice: string) => {
-    if (pendingPageRequestInFlightRef.current) return;
+    if (!canPoll()) return;
+    if (pendingPageRequestInFlightRef.current) {
+      realtimeRefreshDirtyRef.current = true;
+      return;
+    }
+    confirmationNeedsPollingResumeRef.current = false;
+    clearScheduledPolling();
+    realtimeRefreshDirtyRef.current = false;
+    settledRequestCanScheduleRef.current = false;
     pendingPageRequestInFlightRef.current = true;
+    setIsPendingPageLoading(true);
     const epoch = beginPendingRequest();
+    let requestCanSchedule = false;
+    let requestFailed = false;
     setIsReconciling(true);
     setRequiresReconciliation(true);
     setReconciliationMode(mode);
+    reconciliationModeRef.current = mode;
     setConfirmationError(null);
     setConfirmationNotice(null);
     try {
       const result = await getPendingMealUsages();
       if (!isCurrentPendingRequest(epoch)) return;
-      applyPendingPage(result);
-      const confirmedUsageWasOmitted = successfulConfirmationRef.current
-        && !result.items.some((item) => item.mealUsageId === successfulConfirmationRef.current?.mealUsageId);
-      if (confirmedUsageWasOmitted) {
-        setSuccessfulConfirmation(successfulConfirmationRef.current);
-        setConfirmationError(null);
-        setConfirmationNotice(null);
-        setRefreshError(null);
-      }
-      const selectedStillPending = selectedMealUsageRef.current !== null;
-      if (mode === "terminal" && selectedStillPending) {
-        setRequiresReconciliation(true);
-        setReconciliationMode("terminal");
-        setConfirmationError("확정 상태를 다시 확인해야 합니다. 목록 다시 불러오기로만 확인할 수 있습니다.");
-        return;
-      }
-      setRequiresReconciliation(false);
-      setReconciliationMode(null);
-      setConfirmationError(null);
-      if (confirmedUsageWasOmitted) {
+      pollingFailureCountRef.current = 0;
+      nextPollingDelayRef.current = POLLING_INTERVAL_MILLIS;
+      requestCanSchedule = true;
+      const applied = applyPendingPage(result);
+      if (applied === "terminal-pending") return;
+
+      if (applied === "selection-cleared" && successfulConfirmationRef.current !== null) {
         setConfirmationNotice(null);
       } else {
-        setConfirmationNotice(selectedStillPending ? notice : "목록을 최신 상태로 반영했습니다.");
+        setConfirmationNotice(applied === "ambiguous-pending" || applied === "pending"
+          ? notice
+          : "목록을 최신 상태로 반영했습니다.");
       }
     } catch (error) {
       if (!isCurrentPendingRequest(epoch)) return;
@@ -276,20 +427,43 @@ export function MealUsageList() {
         denyAccess();
         return;
       }
+      const failureExponent = Math.min(pollingFailureCountRef.current, 4);
+      nextPollingDelayRef.current = Math.min(
+        POLLING_INTERVAL_MILLIS * (2 ** failureExponent),
+        MAX_POLLING_RETRY_MILLIS,
+      );
+      pollingFailureCountRef.current = Math.min(failureExponent + 1, 4);
+      requestCanSchedule = true;
+      requestFailed = true;
       setConfirmationNotice(null);
       setConfirmationError("확정 결과를 확인하지 못했습니다. 목록을 다시 불러와 확인해 주세요.");
     } finally {
       pendingPageRequestInFlightRef.current = false;
-      if (isCurrentPendingRequest(epoch)) {
+      if (mountedRef.current) {
+        setIsPendingPageLoading(false);
         setIsReconciling(false);
       }
+      if (isCurrentPendingRequest(epoch)) {
+        settledRequestCanScheduleRef.current = requestCanSchedule;
+        settledRequestFailedRef.current = requestFailed;
+      }
+      flushRealtimeRefreshRef.current();
     }
-  }, [applyPendingPage, beginPendingRequest, denyAccess, isCurrentPendingRequest, redirectToLogin]);
+  }, [applyPendingPage, beginPendingRequest, canPoll, clearScheduledPolling, denyAccess, isCurrentPendingRequest, redirectToLogin]);
+
+  const handleManualRefresh = useCallback(() => {
+    if (requiresReconciliation) {
+      void reconcileAfterConfirmation(reconciliationMode ?? "ambiguous", "목록을 최신 상태로 반영했습니다.");
+      return;
+    }
+    void load("manual");
+  }, [load, reconciliationMode, reconcileAfterConfirmation, requiresReconciliation]);
 
   const handleConfirmation = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const currentSelection = selectedMealUsageRef.current;
     if (!currentSelection
+      || !canPoll()
       || confirmationInFlightRef.current
       || pendingPageRequestInFlightRef.current
       || requiresReconciliation) return;
@@ -301,6 +475,8 @@ export function MealUsageList() {
     }
 
     confirmationInFlightRef.current = true;
+    confirmationNeedsPollingResumeRef.current = true;
+    clearScheduledPolling();
     setIsConfirming(true);
     setConfirmationError(null);
     setConfirmationNotice(null);
@@ -357,44 +533,58 @@ export function MealUsageList() {
       if (mountedRef.current) {
         setIsConfirming(false);
       }
+      if (confirmationNeedsPollingResumeRef.current && canPoll()) {
+        settledRequestCanScheduleRef.current = true;
+        settledRequestFailedRef.current = false;
+        nextPollingDelayRef.current = POLLING_INTERVAL_MILLIS;
+      }
+      confirmationNeedsPollingResumeRef.current = false;
+      flushRealtimeRefreshRef.current();
     }
-  }, [denyAccess, initials, reconcileAfterConfirmation, redirectToLogin, requiresReconciliation]);
+  }, [canPoll, clearScheduledPolling, denyAccess, initials, reconcileAfterConfirmation, redirectToLogin, requiresReconciliation]);
 
   useEffect(() => {
     mountedRef.current = true;
+    pollingStoppedRef.current = false;
+
+    const pausePolling = () => {
+      visibleRef.current = false;
+      realtimeRefreshDirtyRef.current = false;
+      realtimeRefreshReasonRef.current = "automatic";
+      settledRequestCanScheduleRef.current = false;
+      clearScheduledPolling();
+      invalidatePendingRequests();
+      setIsRefreshing(false);
+    };
+    const resumePolling = () => {
+      if (pollingStoppedRef.current) return;
+      visibleRef.current = true;
+      pollingFailureCountRef.current = 0;
+      nextPollingDelayRef.current = POLLING_INTERVAL_MILLIS;
+      requestRealtimeRefreshRef.current();
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        pausePolling();
+        return;
+      }
+      resumePolling();
+    };
+
+    if (!document.hidden) {
+      resumePolling();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       mountedRef.current = false;
+      visibleRef.current = false;
+      realtimeRefreshDirtyRef.current = false;
+      settledRequestCanScheduleRef.current = false;
+      clearScheduledPolling();
       invalidatePendingRequests();
     };
-  }, [invalidatePendingRequests]);
-
-  useEffect(() => {
-    let active = true;
-    pendingPageRequestInFlightRef.current = true;
-    const epoch = beginPendingRequest();
-    void getPendingMealUsages()
-      .then((result) => {
-        if (active && isCurrentPendingRequest(epoch)) applyPendingPage(result);
-      })
-      .catch((error: unknown) => {
-        if (!active || !isCurrentPendingRequest(epoch)) return;
-        if (error instanceof ApiError && error.status === 401) {
-          redirectToLogin();
-          return;
-        }
-        if (error instanceof ApiError && error.status === 403) {
-          denyAccess();
-          return;
-        }
-        setViewState("error");
-      })
-      .finally(() => {
-        pendingPageRequestInFlightRef.current = false;
-      });
-    return () => {
-      active = false;
-    };
-  }, [applyPendingPage, beginPendingRequest, denyAccess, isCurrentPendingRequest, redirectToLogin]);
+  }, [clearScheduledPolling, invalidatePendingRequests]);
 
   if (viewState === "loading") {
     return (
@@ -415,10 +605,10 @@ export function MealUsageList() {
   }
 
   if (viewState === "error") {
-    return <StatePanel title="목록을 불러오지 못했습니다" description="네트워크 상태를 확인한 뒤 다시 시도해 주세요." onRetry={() => void load()} />;
+    return <StatePanel title="목록을 불러오지 못했습니다" description="네트워크 상태를 확인한 뒤 다시 시도해 주세요." onRetry={() => void load("initial")} />;
   }
 
-  const rowActionDisabled = isConfirming || isReconciling || isRefreshing || requiresReconciliation;
+  const rowActionDisabled = isPendingPageLoading || isConfirming || isReconciling || isRefreshing || requiresReconciliation;
 
   return (
     <main className={mealUsageListStyles.page}>
@@ -429,7 +619,7 @@ export function MealUsageList() {
             <h1 id="pending-title" className={mealUsageListStyles.title}>확인 대기 거래</h1>
             <p className={mealUsageListStyles.description}>오래된 거래부터 표시합니다.</p>
           </div>
-          <button className={mealUsageListStyles.refresh} type="button" onClick={() => void load(true)} disabled={isRefreshing || isReconciling || isConfirming}>
+          <button className={mealUsageListStyles.refresh} type="button" onClick={handleManualRefresh} disabled={isRefreshing || isReconciling || isConfirming}>
             {isRefreshing ? "새로고침 중…" : "새로고침"}
           </button>
         </header>
@@ -513,7 +703,7 @@ export function MealUsageList() {
                       aria-describedby={confirmationError ? "confirmation-error" : undefined}
                       aria-invalid={Boolean(confirmationError)}
                       className={mealUsageListStyles.initialsInput}
-                      disabled={isConfirming || isReconciling}
+                      disabled={isPendingPageLoading || isConfirming || isReconciling}
                       id="confirmer-initials"
                       onChange={(event) => setInitials(event.target.value)}
                       ref={initialsInputRef}
@@ -522,11 +712,11 @@ export function MealUsageList() {
                     <p className={mealUsageListStyles.initialsHint}>확정 기록에 입력한 그대로 남습니다.</p>
                     {confirmationError ? <p id="confirmation-error" className={mealUsageListStyles.confirmationError} role="alert">{confirmationError}</p> : null}
                     {requiresReconciliation ? (
-                      <button className={mealUsageListStyles.reconcile} type="button" disabled={isReconciling || isRefreshing} onClick={() => void reconcileAfterConfirmation(reconciliationMode ?? "ambiguous", "목록을 최신 상태로 반영했습니다.")}>
+                      <button className={mealUsageListStyles.reconcile} type="button" disabled={isPendingPageLoading || isReconciling || isRefreshing} onClick={() => void reconcileAfterConfirmation(reconciliationMode ?? "ambiguous", "목록을 최신 상태로 반영했습니다.")}>
                         {isReconciling ? "목록 확인 중…" : "목록 다시 불러오기"}
                       </button>
                     ) : (
-                      <button className={mealUsageListStyles.confirm} disabled={isConfirming || isReconciling || isRefreshing} type="submit">
+                      <button className={mealUsageListStyles.confirm} disabled={isPendingPageLoading || isConfirming || isReconciling || isRefreshing} type="submit">
                         {isConfirming || isReconciling ? "확정 처리 중…" : "이니셜로 확정"}
                       </button>
                     )}

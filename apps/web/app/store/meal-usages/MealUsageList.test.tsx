@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError, confirmMealUsage, getPendingMealUsages, UnexpectedConfirmationResponseError } from "@/lib/store-api";
@@ -43,8 +43,18 @@ function deferred<T>() {
   return { promise, reject, resolve };
 }
 
+async function flushUpdates() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 afterEach(() => {
   cleanup();
+  Object.defineProperty(document, "hidden", { configurable: true, value: false, writable: true });
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
   vi.resetAllMocks();
 });
 
@@ -187,6 +197,246 @@ describe("MealUsageList", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "새로고침" })).toBeEnabled());
   });
 
+  it("uses the authoritative pending-list GET with a two-second completed-GET cadence", async () => {
+    vi.useFakeTimers();
+    getPendingMealUsagesMock.mockResolvedValue({ items: [pendingItem], page: 0, size: 50, hasNext: false });
+
+    render(<MealUsageList />);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(1);
+    await flushUpdates();
+
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+    await flushUpdates();
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not request while hidden or unmounted and immediately refreshes once when visible again", async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(document, "hidden", { configurable: true, value: true, writable: true });
+    getPendingMealUsagesMock.mockResolvedValue({ items: [pendingItem], page: 0, size: 50, hasNext: false });
+
+    const { unmount } = render(<MealUsageList />);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(getPendingMealUsagesMock).not.toHaveBeenCalled();
+
+    Object.defineProperty(document, "hidden", { configurable: true, value: false, writable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(1);
+    await flushUpdates();
+
+    Object.defineProperty(document, "hidden", { configurable: true, value: true, writable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(document, "hidden", { configurable: true, value: false, writable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+    unmount();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops a delayed list response after the document becomes hidden", async () => {
+    const initialLoad = deferred<{ items: Array<typeof pendingItem>; page: number; size: number; hasNext: boolean }>();
+    getPendingMealUsagesMock
+      .mockReturnValueOnce(initialLoad.promise)
+      .mockResolvedValueOnce({ items: [pendingItem], page: 0, size: 50, hasNext: false });
+
+    render(<MealUsageList />);
+    await waitFor(() => expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(1));
+    Object.defineProperty(document, "hidden", { configurable: true, value: true, writable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    initialLoad.resolve({ items: [pendingItem], page: 0, size: 50, hasNext: false });
+    await initialLoad.promise;
+    expect(screen.queryByText("₩12,000")).not.toBeInTheDocument();
+
+    Object.defineProperty(document, "hidden", { configurable: true, value: false, writable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(() => expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2));
+  });
+
+  it("coalesces manual refresh behind a slow automatic GET into one trailing request", async () => {
+    vi.useFakeTimers();
+    const slowAutomaticGet = deferred<{ items: Array<typeof pendingItem>; page: number; size: number; hasNext: boolean }>();
+    getPendingMealUsagesMock
+      .mockResolvedValueOnce({ items: [pendingItem], page: 0, size: 50, hasNext: false })
+      .mockReturnValueOnce(slowAutomaticGet.promise)
+      .mockResolvedValueOnce({ items: [pendingItem], page: 0, size: 50, hasNext: false });
+
+    render(<MealUsageList />);
+    await flushUpdates();
+    expect(screen.getByRole("button", { name: /매장 태블릿 입력/ })).toBeVisible();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "새로고침" }));
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+    slowAutomaticGet.resolve({ items: [pendingItem], page: 0, size: 50, hasNext: false });
+    await flushUpdates();
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("disables selection and confirmation while a slow automatic list GET is in flight", async () => {
+    vi.useFakeTimers();
+    const slowAutomaticGet = deferred<{ items: Array<typeof pendingItem>; page: number; size: number; hasNext: boolean }>();
+    getPendingMealUsagesMock
+      .mockResolvedValueOnce({ items: [pendingItem], page: 0, size: 50, hasNext: false })
+      .mockReturnValueOnce(slowAutomaticGet.promise)
+      .mockResolvedValueOnce({ items: [pendingItem], page: 0, size: 50, hasNext: false });
+
+    render(<MealUsageList />);
+    await flushUpdates();
+    const row = screen.getByRole("button", { name: /매장 태블릿 입력/ });
+    fireEvent.click(row);
+    const initialsInput = screen.getByLabelText("확인자 이니셜");
+    fireEvent.change(initialsInput, { target: { value: "HK" } });
+    const confirm = screen.getByRole("button", { name: "이니셜로 확정" });
+    expect(confirm).toBeEnabled();
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    await flushUpdates();
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("button", { name: /매장 태블릿 입력/ })).toBeDisabled();
+    expect(screen.getByLabelText("확인자 이니셜")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "이니셜로 확정" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "이니셜로 확정" }));
+    expect(confirmMealUsageMock).not.toHaveBeenCalled();
+
+    slowAutomaticGet.resolve({ items: [pendingItem], page: 0, size: 50, hasNext: false });
+    await flushUpdates();
+    expect(screen.getByLabelText("확인자 이니셜")).toHaveValue("HK");
+    expect(screen.getByRole("button", { name: "이니셜로 확정" })).toBeEnabled();
+  });
+
+  it("uses one immediate reconciliation GET after exact 201 and waits for it before polling again", async () => {
+    vi.useFakeTimers();
+    const reconciliation = deferred<{ items: Array<typeof pendingItem>; page: number; size: number; hasNext: boolean }>();
+    confirmMealUsageMock.mockResolvedValue();
+    getPendingMealUsagesMock
+      .mockResolvedValueOnce({ items: [pendingItem], page: 0, size: 50, hasNext: false })
+      .mockReturnValueOnce(reconciliation.promise)
+      .mockResolvedValueOnce({ items: [], page: 0, size: 50, hasNext: false });
+
+    render(<MealUsageList />);
+    await flushUpdates();
+    fireEvent.click(screen.getByRole("button", { name: /매장 태블릿 입력/ }));
+    fireEvent.change(screen.getByLabelText("확인자 이니셜"), { target: { value: "HK" } });
+    fireEvent.click(screen.getByRole("button", { name: "이니셜로 확정" }));
+    await flushUpdates();
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+
+    reconciliation.resolve({ items: [], page: 0, size: 50, hasNext: false });
+    await flushUpdates();
+    expect(screen.getByRole("status")).toBeVisible();
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    [new ApiError(401, "AUTHENTICATION_REQUIRED"), "login"],
+    [new ApiError(403, "ACCESS_DENIED"), "forbidden"],
+  ])("clears sensitive state and stops scheduled polling after automatic %s", async (error, expected) => {
+    vi.useFakeTimers();
+    getPendingMealUsagesMock
+      .mockResolvedValueOnce({ items: [pendingItem], page: 0, size: 50, hasNext: false })
+      .mockRejectedValueOnce(error);
+
+    render(<MealUsageList />);
+    await flushUpdates();
+    fireEvent.click(screen.getByRole("button", { name: /매장 태블릿 입력/ }));
+    fireEvent.change(screen.getByLabelText("확인자 이니셜"), { target: { value: "HK" } });
+    await vi.advanceTimersByTimeAsync(2_000);
+    await flushUpdates();
+
+    if (expected === "login") {
+      expect(replace).toHaveBeenCalledWith("/store/login?next=/store/meal-usages");
+    } else {
+      expect(screen.getByText("접근 권한이 없습니다")).toBeVisible();
+    }
+    expect(screen.queryByText("₩12,000")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("확인자 이니셜")).not.toBeInTheDocument();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the last safe list and backs off automatic failures through the 30-second cap before success resets to 2 seconds", async () => {
+    vi.useFakeTimers();
+    getPendingMealUsagesMock
+      .mockResolvedValueOnce({ items: [pendingItem], page: 0, size: 50, hasNext: false })
+      .mockRejectedValueOnce(new ApiError(500, "INTERNAL_SERVER_ERROR"))
+      .mockRejectedValueOnce(new TypeError("network failed"))
+      .mockRejectedValueOnce(new ApiError(500, "INTERNAL_SERVER_ERROR"))
+      .mockRejectedValueOnce(new TypeError("network failed"))
+      .mockRejectedValueOnce(new ApiError(500, "INTERNAL_SERVER_ERROR"))
+      .mockResolvedValueOnce({ items: [], page: 0, size: 50, hasNext: false })
+      .mockResolvedValueOnce({ items: [], page: 0, size: 50, hasNext: false });
+
+    render(<MealUsageList />);
+    await flushUpdates();
+    expect(screen.getByText("₩12,000")).toBeVisible();
+    await vi.advanceTimersByTimeAsync(2_000);
+    await flushUpdates();
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("₩12,000")).toBeVisible();
+
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    await flushUpdates();
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(3);
+
+    await vi.advanceTimersByTimeAsync(4_000 + 8_000 + 16_000);
+    await flushUpdates();
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(6);
+
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(6);
+    await vi.advanceTimersByTimeAsync(1);
+    await flushUpdates();
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(7);
+
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(7);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(8);
+  });
+
+  it("keeps an authoritative empty state through a recoverable automatic polling failure", async () => {
+    vi.useFakeTimers();
+    getPendingMealUsagesMock
+      .mockResolvedValueOnce({ items: [], page: 0, size: 50, hasNext: false })
+      .mockRejectedValueOnce(new ApiError(500, "INTERNAL_SERVER_ERROR"))
+      .mockResolvedValueOnce({ items: [], page: 0, size: 50, hasNext: false });
+
+    render(<MealUsageList />);
+    await flushUpdates();
+    expect(screen.getByText("확인 대기 거래가 없습니다")).toBeVisible();
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    await flushUpdates();
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("확인 대기 거래가 없습니다")).toBeVisible();
+    expect(screen.queryByText("목록을 불러오지 못했습니다")).not.toBeInTheDocument();
+
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(3);
+  });
+
   it("ignores a delayed list result after its lifecycle ends", async () => {
     const initialLoad = deferred<{ items: Array<typeof pendingItem>; page: number; size: number; hasNext: boolean }>();
     getPendingMealUsagesMock.mockReturnValueOnce(initialLoad.promise);
@@ -286,7 +536,7 @@ describe("MealUsageList", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  it("preserves exact 201 provenance through a failed GET and shows success after GET-only retry omits it", async () => {
+  it("preserves exact 201 provenance through a failed GET and promotes it after a top refresh omits the row", async () => {
     const user = userEvent.setup();
     confirmMealUsageMock.mockResolvedValue();
     getPendingMealUsagesMock
@@ -298,7 +548,8 @@ describe("MealUsageList", () => {
     await user.click(await screen.findByRole("button", { name: /매장 태블릿 입력/ }));
     await user.type(screen.getByLabelText("확인자 이니셜"), "HK");
     await user.click(screen.getByRole("button", { name: "이니셜로 확정" }));
-    await user.click(await screen.findByRole("button", { name: "목록 다시 불러오기" }));
+    await screen.findByRole("button", { name: "목록 다시 불러오기" });
+    await user.click(screen.getByRole("button", { name: "새로고침" }));
 
     await waitFor(() => expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(3));
     expect(confirmMealUsageMock).toHaveBeenCalledTimes(1);
