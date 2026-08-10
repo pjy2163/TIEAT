@@ -29,6 +29,7 @@ PROMPTS.md
 docs/
 scripts/check-public.sh
 scripts/verify.sh
+scripts/check-commit-scope.sh
 
 # Editor and operating-system files
 .DS_Store
