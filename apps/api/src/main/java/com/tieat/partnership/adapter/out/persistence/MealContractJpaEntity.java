@@ -6,9 +6,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.util.UUID;
 
@@ -34,10 +31,6 @@ class MealContractJpaEntity {
 
     @Column(name = "qr_selectable", nullable = false)
     private boolean qrSelectable;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "partner_organization_id", insertable = false, updatable = false)
-    private PartnerOrganizationJpaEntity partnerOrganization;
 
     protected MealContractJpaEntity() {
     }
@@ -80,9 +73,5 @@ class MealContractJpaEntity {
 
     boolean qrSelectable() {
         return qrSelectable;
-    }
-
-    String partnerDisplayName() {
-        return partnerOrganization == null ? null : partnerOrganization.displayName();
     }
 }

@@ -19,6 +19,9 @@ import com.tieat.partnership.domain.MealContract;
 import com.tieat.partnership.domain.MealContractId;
 import com.tieat.partnership.domain.MealContractPaymentType;
 import com.tieat.partnership.domain.MealContractRepository;
+import com.tieat.partnership.domain.PartnerOrganization;
+import com.tieat.partnership.domain.PartnerOrganizationId;
+import com.tieat.partnership.domain.PartnerOrganizationRepository;
 import com.tieat.store.domain.StoreId;
 import java.time.Instant;
 import java.util.UUID;
@@ -29,8 +32,11 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -69,6 +75,9 @@ class ContractBalanceConfirmationIntegrationTest {
 
     @Autowired
     private MealContractRepository mealContractRepository;
+
+    @Autowired
+    private PartnerOrganizationRepository partnerOrganizationRepository;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -124,6 +133,25 @@ class ContractBalanceConfirmationIntegrationTest {
         });
         assertThat(reloadUsage(usage.id()).status()).isEqualTo(MealUsageStatus.CONFIRMED);
         assertThat(reloadContract(contract.id()).prepaidBalance()).isZero();
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void confirmsQrSelectableContractWithoutImmutableAssociationWarning(CapturedOutput output) {
+        PartnerOrganization partner = partner("협력사 A");
+        MealContract contract = qrSelectablePrepaidContract(partner.id(), 10_000);
+        MealUsage usage = pendingUsage(contract.id(), STORE_ID, 8_000);
+        mealContractRepository.save(contract);
+        mealUsageRepository.save(usage);
+
+        MealUsage confirmed = confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), STORE_ID, "HK"));
+
+        assertThat(confirmed.prepaidAllocation()).contains(new com.tieat.ledger.domain.PrepaidAllocation(8_000, 8_000, 0, 2_000));
+        MealContract reloaded = reloadContract(contract.id());
+        assertThat(reloaded.prepaidBalance()).isEqualTo(2_000);
+        assertThat(reloaded.partnerOrganizationId()).contains(partner.id());
+        assertThat(reloaded.isQrSelectable()).isTrue();
+        assertThat(output).doesNotContain("HHH000502");
     }
 
     @Test
@@ -339,6 +367,23 @@ class ContractBalanceConfirmationIntegrationTest {
         return new MealContract(
             contractId(), STORE_ID, MealContractPaymentType.PREPAID_WITH_RECEIVABLE_OVERFLOW, prepaidBalance
         );
+    }
+
+    private MealContract qrSelectablePrepaidContract(PartnerOrganizationId partnerOrganizationId, long prepaidBalance) {
+        return new MealContract(
+            contractId(),
+            STORE_ID,
+            MealContractPaymentType.PREPAID_WITH_RECEIVABLE_OVERFLOW,
+            prepaidBalance,
+            partnerOrganizationId,
+            true
+        );
+    }
+
+    private PartnerOrganization partner(String displayName) {
+        return partnerOrganizationRepository.save(new PartnerOrganization(
+            new PartnerOrganizationId(UUID.randomUUID()), displayName
+        ));
     }
 
     private MealContract postpaidContract() {

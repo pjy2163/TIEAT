@@ -36,9 +36,9 @@ public class MealContractPersistenceAdapter implements MealContractRepository {
     public List<QrSelectableMealContract> findQrSelectableByStoreId(StoreId storeId) {
         Objects.requireNonNull(storeId, "Store id must be supplied");
         return repository.findQrSelectableByStoreId(storeId.value()).stream()
-            .map(entity -> new QrSelectableMealContract(
-                new MealContractId(entity.id()),
-                entity.partnerDisplayName()
+            .map(projection -> new QrSelectableMealContract(
+                new MealContractId(projection.getMealContractId()),
+                projection.getPartnerDisplayName()
             ))
             .toList();
     }

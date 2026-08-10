@@ -16,10 +16,18 @@ interface MealContractJpaRepository extends JpaRepository<MealContractJpaEntity,
     Optional<MealContractJpaEntity> findByIdForUpdate(@Param("id") UUID id);
 
     @Query("""
-        select mealContract
-        from MealContractJpaEntity mealContract
-        join fetch mealContract.partnerOrganization
-        where mealContract.storeId = :storeId and mealContract.qrSelectable = true
+        select mealContract.id as mealContractId, partnerOrganization.displayName as partnerDisplayName
+        from MealContractJpaEntity mealContract, PartnerOrganizationJpaEntity partnerOrganization
+        where mealContract.partnerOrganizationId = partnerOrganization.id
+          and mealContract.storeId = :storeId
+          and mealContract.qrSelectable = true
         """)
-    List<MealContractJpaEntity> findQrSelectableByStoreId(@Param("storeId") UUID storeId);
+    List<QrSelectableMealContractProjection> findQrSelectableByStoreId(@Param("storeId") UUID storeId);
+}
+
+interface QrSelectableMealContractProjection {
+
+    UUID getMealContractId();
+
+    String getPartnerDisplayName();
 }
