@@ -35,6 +35,7 @@ public class MealUsageQrContextPersistenceAdapter implements MealUsageQrContextR
             new StoreId(entity.storeId()),
             entity.storeDisplayName(),
             entity.tokenHash(),
+            entity.createdAt(),
             entity.expiresAt(),
             entity.revokedAt()
         );

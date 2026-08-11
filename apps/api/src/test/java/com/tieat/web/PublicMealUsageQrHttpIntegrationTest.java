@@ -144,8 +144,8 @@ class PublicMealUsageQrHttpIntegrationTest {
         String revokedToken = MealUsageQrToken.generate();
         String expiredToken = MealUsageQrToken.generate();
         String malformedToken = "not_a_256_bit_qr_token";
-        seedQrContext(revokedToken, Instant.now().plusSeconds(3_600), Instant.now());
-        seedQrContext(expiredToken, Instant.now().minusSeconds(1), null);
+        seedQrContext(revokedToken, STORE_ID, Instant.now().plusSeconds(3_600), Instant.now());
+        seedQrContext(expiredToken, OTHER_STORE_ID, Instant.now().minusSeconds(1), null);
 
         List<String> problems = new ArrayList<>();
         for (String token : List.of(unknownToken, revokedToken, expiredToken, malformedToken)) {
@@ -416,7 +416,7 @@ class PublicMealUsageQrHttpIntegrationTest {
             true
         ));
         String token = MealUsageQrToken.generate();
-        UUID qrContextId = seedQrContext(token, Instant.now().plusSeconds(3_600), null);
+        UUID qrContextId = seedQrContext(token, STORE_ID, Instant.now().plusSeconds(3_600), null);
         return new Fixture(token, qrContextId, contract);
     }
 
@@ -424,7 +424,7 @@ class PublicMealUsageQrHttpIntegrationTest {
         return partnerOrganizationRepository.save(new PartnerOrganization(new PartnerOrganizationId(UUID.randomUUID()), displayName));
     }
 
-    private UUID seedQrContext(String token, Instant expiresAt, Instant revokedAt) {
+    private UUID seedQrContext(String token, StoreId storeId, Instant expiresAt, Instant revokedAt) {
         UUID qrContextId = UUID.randomUUID();
         jdbcTemplate.update(
             """
@@ -433,7 +433,7 @@ class PublicMealUsageQrHttpIntegrationTest {
                 values (?, ?, ?, ?, ?, ?, ?)
                 """,
             qrContextId,
-            STORE_ID.value(),
+            storeId.value(),
             "강남점",
             MealUsageQrToken.sha256Hash(token),
             Timestamp.from(expiresAt),

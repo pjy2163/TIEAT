@@ -14,6 +14,7 @@ public final class MealUsageQrContext {
     private final StoreId storeId;
     private final String storeDisplayName;
     private final String tokenHash;
+    private final Instant issuedAt;
     private final Instant expiresAt;
     private final Instant revokedAt;
 
@@ -22,6 +23,7 @@ public final class MealUsageQrContext {
         StoreId storeId,
         String storeDisplayName,
         String tokenHash,
+        Instant issuedAt,
         Instant expiresAt,
         Instant revokedAt
     ) {
@@ -35,7 +37,11 @@ public final class MealUsageQrContext {
             throw new IllegalArgumentException("QR token hash must be a SHA-256 hex digest");
         }
         this.tokenHash = tokenHash;
+        this.issuedAt = Objects.requireNonNull(issuedAt, "QR issue time must be supplied");
         this.expiresAt = Objects.requireNonNull(expiresAt, "QR expiry must be supplied");
+        if (!expiresAt.isAfter(issuedAt)) {
+            throw new IllegalArgumentException("QR expiry must be after issue time");
+        }
         this.revokedAt = revokedAt;
     }
 
@@ -47,7 +53,7 @@ public final class MealUsageQrContext {
         Instant issuedAt
     ) {
         Objects.requireNonNull(issuedAt, "QR issue time must be supplied");
-        return new MealUsageQrContext(id, storeId, storeDisplayName, tokenHash, issuedAt.plus(DEFAULT_LIFETIME), null);
+        return new MealUsageQrContext(id, storeId, storeDisplayName, tokenHash, issuedAt, issuedAt.plus(DEFAULT_LIFETIME), null);
     }
 
     public boolean isActiveAt(Instant instant) {
@@ -69,6 +75,10 @@ public final class MealUsageQrContext {
 
     public String tokenHash() {
         return tokenHash;
+    }
+
+    public Instant issuedAt() {
+        return issuedAt;
     }
 
     public Instant expiresAt() {

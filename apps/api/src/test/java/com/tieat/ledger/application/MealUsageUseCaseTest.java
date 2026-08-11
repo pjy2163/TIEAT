@@ -234,6 +234,7 @@ class MealUsageUseCaseTest {
             storeId(),
             "강남점",
             MealUsageQrToken.sha256Hash(token),
+            SERVER_TIME,
             SERVER_TIME.plusSeconds(60),
             null
         ));
