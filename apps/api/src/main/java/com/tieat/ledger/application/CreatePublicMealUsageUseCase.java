@@ -6,6 +6,7 @@ import com.tieat.ledger.domain.MealUsageRepository;
 import com.tieat.ledger.domain.PublicMealUsageIdempotency;
 import com.tieat.ledger.domain.PublicMealUsageIdempotencyRepository;
 import com.tieat.partnership.domain.QrSelectableMealContract;
+import com.tieat.partnership.domain.MealContract;
 import com.tieat.partnership.domain.MealContractRepository;
 import com.tieat.qr.application.PublicMealUsageQrNotFoundException;
 import com.tieat.qr.domain.MealUsageQrContext;
@@ -66,7 +67,10 @@ public class CreatePublicMealUsageUseCase {
             throw new PublicMealUsageRateLimitExceededException();
         }
 
-        QrSelectableMealContract selectedContract = mealContractRepository.findQrSelectableByStoreId(context.storeId()).stream()
+        MealContract lockedContract = mealContractRepository.findByIdForUpdate(command.mealContractId())
+            .filter(contract -> contract.storeId().equals(context.storeId()) && contract.isQrSelectable())
+            .orElseThrow(PublicQrMealContractNotFoundException::new);
+        QrSelectableMealContract selectedContract = mealContractRepository.findQrSelectableByStoreId(lockedContract.storeId()).stream()
             .filter(contract -> contract.mealContractId().equals(command.mealContractId()))
             .findFirst()
             .orElseThrow(PublicQrMealContractNotFoundException::new);
