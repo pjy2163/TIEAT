@@ -732,9 +732,12 @@ export function MealUsageList() {
             <h1 id="pending-title" className={mealUsageListStyles.title}>확인 대기 거래</h1>
             <p className={mealUsageListStyles.description}>오래된 거래부터 표시합니다.</p>
           </div>
-          <button className={mealUsageListStyles.refresh} type="button" onClick={handleManualRefresh} disabled={isRefreshing || isReconciling || isConfirming}>
-            {isRefreshing ? "새로고침 중…" : "새로고침"}
-          </button>
+          <div className={mealUsageListStyles.headerActions}>
+            <a className={mealUsageListStyles.monthlyLedgerLink} href="/store/meal-usages/months">월별 장부</a>
+            <button className={mealUsageListStyles.refresh} type="button" onClick={handleManualRefresh} disabled={isRefreshing || isReconciling || isConfirming}>
+              {isRefreshing ? "새로고침 중…" : "새로고침"}
+            </button>
+          </div>
         </header>
 
         <div className={mealUsageListStyles.card}>
