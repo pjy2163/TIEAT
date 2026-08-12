@@ -8,6 +8,7 @@ import com.tieat.ledger.domain.MealUsageStatus;
 import com.tieat.ledger.domain.PrepaidAllocation;
 import com.tieat.ledger.domain.Confirmation;
 import com.tieat.ledger.domain.Rejection;
+import com.tieat.ledger.domain.Cancellation;
 import com.tieat.partnership.domain.MealContractId;
 import com.tieat.store.domain.StoreId;
 import com.tieat.qr.domain.MealUsageQrContextId;
@@ -62,6 +63,7 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
         Confirmation confirmation = mealUsage.confirmation().orElse(null);
         PrepaidAllocation prepaidAllocation = mealUsage.prepaidAllocation().orElse(null);
         Rejection rejection = mealUsage.rejection().orElse(null);
+        Cancellation cancellation = mealUsage.cancellation().orElse(null);
         return new MealUsageJpaEntity(
             mealUsage.id().value(),
             mealUsage.storeId().value(),
@@ -79,7 +81,9 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
             prepaidAllocation == null ? null : prepaidAllocation.receivableCreated(),
             prepaidAllocation == null ? null : prepaidAllocation.remainingPrepaid(),
             rejection == null ? null : rejection.staffLoginId(),
-            rejection == null ? null : rejection.rejectedAt()
+            rejection == null ? null : rejection.rejectedAt(),
+            cancellation == null ? null : cancellation.cancelledAt(),
+            cancellation == null ? null : cancellation.reason()
         );
     }
 
@@ -127,6 +131,20 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
                 entity.createdAt(),
                 entity.version(),
                 new Rejection(entity.rejectedStaffLoginId(), entity.rejectedAt()),
+                entity.partnerDisplayName(),
+                qrContextId(entity)
+            );
+        }
+        if (entity.status() == MealUsageStatus.CANCELLED) {
+            return MealUsage.restoreCancelled(
+                new MealUsageId(entity.id()),
+                new StoreId(entity.storeId()),
+                new MealContractId(entity.mealContractId()),
+                entity.entrySource(),
+                entity.amount(),
+                entity.createdAt(),
+                entity.version(),
+                new Cancellation(entity.cancellationReason(), entity.cancelledAt()),
                 entity.partnerDisplayName(),
                 qrContextId(entity)
             );

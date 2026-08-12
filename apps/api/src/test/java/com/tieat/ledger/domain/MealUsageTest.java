@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import com.tieat.partnership.domain.MealContractId;
+import com.tieat.qr.domain.MealUsageQrContextId;
 import com.tieat.store.domain.StoreId;
 import java.time.Instant;
 import java.util.UUID;
@@ -213,6 +214,45 @@ class MealUsageTest {
             new Confirmation("HK", CONFIRMED_AT),
             new PrepaidAllocation(10_000, 10_000, 0, 0)
         ));
+    }
+
+    @Test
+    void cancelsOnlyPendingPublicQrUsageAndPreservesTheCancellationAudit() {
+        MealUsage usage = MealUsage.pendingFromPublicQr(
+            id(),
+            storeId(),
+            mealContractId(),
+            new MealUsageQrContextId(UUID.fromString("8d39e2bb-0752-4a97-9f56-9297cbaa385a")),
+            "협력사 A",
+            12_000,
+            createdAt()
+        );
+
+        usage.cancelFromPublicQr(CONFIRMED_AT);
+
+        assertThat(usage.status()).isEqualTo(MealUsageStatus.CANCELLED);
+        assertThat(usage.cancellation()).contains(new Cancellation(CancellationReason.PUBLIC_SELF_CORRECTION, CONFIRMED_AT));
+        assertThat(usage.confirmation()).isEmpty();
+        assertThat(usage.prepaidAllocation()).isEmpty();
+        assertThat(usage.rejection()).isEmpty();
+    }
+
+    @Test
+    void rejectsCancellationForStoreTabletOrTerminalUsage() {
+        MealUsage storeTabletUsage = pending(EntrySource.STORE_TABLET);
+        MealUsage publicUsage = MealUsage.pendingFromPublicQr(
+            id(),
+            storeId(),
+            mealContractId(),
+            new MealUsageQrContextId(UUID.fromString("8d39e2bb-0752-4a97-9f56-9297cbaa385a")),
+            "협력사 A",
+            12_000,
+            createdAt()
+        );
+        publicUsage.cancelFromPublicQr(CONFIRMED_AT);
+
+        assertThatIllegalStateException().isThrownBy(() -> storeTabletUsage.cancelFromPublicQr(CONFIRMED_AT));
+        assertThatIllegalStateException().isThrownBy(() -> publicUsage.cancelFromPublicQr(CONFIRMED_AT.plusSeconds(1)));
     }
 
     private void assertAllocationInvariant(MealUsage usage) {

@@ -1,6 +1,7 @@
 package com.tieat.ledger.adapter.out.persistence;
 
 import com.tieat.ledger.domain.EntrySource;
+import com.tieat.ledger.domain.CancellationReason;
 import com.tieat.ledger.domain.MealUsageStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -70,6 +71,13 @@ class MealUsageJpaEntity {
     @Column(name = "rejected_at")
     private Instant rejectedAt;
 
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancellation_reason", length = 64)
+    private CancellationReason cancellationReason;
+
     protected MealUsageJpaEntity() {
     }
 
@@ -90,7 +98,9 @@ class MealUsageJpaEntity {
         Long receivableCreated,
         Long remainingPrepaid,
         String rejectedStaffLoginId,
-        Instant rejectedAt
+        Instant rejectedAt,
+        Instant cancelledAt,
+        CancellationReason cancellationReason
     ) {
         this.id = id;
         this.storeId = storeId;
@@ -109,6 +119,8 @@ class MealUsageJpaEntity {
         this.remainingPrepaid = remainingPrepaid;
         this.rejectedStaffLoginId = rejectedStaffLoginId;
         this.rejectedAt = rejectedAt;
+        this.cancelledAt = cancelledAt;
+        this.cancellationReason = cancellationReason;
     }
 
     UUID id() {
@@ -177,5 +189,13 @@ class MealUsageJpaEntity {
 
     Instant rejectedAt() {
         return rejectedAt;
+    }
+
+    Instant cancelledAt() {
+        return cancelledAt;
+    }
+
+    CancellationReason cancellationReason() {
+        return cancellationReason;
     }
 }
