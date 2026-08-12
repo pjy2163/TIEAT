@@ -6,7 +6,9 @@ import { ApiError, login } from "@/lib/store-api";
 import { loginStyles } from "./LoginForm.styles";
 
 function safeNext(value: string | null): string {
-  return value === "/store/meal-usages" ? value : "/store/meal-usages";
+  return value === "/store/meal-usages" || value === "/store/meal-usages/months"
+    ? value
+    : "/store/meal-usages";
 }
 
 export function LoginForm() {
