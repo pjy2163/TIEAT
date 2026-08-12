@@ -56,6 +56,18 @@ describe("LoginForm", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/store/meal-usages"));
   });
 
+
+  it("allows the monthly ledger route as an authenticated store destination", async () => {
+    const user = userEvent.setup();
+    nextValue = "/store/meal-usages/months";
+    loginMock.mockResolvedValue(undefined);
+    render(<LoginForm />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole("button", { name: "로그인" }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/store/meal-usages/months"));
+  });
   it("shows a specific authentication failure message", async () => {
     const user = userEvent.setup();
     loginMock.mockRejectedValue(new ApiError(401, "AUTHENTICATION_FAILED"));
