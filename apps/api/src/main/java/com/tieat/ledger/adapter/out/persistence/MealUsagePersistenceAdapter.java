@@ -53,6 +53,28 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
     }
 
     @Override
+    public MealUsageSlice findConfirmedByStoreIdAndCreatedAtBetween(
+        StoreId storeId,
+        Instant startInclusive,
+        Instant endExclusive,
+        int page,
+        int size
+    ) {
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        Objects.requireNonNull(startInclusive, "Monthly ledger start time must be supplied");
+        Objects.requireNonNull(endExclusive, "Monthly ledger end time must be supplied");
+        var pageable = PageRequest.of(
+            page,
+            size,
+            Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"))
+        );
+        var result = repository.findByStoreIdAndStatusAndCreatedAtBetween(
+            storeId.value(), MealUsageStatus.CONFIRMED, startInclusive, endExclusive, pageable
+        );
+        return new MealUsageSlice(result.getContent().stream().map(this::toDomain).toList(), result.hasNext());
+    }
+
+    @Override
     public long countPublicQrCreatedSince(MealUsageQrContextId qrContextId, Instant since) {
         Objects.requireNonNull(qrContextId, "Meal usage QR context id must be supplied");
         Objects.requireNonNull(since, "Public QR rate limit time must be supplied");

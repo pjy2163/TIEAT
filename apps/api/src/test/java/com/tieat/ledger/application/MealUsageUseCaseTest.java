@@ -347,6 +347,27 @@ class MealUsageUseCaseTest {
         }
 
         @Override
+        public MealUsageSlice findConfirmedByStoreIdAndCreatedAtBetween(
+            StoreId storeId,
+            Instant startInclusive,
+            Instant endExclusive,
+            int page,
+            int size
+        ) {
+            List<MealUsage> monthly = mealUsages.values().stream()
+                .filter(usage -> usage.storeId().equals(storeId))
+                .filter(usage -> usage.status() == MealUsageStatus.CONFIRMED)
+                .filter(usage -> !usage.createdAt().isBefore(startInclusive))
+                .filter(usage -> usage.createdAt().isBefore(endExclusive))
+                .sorted(Comparator.<MealUsage, Instant>comparing(MealUsage::createdAt).reversed()
+                    .thenComparing(usage -> usage.id().value(), Comparator.reverseOrder()))
+                .toList();
+            int fromIndex = Math.min(page * size, monthly.size());
+            int toIndex = Math.min(fromIndex + size, monthly.size());
+            return new MealUsageSlice(monthly.subList(fromIndex, toIndex), toIndex < monthly.size());
+        }
+
+        @Override
         public long countPublicQrCreatedSince(
             com.tieat.qr.domain.MealUsageQrContextId qrContextId,
             java.time.Instant since

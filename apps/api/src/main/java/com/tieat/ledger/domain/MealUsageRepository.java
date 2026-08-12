@@ -13,5 +13,13 @@ public interface MealUsageRepository {
 
     MealUsageSlice findPendingByStoreId(StoreId storeId, int page, int size);
 
+    MealUsageSlice findConfirmedByStoreIdAndCreatedAtBetween(
+        StoreId storeId,
+        Instant startInclusive,
+        Instant endExclusive,
+        int page,
+        int size
+    );
+
     long countPublicQrCreatedSince(MealUsageQrContextId qrContextId, Instant since);
 }

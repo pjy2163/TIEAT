@@ -14,6 +14,22 @@ interface MealUsageJpaRepository extends JpaRepository<MealUsageJpaEntity, UUID>
     Slice<MealUsageJpaEntity> findByStoreIdAndStatus(UUID storeId, MealUsageStatus status, Pageable pageable);
 
     @Query("""
+        select mealUsage
+        from MealUsageJpaEntity mealUsage
+        where mealUsage.storeId = :storeId
+          and mealUsage.status = :status
+          and mealUsage.createdAt >= :startInclusive
+          and mealUsage.createdAt < :endExclusive
+        """)
+    Slice<MealUsageJpaEntity> findByStoreIdAndStatusAndCreatedAtBetween(
+        @Param("storeId") UUID storeId,
+        @Param("status") MealUsageStatus status,
+        @Param("startInclusive") Instant startInclusive,
+        @Param("endExclusive") Instant endExclusive,
+        Pageable pageable
+    );
+
+    @Query("""
         select count(mealUsage)
         from MealUsageJpaEntity mealUsage
         where mealUsage.publicQrContextId = :qrContextId and mealUsage.createdAt >= :since

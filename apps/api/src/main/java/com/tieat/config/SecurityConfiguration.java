@@ -49,6 +49,7 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.POST, "/api/v1/public/meal-usage-qr/*/meal-usages").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/meal-usages").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.GET, "/api/v1/meal-usages").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/v1/meal-usages/months/*").hasRole("STORE_STAFF")
                 .requestMatchers("/api/v1/meal-usages/*/confirmations").hasRole("STORE_STAFF")
                 .requestMatchers("/api/v1/meal-usages/*/rejections").hasRole("STORE_STAFF")
                 .anyRequest().authenticated()

@@ -42,7 +42,8 @@ public class ProblemDetailFactory {
     ) throws IOException {
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        if (isPublicMealUsageQrRequest(request)) {
+        if (isPublicMealUsageQrRequest(request)
+            || isMonthlyMealUsageRequest(request)) {
             response.setHeader(HttpHeaders.CACHE_CONTROL, CacheControl.noStore().getHeaderValue());
         }
         objectMapper.writeValue(response.getOutputStream(), create(request, status, errorCode, detail));
@@ -51,5 +52,10 @@ public class ProblemDetailFactory {
     boolean isPublicMealUsageQrRequest(HttpServletRequest request) {
         String publicQrPrefix = request.getContextPath() + "/api/v1/public/meal-usage-qr/";
         return request.getRequestURI().startsWith(publicQrPrefix);
+    }
+
+    boolean isMonthlyMealUsageRequest(HttpServletRequest request) {
+        String monthlyLedgerPrefix = request.getContextPath() + "/api/v1/meal-usages/months/";
+        return request.getRequestURI().startsWith(monthlyLedgerPrefix);
     }
 }
