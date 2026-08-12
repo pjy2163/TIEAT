@@ -17,11 +17,14 @@ import { mealUsageListStyles } from "./MealUsageList.styles";
 type ViewState = "loading" | "ready" | "empty" | "forbidden" | "error";
 type ReconciliationMode = "terminal" | "ambiguous";
 type LoadReason = "initial" | "manual" | "automatic";
-type SuccessfulConfirmation = Pick<PendingMealUsage, "mealUsageId" | "amountMinor" | "entrySource">;
+type SuccessfulConfirmation = Pick<PendingMealUsage, "mealUsageId">;
 type PendingPageApplication = "no-selection" | "selection-cleared" | "terminal-pending" | "ambiguous-pending" | "pending";
+type DeferredPendingPageChange = "new-request" | "changed";
 
 const POLLING_INTERVAL_MILLIS = 2_000;
 const MAX_POLLING_RETRY_MILLIS = 30_000;
+const TERMINAL_SUCCESS_NOTICE_DISMISS_MILLIS = 5_000;
+const REJECTION_SUCCESS_NOTICE = "요청을 거절했습니다.";
 
 const amountFormatter = new Intl.NumberFormat("ko-KR", {
   style: "currency",
@@ -96,13 +99,27 @@ function confirmationErrorMessage(error: unknown): string {
   return "확정 결과를 바로 알 수 없습니다. 목록을 다시 불러와 확인해 주세요.";
 }
 
+function isSamePendingPage(current: PendingMealUsage[], next: PendingMealUsage[]): boolean {
+  return current.length === next.length && current.every((item, index) => {
+    const nextItem = next[index];
+    return item.mealUsageId === nextItem.mealUsageId
+      && item.status === nextItem.status
+      && item.entrySource === nextItem.entrySource
+      && item.partnerDisplayName === nextItem.partnerDisplayName
+      && item.amountMinor === nextItem.amountMinor
+      && item.createdAt === nextItem.createdAt;
+  });
+}
+
 export function MealUsageList() {
   const router = useRouter();
   const [items, setItems] = useState<PendingMealUsage[]>([]);
   const [viewState, setViewState] = useState<ViewState>("loading");
   const [isPendingPageLoading, setIsPendingPageLoading] = useState(false);
+  const [isAutomaticPolling, setIsAutomaticPolling] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [deferredPendingPageChange, setDeferredPendingPageChange] = useState<DeferredPendingPageChange | null>(null);
   const [selectedMealUsage, setSelectedMealUsage] = useState<PendingMealUsage | null>(null);
   const [initials, setInitials] = useState("");
   const [confirmationError, setConfirmationError] = useState<string | null>(null);
@@ -115,6 +132,7 @@ export function MealUsageList() {
   const [reconciliationMode, setReconciliationMode] = useState<ReconciliationMode | null>(null);
   const hasItemsRef = useRef(false);
   const hasAuthoritativePendingPageRef = useRef(false);
+  const displayedPendingPageRef = useRef<PendingMealUsage[]>([]);
   const selectedMealUsageRef = useRef<PendingMealUsage | null>(null);
   const confirmationInFlightRef = useRef(false);
   const successfulConfirmationRef = useRef<SuccessfulConfirmation | null>(null);
@@ -181,6 +199,18 @@ export function MealUsageList() {
     setSuccessfulConfirmation(null);
   }, []);
 
+  useEffect(() => {
+    if (!successfulConfirmation) return;
+    const timer = window.setTimeout(clearSuccessfulConfirmation, TERMINAL_SUCCESS_NOTICE_DISMISS_MILLIS);
+    return () => window.clearTimeout(timer);
+  }, [clearSuccessfulConfirmation, successfulConfirmation]);
+
+  useEffect(() => {
+    if (confirmationNotice !== REJECTION_SUCCESS_NOTICE) return;
+    const timer = window.setTimeout(() => setConfirmationNotice(null), TERMINAL_SUCCESS_NOTICE_DISMISS_MILLIS);
+    return () => window.clearTimeout(timer);
+  }, [confirmationNotice]);
+
   const selectMealUsage = useCallback((item: PendingMealUsage) => {
     selectedMealUsageRef.current = item;
     setSelectedMealUsage(item);
@@ -197,6 +227,8 @@ export function MealUsageList() {
   const clearSensitiveRows = useCallback(() => {
     setItems([]);
     hasItemsRef.current = false;
+    displayedPendingPageRef.current = [];
+    setDeferredPendingPageChange(null);
     setRefreshError(null);
     setConfirmationNotice(null);
     clearSuccessfulConfirmation();
@@ -205,10 +237,12 @@ export function MealUsageList() {
 
   const applyPendingPage = useCallback((result: PendingMealUsagePage): PendingPageApplication => {
     hasAuthoritativePendingPageRef.current = true;
+    displayedPendingPageRef.current = result.items;
     setItems(result.items);
     hasItemsRef.current = result.items.length > 0;
     setViewState(result.items.length === 0 ? "empty" : "ready");
     setRefreshError(null);
+    setDeferredPendingPageChange(null);
 
     const selectedId = selectedMealUsageRef.current?.mealUsageId;
     const successfulConfirmationWasOmitted = successfulConfirmationRef.current
@@ -289,7 +323,11 @@ export function MealUsageList() {
     clearScheduledPolling();
     settledRequestCanScheduleRef.current = false;
     pendingPageRequestInFlightRef.current = true;
-    setIsPendingPageLoading(true);
+    if (reason === "automatic") {
+      setIsAutomaticPolling(true);
+    } else {
+      setIsPendingPageLoading(true);
+    }
     const epoch = beginPendingRequest();
     let requestCanSchedule = false;
     let requestFailed = false;
@@ -300,7 +338,19 @@ export function MealUsageList() {
       pollingFailureCountRef.current = 0;
       nextPollingDelayRef.current = POLLING_INTERVAL_MILLIS;
       requestCanSchedule = true;
-      applyPendingPage(result);
+      if (reason === "automatic" && selectedMealUsageRef.current !== null) {
+        const displayedPage = displayedPendingPageRef.current;
+        const displayedIds = new Set(displayedPage.map((item) => item.mealUsageId));
+        const hasNewRequest = result.items.some((item) => !displayedIds.has(item.mealUsageId));
+        const hasChangedPage = !isSamePendingPage(displayedPage, result.items);
+        if (hasNewRequest) {
+          setDeferredPendingPageChange("new-request");
+        } else if (hasChangedPage) {
+          setDeferredPendingPageChange("changed");
+        }
+      } else {
+        applyPendingPage(result);
+      }
     } catch (error) {
       if (!isCurrentPendingRequest(epoch)) return;
       if (error instanceof ApiError && error.status === 401) {
@@ -328,7 +378,10 @@ export function MealUsageList() {
       }
     } finally {
       pendingPageRequestInFlightRef.current = false;
-      if (mountedRef.current) {
+      if (reason === "automatic" && mountedRef.current) {
+        setIsAutomaticPolling(false);
+      }
+      if (reason !== "automatic" && mountedRef.current) {
         setIsPendingPageLoading(false);
       }
       if (reason === "manual" && mountedRef.current) {
@@ -489,8 +542,6 @@ export function MealUsageList() {
       if (!mountedRef.current) return;
       successfulConfirmationRef.current = {
         mealUsageId: currentSelection.mealUsageId,
-        amountMinor: currentSelection.amountMinor,
-        entrySource: currentSelection.entrySource,
       };
       setSuccessfulConfirmation(null);
       setConfirmationError(null);
@@ -565,7 +616,7 @@ export function MealUsageList() {
     try {
       await rejectMealUsage(currentSelection.mealUsageId);
       if (!mountedRef.current) return;
-      await reconcileAfterConfirmation("terminal", "거절을 반영해 목록을 다시 불러왔습니다.");
+      await reconcileAfterConfirmation("terminal", REJECTION_SUCCESS_NOTICE);
     } catch (error) {
       if (!mountedRef.current) return;
       if (error instanceof UnexpectedRejectionResponseError) {
@@ -688,6 +739,11 @@ export function MealUsageList() {
 
         <div className={mealUsageListStyles.card}>
           {refreshError ? <p className={mealUsageListStyles.notice} role="alert">{refreshError}</p> : null}
+          {deferredPendingPageChange ? (
+            <button className={mealUsageListStyles.incomingRefresh} type="button" onClick={handleManualRefresh} disabled={isRefreshing || isReconciling || isConfirming}>
+              {deferredPendingPageChange === "new-request" ? "새로운 요청이 있습니다." : "목록이 변경되었습니다 · 새로고침"}
+            </button>
+          ) : null}
           {confirmationNotice ? <p className={mealUsageListStyles.statusNotice} role="status">{confirmationNotice}</p> : null}
           {successfulConfirmation ? (
             <div className={mealUsageListStyles.successNotice} role="status">
@@ -696,8 +752,7 @@ export function MealUsageList() {
                 <path d="m8.5 12 2.3 2.3 4.8-5" />
               </svg>
               <div className={mealUsageListStyles.successCopy}>
-                <p className={mealUsageListStyles.successTitle}>{amountFormatter.format(successfulConfirmation.amountMinor)} 거래 확정 완료</p>
-                <p className={mealUsageListStyles.successDescription}>{entrySourceLabel(successfulConfirmation.entrySource)}</p>
+                <p className={mealUsageListStyles.successTitle}>요청을 확정했습니다.</p>
               </div>
             </div>
           ) : null}
@@ -727,7 +782,7 @@ export function MealUsageList() {
                             <span>{entrySourceLabel(item.entrySource)}</span>
                           </span>
                           <span className={mealUsageListStyles.partner}>
-                            {item.partnerDisplayName ? `협력사 · ${item.partnerDisplayName}` : "협력사 미지정"}
+                            {item.partnerDisplayName ?? "미지정"}
                           </span>
                           <time className={mealUsageListStyles.createdAt} dateTime={item.createdAt}>{dateFormatter.format(new Date(item.createdAt))}</time>
                         </span>
@@ -768,35 +823,49 @@ export function MealUsageList() {
                   </dl>
                   <form className={mealUsageListStyles.confirmationForm} onSubmit={handleConfirmation}>
                     <label className={mealUsageListStyles.initialsLabel} htmlFor="confirmer-initials">확인자 이니셜</label>
-                    <input
-                      aria-describedby={confirmationError ? "confirmation-error" : undefined}
-                      aria-invalid={Boolean(confirmationError)}
-                      className={mealUsageListStyles.initialsInput}
-                      disabled={isPendingPageLoading || isConfirming || isRejecting || isReconciling}
-                      id="confirmer-initials"
-                      onChange={(event) => setInitials(event.target.value)}
-                      ref={initialsInputRef}
-                      value={initials}
-                    />
-                    <p className={mealUsageListStyles.initialsHint}>확정 기록에 입력한 그대로 남습니다.</p>
+                    <div className={mealUsageListStyles.initialsInputRow}>
+                      <input
+                        aria-describedby={confirmationError ? "confirmation-error" : undefined}
+                        aria-invalid={Boolean(confirmationError)}
+                        className={mealUsageListStyles.initialsInput}
+                        disabled={isPendingPageLoading || isConfirming || isRejecting || isReconciling}
+                        id="confirmer-initials"
+                        onChange={(event) => setInitials(event.target.value)}
+                        ref={initialsInputRef}
+                        value={initials}
+                      />
+                      {!requiresReconciliation ? (
+                        <>
+                          <button
+                            aria-label={isConfirming || isReconciling ? "확정 처리 중…" : "이니셜로 확정"}
+                            className={mealUsageListStyles.confirmIconAction}
+                            disabled={isPendingPageLoading || isAutomaticPolling || isConfirming || isRejecting || isReconciling || isRefreshing}
+                            type="submit"
+                          >
+                            <svg aria-hidden="true" className={mealUsageListStyles.terminalActionIcon} fill="none" height="22" viewBox="0 0 24 24" width="22">
+                              <path d="m5 12 4.1 4.1L19 6.5" />
+                            </svg>
+                          </button>
+                          <button
+                            aria-label={isRejecting || isReconciling ? "거절 처리 중…" : "거절"}
+                            className={mealUsageListStyles.rejectIconAction}
+                            disabled={isPendingPageLoading || isAutomaticPolling || isConfirming || isRejecting || isReconciling || isRefreshing}
+                            onClick={() => void handleRejection()}
+                            type="button"
+                          >
+                            <svg aria-hidden="true" className={mealUsageListStyles.terminalActionIcon} fill="none" height="22" viewBox="0 0 24 24" width="22">
+                              <path d="m7 7 10 10M17 7 7 17" />
+                            </svg>
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
                     {confirmationError ? <p id="confirmation-error" className={mealUsageListStyles.confirmationError} role="alert">{confirmationError}</p> : null}
                     {requiresReconciliation ? (
                       <button className={mealUsageListStyles.reconcile} type="button" disabled={isPendingPageLoading || isReconciling || isRefreshing} onClick={() => void reconcileAfterConfirmation(reconciliationMode ?? "ambiguous", "목록을 최신 상태로 반영했습니다.")}>
                         {isReconciling ? "목록 확인 중…" : "목록 다시 불러오기"}
                       </button>
-                    ) : (
-                      <>
-                        <div className={mealUsageListStyles.terminalActions}>
-                          <button className={mealUsageListStyles.confirmInActionGroup} disabled={isPendingPageLoading || isConfirming || isRejecting || isReconciling || isRefreshing} type="submit">
-                            {isConfirming || isReconciling ? "확정 처리 중…" : "이니셜로 확정"}
-                          </button>
-                          <button className={mealUsageListStyles.reject} disabled={isPendingPageLoading || isConfirming || isRejecting || isReconciling || isRefreshing} onClick={() => void handleRejection()} type="button">
-                            {isRejecting || isReconciling ? "거절 처리 중…" : "거절"}
-                          </button>
-                        </div>
-                        <p className={mealUsageListStyles.initialsHint}>거절하면 이 거래는 확정되지 않고 잔액도 바뀌지 않습니다.</p>
-                      </>
-                    )}
+                    ) : null}
                   </form>
                 </section>
               ) : null}
