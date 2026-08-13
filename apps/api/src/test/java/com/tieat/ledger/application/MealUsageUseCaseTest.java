@@ -121,6 +121,7 @@ class MealUsageUseCaseTest {
             assertThat(allocation.receivableCreated()).isEqualTo(7_000);
         });
         assertThat(repository.saveCount).isEqualTo(2);
+        assertThat(repository.lockedId).isEqualTo(pending.id());
         assertThat(mealContractRepository.lockedId).isEqualTo(mealContractId());
         assertThat(mealContractRepository.findByIdForUpdate(mealContractId()).orElseThrow().prepaidBalance())
             .isZero();
@@ -246,8 +247,9 @@ class MealUsageUseCaseTest {
             Clock.fixed(SERVER_TIME, ZoneOffset.UTC)
         );
         UUID idempotencyKey = UUID.fromString("3279f750-a0d5-4978-81d5-a5da1a8d7b5a");
+        String publicRequestKey = MealUsageQrToken.generate();
         CreatePublicMealUsageCommand command = new CreatePublicMealUsageCommand(
-            token, idempotencyKey, mealContractId(), 12_000
+            token, idempotencyKey, mealContractId(), 12_000, publicRequestKey, "홍길동"
         );
 
         MealUsage created = useCase.create(command);
@@ -260,12 +262,22 @@ class MealUsageUseCaseTest {
         assertThat(created.createdAt()).isEqualTo(SERVER_TIME);
         assertThat(created.publicQrContextId()).contains(qrContextId);
         assertThat(created.partnerDisplayNameSnapshot()).isPresent();
+        assertThat(created.customerNameSnapshot()).contains("홍길동");
         assertThat(usageRepository.saveCount).isEqualTo(1);
         assertThat(idempotencyRepository.saveCount).isEqualTo(1);
+        PublicMealUsageIdempotency storedRequest = idempotencyRepository.findByQrContextIdAndKey(qrContextId, idempotencyKey).orElseThrow();
+        assertThat(storedRequest.requestKeyHash()).isEqualTo(PublicMealUsageIdempotency.hashRequestKey(publicRequestKey));
+        assertThat(storedRequest.createdAt()).isEqualTo(SERVER_TIME);
         assertThat(contractRepository.findById(mealContractId()).orElseThrow().prepaidBalance()).isEqualTo(12_000);
 
         assertThatThrownBy(() -> useCase.create(new CreatePublicMealUsageCommand(
-            token, idempotencyKey, mealContractId(), 12_001
+            token, idempotencyKey, mealContractId(), 12_001, publicRequestKey, "홍길동"
+        ))).isInstanceOf(PublicMealUsageIdempotencyConflictException.class);
+        assertThatThrownBy(() -> useCase.create(new CreatePublicMealUsageCommand(
+            token, idempotencyKey, mealContractId(), 12_000, MealUsageQrToken.generate(), "홍길동"
+        ))).isInstanceOf(PublicMealUsageIdempotencyConflictException.class);
+        assertThatThrownBy(() -> useCase.create(new CreatePublicMealUsageCommand(
+            token, idempotencyKey, mealContractId(), 12_000, publicRequestKey, "김길동"
         ))).isInstanceOf(PublicMealUsageIdempotencyConflictException.class);
     }
 
@@ -287,6 +299,7 @@ class MealUsageUseCaseTest {
         assertThat(rejected.rejection()).contains(new com.tieat.ledger.domain.Rejection("store-hk", SERVER_TIME));
         assertThat(rejected.confirmation()).isEmpty();
         assertThat(rejected.prepaidAllocation()).isEmpty();
+        assertThat(usageRepository.lockedId).isEqualTo(pending.id());
         assertThat(contractRepository.findById(mealContractId()).orElseThrow().prepaidBalance()).isEqualTo(12_000);
         assertThatThrownBy(() -> useCase.reject(new RejectMealUsageCommand(pending.id(), storeId(), "store-hk")))
             .isInstanceOf(MealUsageNotPendingException.class);
@@ -320,6 +333,7 @@ class MealUsageUseCaseTest {
     private static final class InMemoryMealUsageRepository implements MealUsageRepository {
 
         private final Map<MealUsageId, MealUsage> mealUsages = new HashMap<>();
+        private MealUsageId lockedId;
         private int saveCount;
 
         @Override
@@ -331,6 +345,12 @@ class MealUsageUseCaseTest {
 
         @Override
         public Optional<MealUsage> findById(MealUsageId id) {
+            return Optional.ofNullable(mealUsages.get(id));
+        }
+
+        @Override
+        public Optional<MealUsage> findByIdForUpdate(MealUsageId id) {
+            lockedId = id;
             return Optional.ofNullable(mealUsages.get(id));
         }
 
@@ -376,6 +396,11 @@ class MealUsageUseCaseTest {
                 .filter(usage -> usage.publicQrContextId().filter(qrContextId::equals).isPresent())
                 .filter(usage -> !usage.createdAt().isBefore(since))
                 .count();
+        }
+
+        @Override
+        public int anonymizeCustomerNamesCreatedBefore(Instant cutoffExclusive, Instant executedAt) {
+            return 0;
         }
     }
 

@@ -477,8 +477,9 @@ class MealUsageQrOperationsLifecycleIntegrationTest {
     ) {
         return post(publicPath(rawToken) + "/meal-usages")
             .header("Idempotency-Key", UUID.randomUUID())
+            .header("Public-Request-Key", MealUsageQrToken.generate())
             .contentType("application/json")
-            .content("{\"mealContractId\":\"" + mealContractId + "\",\"amountMinor\":" + amount + "}");
+            .content("{\"mealContractId\":\"" + mealContractId + "\",\"customerName\":\"홍길동\",\"amountMinor\":" + amount + "}");
     }
 
     private <T> T getFuture(Future<T> future) {

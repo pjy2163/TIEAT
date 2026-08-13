@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tieat.ledger.application.ConfirmMealUsageCommand;
 import com.tieat.ledger.application.ConfirmMealUsageUseCase;
-import com.tieat.ledger.application.MealContractNotFoundException;
 import com.tieat.ledger.application.MealUsageAlreadyConfirmedException;
+import com.tieat.ledger.application.MealContractNotFoundException;
 import com.tieat.ledger.application.MealUsageContractScopeMismatchException;
 import com.tieat.ledger.application.RejectMealUsageCommand;
 import com.tieat.ledger.application.RejectMealUsageUseCase;
@@ -38,7 +38,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -270,45 +269,40 @@ class ContractBalanceConfirmationIntegrationTest {
     }
 
     @Test
-    void rollsBackContractDebitWhenAStaleUsageLosesTheRace() throws Exception {
+    void serializesTheSameUsageBeforeCheckingWhetherItIsAlreadyConfirmed() throws Exception {
         MealContract contract = prepaidContract(10_000);
         MealUsage usage = pendingUsage(contract.id(), STORE_ID, 8_000);
         mealContractRepository.save(contract);
         mealUsageRepository.save(usage);
 
-        CountDownLatch firstLockAcquired = new CountDownLatch(1);
-        CountDownLatch releaseFirst = new CountDownLatch(1);
-        CountDownLatch secondStarted = new CountDownLatch(1);
+        CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
-            Future<MealUsage> first = executor.submit(() -> transactionTemplate.execute(status -> {
-                mealContractRepository.findByIdForUpdate(contract.id()).orElseThrow();
-                firstLockAcquired.countDown();
-                await(releaseFirst);
+            Future<MealUsage> first = executor.submit(() -> {
+                await(start);
                 return confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), STORE_ID, "HK"));
-            }));
-            assertThat(firstLockAcquired.await(5, TimeUnit.SECONDS)).isTrue();
-
-            Future<MealUsage> stale = executor.submit(() -> {
-                secondStarted.countDown();
+            });
+            Future<MealUsage> second = executor.submit(() -> {
+                await(start);
                 return confirmMealUsageUseCase.confirm(new ConfirmMealUsageCommand(usage.id(), STORE_ID, "JS"));
             });
-            assertThat(secondStarted.await(5, TimeUnit.SECONDS)).isTrue();
-            assertThat(stale.isDone()).isFalse();
+            start.countDown();
 
-            releaseFirst.countDown();
-            assertThat(first.get(5, TimeUnit.SECONDS).status()).isEqualTo(MealUsageStatus.CONFIRMED);
-            assertThatThrownBy(() -> stale.get(5, TimeUnit.SECONDS))
-                .hasCauseInstanceOf(ObjectOptimisticLockingFailureException.class);
+            int successfulTransitions = (completedSuccessfully(first) ? 1 : 0)
+                + (completedSuccessfully(second) ? 1 : 0);
+            assertThat(successfulTransitions).isEqualTo(1);
+            Future<MealUsage> failed = first.isDone() && !completedSuccessfully(first) ? first : second;
+            assertThatThrownBy(() -> failed.get(5, TimeUnit.SECONDS))
+                .hasCauseInstanceOf(MealUsageAlreadyConfirmedException.class);
         } finally {
-            releaseFirst.countDown();
+            start.countDown();
             executor.shutdownNow();
         }
 
         assertThat(reloadContract(contract.id()).prepaidBalance()).isEqualTo(2_000);
         assertThat(reloadUsage(usage.id()).status()).isEqualTo(MealUsageStatus.CONFIRMED);
         assertThat(reloadUsage(usage.id()).confirmation()).hasValueSatisfying(
-            confirmation -> assertThat(confirmation.staffInitials()).isEqualTo("HK")
+            confirmation -> assertThat(confirmation.staffInitials()).isIn("HK", "JS")
         );
     }
 

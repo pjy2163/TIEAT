@@ -23,6 +23,7 @@ import com.tieat.partnership.domain.PartnerOrganizationId;
 import com.tieat.partnership.domain.PartnerOrganizationRepository;
 import com.tieat.qr.application.ManageMealUsageQrOperationsUseCase;
 import com.tieat.qr.application.QrOperationException;
+import com.tieat.qr.domain.MealUsageQrToken;
 import com.tieat.store.domain.StoreId;
 import java.time.Instant;
 import java.util.List;
@@ -356,8 +357,9 @@ class MealUsageQrOperationsPartnerSelectionIntegrationTest {
     ) {
         return post(publicPath(rawToken) + "/meal-usages")
             .header("Idempotency-Key", UUID.randomUUID())
+            .header("Public-Request-Key", MealUsageQrToken.generate())
             .contentType("application/json")
-            .content("{\"mealContractId\":\"" + mealContractId + "\",\"amountMinor\":" + amount + "}");
+            .content("{\"mealContractId\":\"" + mealContractId + "\",\"customerName\":\"홍길동\",\"amountMinor\":" + amount + "}");
     }
 
     private MealUsage reloadUsage(MealUsageId id) {
