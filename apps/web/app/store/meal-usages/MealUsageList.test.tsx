@@ -30,6 +30,7 @@ const pendingItem = {
   status: "PENDING" as const,
   entrySource: "STORE_TABLET" as const,
   partnerDisplayName: "협력사 A",
+  customerName: null,
   amountMinor: 12000,
   createdAt: "2026-08-05T01:00:00Z",
 };
@@ -39,6 +40,7 @@ const partnerMobilePendingItem = {
   mealUsageId: "00000000-0000-0000-0000-000000000002",
   entrySource: "PARTNER_MOBILE" as const,
   partnerDisplayName: "협력사 B",
+  customerName: "홍길동",
   amountMinor: 1234567,
 };
 
@@ -352,7 +354,7 @@ describe("MealUsageList", () => {
     await flushUpdates();
     expect(screen.getByLabelText("확인자 이니셜")).toHaveValue("HK");
     expect(screen.getByRole("button", { name: "새로운 요청이 있습니다." })).toBeVisible();
-    expect(screen.getByRole("button", { name: "새로고침", exact: true })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^새로고침$/ })).toBeVisible();
     expect(screen.queryByText("협력사 B")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "새로운 요청이 있습니다." }));
