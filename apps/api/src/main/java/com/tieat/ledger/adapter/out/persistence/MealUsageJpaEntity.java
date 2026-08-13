@@ -39,6 +39,9 @@ class MealUsageJpaEntity {
     @Column(name = "partner_display_name", columnDefinition = "TEXT")
     private String partnerDisplayName;
 
+    @Column(name = "customer_name", columnDefinition = "TEXT")
+    private String customerName;
+
     @Column(name = "public_qr_context_id")
     private UUID publicQrContextId;
 
@@ -89,6 +92,7 @@ class MealUsageJpaEntity {
         long amount,
         Instant createdAt,
         String partnerDisplayName,
+        String customerName,
         UUID publicQrContextId,
         long version,
         MealUsageStatus status,
@@ -109,6 +113,7 @@ class MealUsageJpaEntity {
         this.amount = amount;
         this.createdAt = createdAt;
         this.partnerDisplayName = partnerDisplayName;
+        this.customerName = customerName;
         this.publicQrContextId = publicQrContextId;
         this.version = version;
         this.status = status;
@@ -149,6 +154,10 @@ class MealUsageJpaEntity {
 
     String partnerDisplayName() {
         return partnerDisplayName;
+    }
+
+    String customerName() {
+        return customerName;
     }
 
     UUID publicQrContextId() {

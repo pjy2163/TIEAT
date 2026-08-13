@@ -32,7 +32,7 @@ public class ConfirmMealUsageUseCase {
     @Transactional
     public MealUsage confirm(ConfirmMealUsageCommand command) {
         Objects.requireNonNull(command, "Confirm command must be supplied");
-        MealUsage mealUsage = mealUsageRepository.findById(command.mealUsageId())
+        MealUsage mealUsage = mealUsageRepository.findByIdForUpdate(command.mealUsageId())
             .orElseThrow(() -> new MealUsageNotFoundException(command.mealUsageId()));
         if (!mealUsage.storeId().equals(command.actorStoreId())) {
             throw new MealUsageNotFoundException(command.mealUsageId());

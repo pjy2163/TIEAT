@@ -23,7 +23,7 @@ public class RejectMealUsageUseCase {
     @Transactional
     public MealUsage reject(RejectMealUsageCommand command) {
         Objects.requireNonNull(command, "Reject command must be supplied");
-        MealUsage mealUsage = mealUsageRepository.findById(command.mealUsageId())
+        MealUsage mealUsage = mealUsageRepository.findByIdForUpdate(command.mealUsageId())
             .orElseThrow(() -> new MealUsageNotFoundException(command.mealUsageId()));
         if (!mealUsage.storeId().equals(command.actorStoreId())) {
             throw new MealUsageNotFoundException(command.mealUsageId());

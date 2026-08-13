@@ -5,7 +5,6 @@ import com.tieat.ledger.domain.PublicMealUsageIdempotency;
 import com.tieat.ledger.domain.PublicMealUsageIdempotencyRepository;
 import com.tieat.partnership.domain.MealContractId;
 import com.tieat.qr.domain.MealUsageQrContextId;
-import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,7 +38,8 @@ public class PublicMealUsageIdempotencyPersistenceAdapter implements PublicMealU
             idempotency.mealContractId().value(),
             idempotency.amount(),
             idempotency.mealUsageId().value(),
-            Instant.now()
+            idempotency.requestKeyHash(),
+            idempotency.createdAt()
         )));
     }
 
@@ -49,7 +49,9 @@ public class PublicMealUsageIdempotencyPersistenceAdapter implements PublicMealU
             entity.idempotencyKey(),
             new MealContractId(entity.mealContractId()),
             entity.amount(),
-            new MealUsageId(entity.mealUsageId())
+            new MealUsageId(entity.mealUsageId()),
+            entity.requestKeyHash(),
+            entity.createdAt()
         );
     }
 }

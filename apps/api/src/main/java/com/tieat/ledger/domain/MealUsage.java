@@ -17,6 +17,7 @@ public final class MealUsage {
     private final Instant createdAt;
     private final long version;
     private final String partnerDisplayNameSnapshot;
+    private String customerNameSnapshot;
     private final MealUsageQrContextId publicQrContextId;
     private MealUsageStatus status;
     private Confirmation confirmation;
@@ -33,6 +34,7 @@ public final class MealUsage {
         Instant createdAt,
         long version,
         String partnerDisplayNameSnapshot,
+        String customerNameSnapshot,
         MealUsageQrContextId publicQrContextId,
         MealUsageStatus status,
         Confirmation confirmation,
@@ -57,6 +59,7 @@ public final class MealUsage {
             throw new IllegalArgumentException("Partner display name snapshot must not be blank");
         }
         this.partnerDisplayNameSnapshot = partnerDisplayNameSnapshot;
+        this.customerNameSnapshot = normalizeOptionalCustomerNameSnapshot(customerNameSnapshot);
         this.publicQrContextId = publicQrContextId;
         this.status = Objects.requireNonNull(status, "Meal usage status must be supplied");
         this.confirmation = confirmation;
@@ -82,6 +85,7 @@ public final class MealUsage {
             amount,
             createdAt,
             0,
+            null,
             null,
             null,
             MealUsageStatus.PENDING,
@@ -110,6 +114,36 @@ public final class MealUsage {
             createdAt,
             0,
             partnerDisplayNameSnapshot,
+            null,
+            Objects.requireNonNull(publicQrContextId, "Public QR context id must be supplied"),
+            MealUsageStatus.PENDING,
+            null,
+            null,
+            null,
+            null
+        );
+    }
+
+    public static MealUsage pendingFromPublicQr(
+        MealUsageId id,
+        StoreId storeId,
+        MealContractId mealContractId,
+        MealUsageQrContextId publicQrContextId,
+        String partnerDisplayNameSnapshot,
+        String customerNameSnapshot,
+        long amount,
+        Instant createdAt
+    ) {
+        return new MealUsage(
+            id,
+            storeId,
+            mealContractId,
+            EntrySource.PARTNER_MOBILE,
+            amount,
+            createdAt,
+            0,
+            partnerDisplayNameSnapshot,
+            requireNonBlankCustomerName(customerNameSnapshot),
             Objects.requireNonNull(publicQrContextId, "Public QR context id must be supplied"),
             MealUsageStatus.PENDING,
             null,
@@ -128,7 +162,7 @@ public final class MealUsage {
         Instant createdAt,
         long version
     ) {
-        return restorePending(id, storeId, mealContractId, entrySource, amount, createdAt, version, null, null);
+        return restorePending(id, storeId, mealContractId, entrySource, amount, createdAt, version, null, null, null);
     }
 
     public static MealUsage restorePending(
@@ -142,6 +176,23 @@ public final class MealUsage {
         String partnerDisplayNameSnapshot,
         MealUsageQrContextId publicQrContextId
     ) {
+        return restorePending(
+            id, storeId, mealContractId, entrySource, amount, createdAt, version, partnerDisplayNameSnapshot, publicQrContextId, null
+        );
+    }
+
+    public static MealUsage restorePending(
+        MealUsageId id,
+        StoreId storeId,
+        MealContractId mealContractId,
+        EntrySource entrySource,
+        long amount,
+        Instant createdAt,
+        long version,
+        String partnerDisplayNameSnapshot,
+        MealUsageQrContextId publicQrContextId,
+        String customerNameSnapshot
+    ) {
         return new MealUsage(
             id,
             storeId,
@@ -151,6 +202,7 @@ public final class MealUsage {
             createdAt,
             version,
             partnerDisplayNameSnapshot,
+            customerNameSnapshot,
             publicQrContextId,
             MealUsageStatus.PENDING,
             null,
@@ -172,7 +224,7 @@ public final class MealUsage {
         PrepaidAllocation prepaidAllocation
     ) {
         return restoreConfirmed(
-            id, storeId, mealContractId, entrySource, amount, createdAt, version, confirmation, prepaidAllocation, null, null
+            id, storeId, mealContractId, entrySource, amount, createdAt, version, confirmation, prepaidAllocation, null, null, null
         );
     }
 
@@ -189,6 +241,36 @@ public final class MealUsage {
         String partnerDisplayNameSnapshot,
         MealUsageQrContextId publicQrContextId
     ) {
+        return restoreConfirmed(
+            id,
+            storeId,
+            mealContractId,
+            entrySource,
+            amount,
+            createdAt,
+            version,
+            confirmation,
+            prepaidAllocation,
+            partnerDisplayNameSnapshot,
+            publicQrContextId,
+            null
+        );
+    }
+
+    public static MealUsage restoreConfirmed(
+        MealUsageId id,
+        StoreId storeId,
+        MealContractId mealContractId,
+        EntrySource entrySource,
+        long amount,
+        Instant createdAt,
+        long version,
+        Confirmation confirmation,
+        PrepaidAllocation prepaidAllocation,
+        String partnerDisplayNameSnapshot,
+        MealUsageQrContextId publicQrContextId,
+        String customerNameSnapshot
+    ) {
         return new MealUsage(
             id,
             storeId,
@@ -198,6 +280,7 @@ public final class MealUsage {
             createdAt,
             version,
             partnerDisplayNameSnapshot,
+            customerNameSnapshot,
             publicQrContextId,
             MealUsageStatus.CONFIRMED,
             confirmation,
@@ -219,6 +302,34 @@ public final class MealUsage {
         String partnerDisplayNameSnapshot,
         MealUsageQrContextId publicQrContextId
     ) {
+        return restoreRejected(
+            id,
+            storeId,
+            mealContractId,
+            entrySource,
+            amount,
+            createdAt,
+            version,
+            rejection,
+            partnerDisplayNameSnapshot,
+            publicQrContextId,
+            null
+        );
+    }
+
+    public static MealUsage restoreRejected(
+        MealUsageId id,
+        StoreId storeId,
+        MealContractId mealContractId,
+        EntrySource entrySource,
+        long amount,
+        Instant createdAt,
+        long version,
+        Rejection rejection,
+        String partnerDisplayNameSnapshot,
+        MealUsageQrContextId publicQrContextId,
+        String customerNameSnapshot
+    ) {
         return new MealUsage(
             id,
             storeId,
@@ -228,6 +339,7 @@ public final class MealUsage {
             createdAt,
             version,
             partnerDisplayNameSnapshot,
+            customerNameSnapshot,
             publicQrContextId,
             MealUsageStatus.REJECTED,
             null,
@@ -249,6 +361,34 @@ public final class MealUsage {
         String partnerDisplayNameSnapshot,
         MealUsageQrContextId publicQrContextId
     ) {
+        return restoreCancelled(
+            id,
+            storeId,
+            mealContractId,
+            entrySource,
+            amount,
+            createdAt,
+            version,
+            cancellation,
+            partnerDisplayNameSnapshot,
+            publicQrContextId,
+            null
+        );
+    }
+
+    public static MealUsage restoreCancelled(
+        MealUsageId id,
+        StoreId storeId,
+        MealContractId mealContractId,
+        EntrySource entrySource,
+        long amount,
+        Instant createdAt,
+        long version,
+        Cancellation cancellation,
+        String partnerDisplayNameSnapshot,
+        MealUsageQrContextId publicQrContextId,
+        String customerNameSnapshot
+    ) {
         return new MealUsage(
             id,
             storeId,
@@ -258,6 +398,7 @@ public final class MealUsage {
             createdAt,
             version,
             partnerDisplayNameSnapshot,
+            customerNameSnapshot,
             publicQrContextId,
             MealUsageStatus.CANCELLED,
             null,
@@ -331,6 +472,10 @@ public final class MealUsage {
         return Optional.ofNullable(partnerDisplayNameSnapshot);
     }
 
+    public Optional<String> customerNameSnapshot() {
+        return Optional.ofNullable(customerNameSnapshot);
+    }
+
     public Optional<MealUsageQrContextId> publicQrContextId() {
         return Optional.ofNullable(publicQrContextId);
     }
@@ -378,5 +523,24 @@ public final class MealUsage {
         if (prepaidAllocation != null && prepaidAllocation.usageAmount() != amount) {
             throw new IllegalArgumentException("Prepaid allocation amount must match meal usage amount");
         }
+    }
+
+    private static String requireNonBlankCustomerName(String customerNameSnapshot) {
+        String normalized = normalizeOptionalCustomerNameSnapshot(customerNameSnapshot);
+        if (normalized == null) {
+            throw new IllegalArgumentException("Customer name snapshot must not be blank");
+        }
+        return normalized;
+    }
+
+    private static String normalizeOptionalCustomerNameSnapshot(String customerNameSnapshot) {
+        if (customerNameSnapshot == null) {
+            return null;
+        }
+        String normalized = customerNameSnapshot.strip();
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException("Customer name snapshot must not be blank");
+        }
+        return normalized;
     }
 }

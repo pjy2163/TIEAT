@@ -38,6 +38,8 @@ public class SecurityConfiguration {
                 .csrfTokenRepository(new HttpSessionCsrfTokenRepository())
                 .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(
                     HttpMethod.POST, "/api/v1/public/meal-usage-qr/{token}/meal-usages"
+                ), PathPatternRequestMatcher.pathPattern(
+                    HttpMethod.POST, "/api/v1/public/meal-usage-qr/{token}/meal-usages/{mealUsageId}/cancellations"
                 ))
             )
             .sessionManagement(session -> session.sessionAuthenticationStrategy(
@@ -47,6 +49,8 @@ public class SecurityConfiguration {
                 .requestMatchers("/actuator/health", "/actuator/info", "/api/v1/csrf", "/api/v1/sessions", "/v3/api-docs/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/public/meal-usage-qr/*").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/public/meal-usage-qr/*/meal-usages").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/public/meal-usage-qr/*/meal-usages/*").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/public/meal-usage-qr/*/meal-usages/*/cancellations").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/meal-usages").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.GET, "/api/v1/meal-usages").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.GET, "/api/v1/meal-usages/months/*").hasRole("STORE_STAFF")

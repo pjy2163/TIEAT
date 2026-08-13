@@ -23,9 +23,14 @@ import org.springframework.stereotype.Repository;
 public class MealUsagePersistenceAdapter implements MealUsageRepository {
 
     private final MealUsageJpaRepository repository;
+    private final CustomerNameAnonymizationAuditJpaRepository anonymizationAuditRepository;
 
-    public MealUsagePersistenceAdapter(MealUsageJpaRepository repository) {
+    public MealUsagePersistenceAdapter(
+        MealUsageJpaRepository repository,
+        CustomerNameAnonymizationAuditJpaRepository anonymizationAuditRepository
+    ) {
         this.repository = Objects.requireNonNull(repository);
+        this.anonymizationAuditRepository = Objects.requireNonNull(anonymizationAuditRepository);
     }
 
     @Override
@@ -38,6 +43,12 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
     public Optional<MealUsage> findById(MealUsageId id) {
         Objects.requireNonNull(id, "Meal usage id must be supplied");
         return repository.findById(id.value()).map(this::toDomain);
+    }
+
+    @Override
+    public Optional<MealUsage> findByIdForUpdate(MealUsageId id) {
+        Objects.requireNonNull(id, "Meal usage id must be supplied");
+        return repository.findByIdForUpdate(id.value()).map(this::toDomain);
     }
 
     @Override
@@ -81,6 +92,17 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
         return repository.countByPublicQrContextIdAndCreatedAtGreaterThanEqual(qrContextId.value(), since);
     }
 
+    @Override
+    public int anonymizeCustomerNamesCreatedBefore(Instant cutoffExclusive, Instant executedAt) {
+        Objects.requireNonNull(cutoffExclusive, "Customer name cutoff must be supplied");
+        Objects.requireNonNull(executedAt, "Customer name anonymization time must be supplied");
+        int affectedCount = repository.anonymizeCustomerNamesCreatedBefore(cutoffExclusive);
+        anonymizationAuditRepository.save(new CustomerNameAnonymizationAuditJpaEntity(
+            java.util.UUID.randomUUID(), cutoffExclusive, executedAt, affectedCount
+        ));
+        return affectedCount;
+    }
+
     private MealUsageJpaEntity toEntity(MealUsage mealUsage) {
         Confirmation confirmation = mealUsage.confirmation().orElse(null);
         PrepaidAllocation prepaidAllocation = mealUsage.prepaidAllocation().orElse(null);
@@ -94,6 +116,7 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
             mealUsage.amount(),
             mealUsage.createdAt(),
             mealUsage.partnerDisplayNameSnapshot().orElse(null),
+            mealUsage.customerNameSnapshot().orElse(null),
             mealUsage.publicQrContextId().map(MealUsageQrContextId::value).orElse(null),
             mealUsage.version(),
             mealUsage.status(),
@@ -120,7 +143,8 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
                 entity.createdAt(),
                 entity.version(),
                 entity.partnerDisplayName(),
-                qrContextId(entity)
+                qrContextId(entity),
+                entity.customerName()
             );
         }
         if (entity.status() == MealUsageStatus.CONFIRMED) {
@@ -140,7 +164,8 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
                     requiredAllocationValue(entity.remainingPrepaid(), "remaining prepaid")
                 ),
                 entity.partnerDisplayName(),
-                qrContextId(entity)
+                qrContextId(entity),
+                entity.customerName()
             );
         }
         if (entity.status() == MealUsageStatus.REJECTED) {
@@ -154,7 +179,8 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
                 entity.version(),
                 new Rejection(entity.rejectedStaffLoginId(), entity.rejectedAt()),
                 entity.partnerDisplayName(),
-                qrContextId(entity)
+                qrContextId(entity),
+                entity.customerName()
             );
         }
         if (entity.status() == MealUsageStatus.CANCELLED) {
@@ -168,7 +194,8 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
                 entity.version(),
                 new Cancellation(entity.cancellationReason(), entity.cancelledAt()),
                 entity.partnerDisplayName(),
-                qrContextId(entity)
+                qrContextId(entity),
+                entity.customerName()
             );
         }
         throw new IllegalStateException("Unsupported meal usage status: " + entity.status());

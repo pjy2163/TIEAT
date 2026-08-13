@@ -11,6 +11,8 @@ public interface MealUsageRepository {
 
     Optional<MealUsage> findById(MealUsageId id);
 
+    Optional<MealUsage> findByIdForUpdate(MealUsageId id);
+
     MealUsageSlice findPendingByStoreId(StoreId storeId, int page, int size);
 
     MealUsageSlice findConfirmedByStoreIdAndCreatedAtBetween(
@@ -22,4 +24,6 @@ public interface MealUsageRepository {
     );
 
     long countPublicQrCreatedSince(MealUsageQrContextId qrContextId, Instant since);
+
+    int anonymizeCustomerNamesCreatedBefore(Instant cutoffExclusive, Instant executedAt);
 }

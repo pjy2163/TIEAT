@@ -9,6 +9,7 @@ import com.tieat.ledger.application.PublicQrMealContractNotFoundException;
 import com.tieat.ledger.application.MealUsageNotFoundException;
 import com.tieat.ledger.application.InvalidPendingMealUsageQueryException;
 import com.tieat.ledger.application.InvalidMonthlyMealUsageQueryException;
+import com.tieat.ledger.domain.PublicMealUsageIdempotency.InvalidPublicRequestKeyException;
 import com.tieat.qr.application.PublicMealUsageQrNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -109,7 +110,8 @@ public class ApiExceptionHandler {
         MissingServletRequestParameterException.class,
         MissingRequestHeaderException.class,
         InvalidPendingMealUsageQueryException.class,
-        InvalidMonthlyMealUsageQueryException.class
+        InvalidMonthlyMealUsageQueryException.class,
+        InvalidPublicRequestKeyException.class
     })
     ResponseEntity<ProblemDetail> handleValidation(Exception exception, HttpServletRequest request) {
         return problem(request, HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Request validation failed");
