@@ -21,7 +21,12 @@ class MealUsagePersistenceAdapterTest {
     @Test
     void mapsConfirmedMealUsageForPersistence() {
         MealUsageJpaRepository jpaRepository = mock(MealUsageJpaRepository.class);
-        MealUsagePersistenceAdapter adapter = new MealUsagePersistenceAdapter(jpaRepository);
+        CustomerNameAnonymizationAuditJpaRepository anonymizationAuditRepository =
+            mock(CustomerNameAnonymizationAuditJpaRepository.class);
+        MealUsagePersistenceAdapter adapter = new MealUsagePersistenceAdapter(
+            jpaRepository,
+            anonymizationAuditRepository
+        );
         MealUsage confirmed = MealUsage.pending(
             new MealUsageId(UUID.fromString("7693bfcf-01b4-4de2-9c9f-5d81612460e5")),
             new StoreId(UUID.fromString("9d5e37dd-dbe2-40dc-97fb-8e77c89aa4cb")),
