@@ -28,6 +28,7 @@ export const mealUsageListStyles = {
   sourceIconTablet: "size-6 shrink-0 stroke-current stroke-[1.75] text-[#315efb] [stroke-linecap:round] [stroke-linejoin:round]",
   sourceIconPartnerMobile: "size-6 shrink-0 stroke-current stroke-[1.75] text-[#6558d3] [stroke-linecap:round] [stroke-linejoin:round]",
   partner: "mt-1 block text-sm text-[var(--text-secondary)]",
+  customer: "mt-1 block text-xs text-[var(--text-muted)]",
   createdAt: "mt-1 text-sm text-[var(--text-muted)]",
   amount: "self-start text-right text-base font-semibold tabular-nums text-[var(--text-primary)] sm:self-auto",
   status: "inline-flex w-fit self-start rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#244cda] sm:self-auto",

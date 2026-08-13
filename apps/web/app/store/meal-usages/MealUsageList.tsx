@@ -106,6 +106,7 @@ function isSamePendingPage(current: PendingMealUsage[], next: PendingMealUsage[]
       && item.status === nextItem.status
       && item.entrySource === nextItem.entrySource
       && item.partnerDisplayName === nextItem.partnerDisplayName
+      && item.customerName === nextItem.customerName
       && item.amountMinor === nextItem.amountMinor
       && item.createdAt === nextItem.createdAt;
   });
@@ -787,6 +788,9 @@ export function MealUsageList() {
                           <span className={mealUsageListStyles.partner}>
                             {item.partnerDisplayName ?? "미지정"}
                           </span>
+                          {item.entrySource === "PARTNER_MOBILE" ? (
+                            <span className={mealUsageListStyles.customer}>입력자 {item.customerName ?? "이름 보관기간 만료"}</span>
+                          ) : null}
                           <time className={mealUsageListStyles.createdAt} dateTime={item.createdAt}>{dateFormatter.format(new Date(item.createdAt))}</time>
                         </span>
                         <strong className={mealUsageListStyles.amount}>{amountFormatter.format(item.amountMinor)}</strong>
@@ -811,6 +815,12 @@ export function MealUsageList() {
                       <dt>협력사</dt>
                       <dd>{selectedMealUsage.partnerDisplayName ?? "미지정"}</dd>
                     </div>
+                    {selectedMealUsage.entrySource === "PARTNER_MOBILE" ? (
+                      <div>
+                        <dt>입력자</dt>
+                        <dd>{selectedMealUsage.customerName ?? "이름 보관기간 만료"}</dd>
+                      </div>
+                    ) : null}
                     <div>
                       <dt>입력 시각</dt>
                       <dd><time dateTime={selectedMealUsage.createdAt}>{dateFormatter.format(new Date(selectedMealUsage.createdAt))}</time></dd>

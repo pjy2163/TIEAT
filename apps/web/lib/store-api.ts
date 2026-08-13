@@ -3,6 +3,7 @@ export type PendingMealUsage = {
   status: "PENDING";
   entrySource: "STORE_TABLET" | "PARTNER_MOBILE";
   partnerDisplayName: string | null;
+  customerName: string | null;
   amountMinor: number;
   createdAt: string;
 };
@@ -109,6 +110,7 @@ function parsePendingMealUsage(value: unknown): PendingMealUsage {
     || value.status !== "PENDING"
     || (value.entrySource !== "STORE_TABLET" && value.entrySource !== "PARTNER_MOBILE")
     || (value.partnerDisplayName !== null && !isNonEmptyString(value.partnerDisplayName))
+    || (value.customerName !== null && !isNonEmptyString(value.customerName))
     || typeof value.amountMinor !== "number"
     || !Number.isSafeInteger(value.amountMinor)
     || value.amountMinor <= 0
@@ -120,6 +122,7 @@ function parsePendingMealUsage(value: unknown): PendingMealUsage {
     status: value.status,
     entrySource: value.entrySource,
     partnerDisplayName: value.partnerDisplayName,
+    customerName: value.customerName,
     amountMinor: value.amountMinor,
     createdAt: value.createdAt,
   };
