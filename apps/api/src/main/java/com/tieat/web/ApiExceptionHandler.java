@@ -9,8 +9,10 @@ import com.tieat.ledger.application.PublicQrMealContractNotFoundException;
 import com.tieat.ledger.application.MealUsageNotFoundException;
 import com.tieat.ledger.application.InvalidPendingMealUsageQueryException;
 import com.tieat.ledger.application.InvalidMonthlyMealUsageQueryException;
+import com.tieat.settlement.application.InvalidPosSettlementHistoryQueryException;
 import com.tieat.ledger.domain.PublicMealUsageIdempotency.InvalidPublicRequestKeyException;
 import com.tieat.qr.application.PublicMealUsageQrNotFoundException;
+import com.tieat.settlement.application.PosSettlementConflictException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.CacheControl;
@@ -89,6 +91,45 @@ public class ApiExceptionHandler {
         return problem(request, HttpStatus.TOO_MANY_REQUESTS, "PUBLIC_QR_RATE_LIMITED", "Public QR request rate limit was exceeded");
     }
 
+    @ExceptionHandler(PosSettlementConflictException.class)
+    ResponseEntity<ProblemDetail> handlePosSettlementConflict(
+        PosSettlementConflictException exception,
+        HttpServletRequest request
+    ) {
+        return switch (exception.reason()) {
+            case IDEMPOTENCY_KEY_REUSED -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "IDEMPOTENCY_KEY_REUSED",
+                "Idempotency key was already used with a different request payload"
+            );
+            case USAGE_NOT_OUTSTANDING -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "POS_SETTLEMENT_USAGE_NOT_OUTSTANDING",
+                "Selected meal usage is not an outstanding receivable"
+            );
+            case USAGE_CONTRACT_MISMATCH -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "POS_SETTLEMENT_USAGE_CONTRACT_MISMATCH",
+                "Selected meal usages must belong to the requested meal contract"
+            );
+            case USAGE_ALREADY_ALLOCATED -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "POS_SETTLEMENT_USAGE_ALREADY_ALLOCATED",
+                "Selected meal usage was already allocated to a POS settlement"
+            );
+            case TOTAL_MISMATCH -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "POS_SETTLEMENT_TOTAL_MISMATCH",
+                "Submitted POS total must equal the selected receivables"
+            );
+        };
+    }
+
     @ExceptionHandler(OptimisticLockingFailureException.class)
     ResponseEntity<ProblemDetail> handleOptimisticConflict(
         OptimisticLockingFailureException exception,
@@ -111,6 +152,7 @@ public class ApiExceptionHandler {
         MissingRequestHeaderException.class,
         InvalidPendingMealUsageQueryException.class,
         InvalidMonthlyMealUsageQueryException.class,
+        InvalidPosSettlementHistoryQueryException.class,
         InvalidPublicRequestKeyException.class
     })
     ResponseEntity<ProblemDetail> handleValidation(Exception exception, HttpServletRequest request) {
@@ -135,7 +177,8 @@ public class ApiExceptionHandler {
     ) {
         ResponseEntity.BodyBuilder response = ResponseEntity.status(status);
         if (problemDetailFactory.isPublicMealUsageQrRequest(request)
-            || problemDetailFactory.isMonthlyMealUsageRequest(request)) {
+            || problemDetailFactory.isMonthlyMealUsageRequest(request)
+            || problemDetailFactory.isPosSettlementRequest(request)) {
             response.cacheControl(CacheControl.noStore());
         }
         return response.body(problemDetailFactory.create(request, status, errorCode, detail));
