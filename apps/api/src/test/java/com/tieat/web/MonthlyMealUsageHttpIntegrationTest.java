@@ -115,6 +115,10 @@ class MonthlyMealUsageHttpIntegrationTest {
         mealUsageRepository.save(confirmed(
             STORE_ID, "00000000-0000-0000-0000-000000000008", "2026-08-31T15:00:00Z", "경계 후"
         ));
+        MealUsage previousMonthConfirmed = confirmed(
+            STORE_ID, "00000000-0000-0000-0000-000000000010", "2026-06-30T15:00:00Z", "협력사 이전"
+        );
+        mealUsageRepository.save(previousMonthConfirmed);
         mealUsageRepository.save(confirmed(
             OTHER_STORE_ID, "00000000-0000-0000-0000-000000000009", "2026-08-31T14:59:59.999999Z", "다른 매장"
         ));
@@ -126,6 +130,8 @@ class MonthlyMealUsageHttpIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
             .andExpect(jsonPath("$.month").value("2026-08"))
+            .andExpect(jsonPath("$.fromMonth").value("2026-08"))
+            .andExpect(jsonPath("$.toMonth").value("2026-08"))
             .andExpect(jsonPath("$.timeZone").value("Asia/Seoul"))
             .andExpect(jsonPath("$.items.length()").value(2))
             .andExpect(jsonPath("$.items[0].id").value(sameMomentHigherIdConfirmed.id().value().toString()))
@@ -138,10 +144,13 @@ class MonthlyMealUsageHttpIntegrationTest {
             .andExpect(jsonPath("$.page").value(0))
             .andExpect(jsonPath("$.size").value(2))
             .andExpect(jsonPath("$.hasNext").value(true))
+            .andExpect(jsonPath("$.totalAmountMinor").value(36_000))
             .andReturn();
 
         JsonNode firstPageJson = objectMapper.readTree(firstPage.getResponse().getContentAsString());
-        assertThat(fieldNames(firstPageJson)).containsExactlyInAnyOrder("month", "timeZone", "items", "page", "size", "hasNext");
+        assertThat(fieldNames(firstPageJson)).containsExactlyInAnyOrder(
+            "month", "fromMonth", "toMonth", "timeZone", "items", "page", "size", "hasNext", "totalAmountMinor"
+        );
         assertThat(fieldNames(firstPageJson.get("items").get(0)))
             .containsExactlyInAnyOrder(
                 "id", "status", "partnerDisplayName", "amountMinor", "createdAt", "confirmedStaffInitials"
@@ -155,6 +164,15 @@ class MonthlyMealUsageHttpIntegrationTest {
             .andExpect(jsonPath("$.items[0].status").value("CONFIRMED"))
             .andExpect(jsonPath("$.items[0].confirmedStaffInitials").value("HK"))
             .andExpect(jsonPath("$.hasNext").value(false));
+
+        mockMvc.perform(monthlyRequest(session, "2026-07", "2026-08", 0, 20))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.month").value("2026-07"))
+            .andExpect(jsonPath("$.fromMonth").value("2026-07"))
+            .andExpect(jsonPath("$.toMonth").value("2026-08"))
+            .andExpect(jsonPath("$.items.length()").value(5))
+            .andExpect(jsonPath("$.items[4].id").value(previousMonthConfirmed.id().value().toString()))
+            .andExpect(jsonPath("$.totalAmountMinor").value(60_000));
 
         assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usages", Long.class)).isEqualTo(initialCount);
         assertThat(jdbcTemplate.queryForObject("select coalesce(sum(version), 0) from meal_usages", Long.class))
@@ -184,7 +202,9 @@ class MonthlyMealUsageHttpIntegrationTest {
             "/api/v1/meal-usages/months/2026-08?page=0&size=101",
             "/api/v1/meal-usages/months/2026-08?page=0&size=not-a-number",
             "/api/v1/meal-usages/months/2026-08?size=20",
-            "/api/v1/meal-usages/months/2026-08?page=0"
+            "/api/v1/meal-usages/months/2026-08?page=0",
+            "/api/v1/meal-usages/months/2026-08?to=2026-07&page=0&size=20",
+            "/api/v1/meal-usages/months/2026-01?to=2027-01&page=0&size=20"
         }) {
             mockMvc.perform(get(pathAndQuery).session(session))
                 .andExpect(problem(HttpStatus.BAD_REQUEST.value(), "VALIDATION_FAILED"))
@@ -226,10 +246,24 @@ class MonthlyMealUsageHttpIntegrationTest {
         int page,
         int size
     ) {
-        return get("/api/v1/meal-usages/months/{month}", month)
+        return monthlyRequest(session, month, null, page, size);
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder monthlyRequest(
+        MockHttpSession session,
+        String month,
+        String to,
+        int page,
+        int size
+    ) {
+        var request = get("/api/v1/meal-usages/months/{month}", month)
             .session(session)
             .param("page", Integer.toString(page))
             .param("size", Integer.toString(size));
+        if (to != null) {
+            request.param("to", to);
+        }
+        return request;
     }
 
     private org.springframework.test.web.servlet.ResultMatcher problem(int expectedStatus, String errorCode) {

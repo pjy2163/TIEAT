@@ -38,6 +38,21 @@ interface MealUsageJpaRepository extends JpaRepository<MealUsageJpaEntity, UUID>
     );
 
     @Query("""
+        select coalesce(sum(mealUsage.amount), 0)
+        from MealUsageJpaEntity mealUsage
+        where mealUsage.storeId = :storeId
+          and mealUsage.status = :status
+          and mealUsage.createdAt >= :startInclusive
+          and mealUsage.createdAt < :endExclusive
+        """)
+    long sumByStoreIdAndStatusAndCreatedAtBetween(
+        @Param("storeId") UUID storeId,
+        @Param("status") MealUsageStatus status,
+        @Param("startInclusive") Instant startInclusive,
+        @Param("endExclusive") Instant endExclusive
+    );
+
+    @Query("""
         select count(mealUsage)
         from MealUsageJpaEntity mealUsage
         where mealUsage.publicQrContextId = :qrContextId and mealUsage.createdAt >= :since

@@ -388,6 +388,21 @@ class MealUsageUseCaseTest {
         }
 
         @Override
+        public long sumConfirmedByStoreIdAndCreatedAtBetween(
+            StoreId storeId,
+            Instant startInclusive,
+            Instant endExclusive
+        ) {
+            return mealUsages.values().stream()
+                .filter(usage -> usage.storeId().equals(storeId))
+                .filter(usage -> usage.status() == MealUsageStatus.CONFIRMED)
+                .filter(usage -> !usage.createdAt().isBefore(startInclusive))
+                .filter(usage -> usage.createdAt().isBefore(endExclusive))
+                .mapToLong(MealUsage::amount)
+                .sum();
+        }
+
+        @Override
         public long countPublicQrCreatedSince(
             com.tieat.qr.domain.MealUsageQrContextId qrContextId,
             java.time.Instant since

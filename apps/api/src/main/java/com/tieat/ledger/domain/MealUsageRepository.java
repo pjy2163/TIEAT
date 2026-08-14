@@ -23,6 +23,12 @@ public interface MealUsageRepository {
         int size
     );
 
+    long sumConfirmedByStoreIdAndCreatedAtBetween(
+        StoreId storeId,
+        Instant startInclusive,
+        Instant endExclusive
+    );
+
     long countPublicQrCreatedSince(MealUsageQrContextId qrContextId, Instant since);
 
     int anonymizeCustomerNamesCreatedBefore(Instant cutoffExclusive, Instant executedAt);

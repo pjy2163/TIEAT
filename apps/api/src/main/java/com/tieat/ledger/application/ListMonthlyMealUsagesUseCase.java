@@ -20,12 +20,25 @@ public class ListMonthlyMealUsagesUseCase {
     @Transactional(readOnly = true)
     public MonthlyMealUsagePage list(ListMonthlyMealUsagesQuery query) {
         Objects.requireNonNull(query, "Monthly meal usage query must be supplied");
-        var month = query.yearMonth();
-        var monthStart = month.atDay(1).atStartOfDay(KOREA_STANDARD_TIME).toInstant();
-        var nextMonthStart = month.plusMonths(1).atDay(1).atStartOfDay(KOREA_STANDARD_TIME).toInstant();
+        var fromMonth = query.fromYearMonth();
+        var toMonth = query.toYearMonth();
+        var monthStart = fromMonth.atDay(1).atStartOfDay(KOREA_STANDARD_TIME).toInstant();
+        var nextMonthStart = toMonth.plusMonths(1).atDay(1).atStartOfDay(KOREA_STANDARD_TIME).toInstant();
         var slice = mealUsageRepository.findConfirmedByStoreIdAndCreatedAtBetween(
             query.storeId(), monthStart, nextMonthStart, query.page(), query.size()
         );
-        return new MonthlyMealUsagePage(query.month(), slice.items(), query.page(), query.size(), slice.hasNext());
+        long totalAmountMinor = mealUsageRepository.sumConfirmedByStoreIdAndCreatedAtBetween(
+            query.storeId(), monthStart, nextMonthStart
+        );
+        return new MonthlyMealUsagePage(
+            query.fromMonth(),
+            query.fromMonth(),
+            query.toMonth(),
+            slice.items(),
+            query.page(),
+            query.size(),
+            slice.hasNext(),
+            totalAmountMinor
+        );
     }
 }

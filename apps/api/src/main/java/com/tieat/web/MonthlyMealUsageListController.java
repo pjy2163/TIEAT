@@ -37,7 +37,7 @@ class MonthlyMealUsageListController {
         this.listMonthlyMealUsagesUseCase = listMonthlyMealUsagesUseCase;
     }
 
-    @Operation(summary = "List confirmed meal usages for an authenticated store calendar month")
+    @Operation(summary = "List confirmed meal usages for an authenticated store calendar range")
     @SecurityRequirement(name = "sessionCookie")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Monthly meal usage ledger", content = @Content(schema = @Schema(implementation = MonthlyMealUsageListResponse.class))),
@@ -50,6 +50,8 @@ class MonthlyMealUsageListController {
     ResponseEntity<MonthlyMealUsageListResponse> list(
         @Parameter(required = true, schema = @Schema(pattern = "^\\d{4}-(0[1-9]|1[0-2])$"))
         @PathVariable String month,
+        @Parameter(required = false, schema = @Schema(pattern = "^\\d{4}-(0[1-9]|1[0-2])$"))
+        @RequestParam(required = false) String to,
         @Parameter(required = true, schema = @Schema(minimum = "0"))
         @RequestParam int page,
         @Parameter(required = true, schema = @Schema(minimum = "1", maximum = "100"))
@@ -57,7 +59,7 @@ class MonthlyMealUsageListController {
         @AuthenticationPrincipal StoreAccountPrincipal principal
     ) {
         MonthlyMealUsagePage result = listMonthlyMealUsagesUseCase.list(
-            new ListMonthlyMealUsagesQuery(principal.storeId(), month, page, size)
+            new ListMonthlyMealUsagesQuery(principal.storeId(), month, to, page, size)
         );
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
@@ -66,21 +68,27 @@ class MonthlyMealUsageListController {
 
     record MonthlyMealUsageListResponse(
         String month,
+        String fromMonth,
+        String toMonth,
         String timeZone,
         List<MonthlyMealUsageItemResponse> items,
         int page,
         int size,
-        boolean hasNext
+        boolean hasNext,
+        long totalAmountMinor
     ) {
 
         static MonthlyMealUsageListResponse from(MonthlyMealUsagePage page) {
             return new MonthlyMealUsageListResponse(
                 page.month(),
+                page.fromMonth(),
+                page.toMonth(),
                 TIME_ZONE,
                 page.items().stream().map(MonthlyMealUsageItemResponse::from).toList(),
                 page.page(),
                 page.size(),
-                page.hasNext()
+                page.hasNext(),
+                page.totalAmountMinor()
             );
         }
     }
