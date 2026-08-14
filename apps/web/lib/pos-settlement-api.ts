@@ -50,6 +50,19 @@ export type PosSettlementRequest = {
   mealUsageIds: string[];
 };
 
+export type PosSettlementSelectionSeed = {
+  version: 1;
+  mealUsageIds: string[];
+  /**
+   * These values are carried only as a short-lived navigation hint. The
+   * settlement form must derive the contract and amount again from the
+   * authoritative receivables overview before recording anything.
+   */
+  mealContractId: string | null;
+  amountMinor: number | null;
+  createdAt: number;
+};
+
 export class UnexpectedPosSettlementResponseError extends ApiError {
   constructor() {
     super(0, "UNEXPECTED_POS_SETTLEMENT_RESPONSE");
@@ -68,6 +81,8 @@ const SETTLEMENTS_PATH = `${API_PATH}/pos-settlements`;
 
 const RECENT_SETTLEMENTS_PAGE = 0;
 const RECENT_SETTLEMENTS_SIZE = 20;
+export const POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY = "tieat.pos-settlement-selection.v1";
+const POS_SETTLEMENT_SELECTION_SEED_TTL_MS = 5 * 60 * 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -80,6 +95,82 @@ function isNonEmptyString(value: unknown): value is string {
 function isUuid(value: unknown): value is string {
   return isNonEmptyString(value)
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function isValidSelectionSeedUsageIds(value: unknown): value is string[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 100) return false;
+  const ids = value.filter(isUuid);
+  return ids.length === value.length && new Set(ids).size === ids.length;
+}
+
+/**
+ * Stores a same-tab navigation hint for the monthly ledger handoff. A
+ * sessionStorage failure is reported to the caller so it can keep the user
+ * on the monthly page instead of navigating without the selected rows.
+ */
+export function writePosSettlementSelectionSeed(seed: {
+  mealUsageIds: string[];
+  mealContractId: string | null;
+  amountMinor: number | null;
+}): boolean {
+  if (!isValidSelectionSeedUsageIds(seed.mealUsageIds)) return false;
+  try {
+    window.sessionStorage.setItem(POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      mealUsageIds: seed.mealUsageIds,
+      mealContractId: seed.mealContractId,
+      amountMinor: seed.amountMinor,
+      createdAt: Date.now(),
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function discardPosSettlementSelectionSeed(): void {
+  try {
+    window.sessionStorage.removeItem(POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY);
+  } catch {
+    // Storage can be unavailable in privacy-restricted contexts.
+  }
+}
+
+/**
+ * Reads and consumes the one-time monthly handoff. Only usage IDs and expiry
+ * are trusted here; amount and contract fields are intentionally treated as
+ * untrusted hints by the consumer.
+ */
+export function takePosSettlementSelectionSeed(): PosSettlementSelectionSeed | null {
+  let raw: string | null = null;
+  try {
+    raw = window.sessionStorage.getItem(POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY);
+    discardPosSettlementSelectionSeed();
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!isRecord(value)
+      || value.version !== 1
+      || !isValidSelectionSeedUsageIds(value.mealUsageIds)
+      || typeof value.createdAt !== "number"
+      || !Number.isSafeInteger(value.createdAt)
+      || Math.abs(Date.now() - value.createdAt) > POS_SETTLEMENT_SELECTION_SEED_TTL_MS) {
+      return null;
+    }
+    return {
+      version: 1,
+      mealUsageIds: value.mealUsageIds,
+      mealContractId: typeof value.mealContractId === "string" ? value.mealContractId : null,
+      amountMinor: typeof value.amountMinor === "number" ? value.amountMinor : null,
+      createdAt: value.createdAt,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function isPositiveSafeInteger(value: unknown): value is number {

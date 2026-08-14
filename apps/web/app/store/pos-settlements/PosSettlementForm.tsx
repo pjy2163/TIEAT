@@ -7,9 +7,11 @@ import {
   getOutstandingReceivables,
   getRecentPosSettlements,
   recordPosSettlement,
+  takePosSettlementSelectionSeed,
   type OutstandingReceivable,
   type PartnerReceivableSummary,
   type PosSettlement,
+  type PosSettlementSelectionSeed,
 } from "@/lib/pos-settlement-api";
 import { posSettlementFormStyles } from "./PosSettlementForm.styles";
 
@@ -50,6 +52,27 @@ function isPositiveInteger(value: string): boolean {
     if (character < "0" || character > "9") return false;
   }
   return Number.isSafeInteger(Number(value)) && Number(value) > 0;
+}
+
+function seededSelectionError(): string {
+  return "월별에서 선택한 금액이 현재 미수금 목록과 달라 기록할 수 없습니다. 목록을 새로고침한 뒤 다시 선택해 주세요.";
+}
+
+function reconstructSeedSelection(
+  seed: PosSettlementSelectionSeed,
+  items: OutstandingReceivable[],
+): { selected: OutstandingReceivable[]; totalMinor: number } | null {
+  const selected = items.filter((item) => seed.mealUsageIds.includes(item.mealUsageId));
+  const selectedIds = new Set(selected.map((item) => item.mealUsageId));
+  const contracts = new Set(selected.map((item) => item.mealContractId));
+  if (selected.length !== seed.mealUsageIds.length
+    || selectedIds.size !== seed.mealUsageIds.length
+    || contracts.size !== 1
+    || selected.some((item) => item.receivableCreatedMinor <= 0)) {
+    return null;
+  }
+  const totalMinor = selected.reduce((total, item) => total + item.receivableCreatedMinor, 0);
+  return Number.isSafeInteger(totalMinor) && totalMinor > 0 ? { selected, totalMinor } : null;
 }
 
 function StatePanel({
@@ -93,6 +116,7 @@ export function PosSettlementForm() {
   const initialLoadStartedRef = useRef(false);
   const requestEpochRef = useRef(0);
   const selectedUsageIdsRef = useRef<Set<string>>(new Set());
+  const pendingSelectionSeedRef = useRef<PosSettlementSelectionSeed | null>(null);
 
   const resetIdempotencyKey = useCallback(() => {
     idempotencyKeyRef.current = null;
@@ -143,8 +167,18 @@ export function PosSettlementForm() {
       if (requestEpoch !== requestEpochRef.current) return;
       setReceivables(overview.items);
       setPartnerSummaries(overview.partners);
-      replaceSelectedUsageIds(new Set());
+      const pendingSeed = pendingSelectionSeedRef.current;
+      pendingSelectionSeedRef.current = null;
+      const reconstructed = pendingSeed ? reconstructSeedSelection(pendingSeed, overview.items) : null;
+      replaceSelectedUsageIds(reconstructed ? new Set(reconstructed.selected.map((item) => item.mealUsageId)) : new Set());
       resetIdempotencyKey();
+      if (pendingSeed && reconstructed) {
+        setSubmittedTotalInput(String(reconstructed.totalMinor));
+        setFormError(null);
+      } else if (pendingSeed) {
+        setSubmittedTotalInput("");
+        setFormError(seededSelectionError());
+      }
       setReceivableViewState(overview.partners.length === 0 ? "empty" : "ready");
     } catch (error) {
       if (requestEpoch !== requestEpochRef.current) return;
@@ -197,6 +231,7 @@ export function PosSettlementForm() {
   useEffect(() => {
     if (initialLoadStartedRef.current) return;
     initialLoadStartedRef.current = true;
+    pendingSelectionSeedRef.current = takePosSettlementSelectionSeed();
     void loadReceivables();
     void loadHistory();
   }, [loadHistory, loadReceivables]);
@@ -416,7 +451,7 @@ export function PosSettlementForm() {
                         </dl>
                       </header>
                       <p className={posSettlementFormStyles.partnerNote}>
-                        결제할 금액은 모든 달에서 아직 남아 있는 금액입니다. 일부 결제 뒤에도 남은 금액은 계속 보입니다. 선불로 처리됨: 선불로 처리된 금액은 결제할 금액에 포함되지 않습니다.
+                        결제할 금액은 모든 달에서 아직 남아 있는 금액입니다. 일부 결제 뒤에도 남은 금액은 계속 보입니다. 결제 완료(선불): 선불로 처리된 금액은 결제할 금액에 포함되지 않습니다. <span className="sr-only">선불 잔액으로 처리되어 추가 결제할 금액 없음</span>
                       </p>
                       {partnerReceivables.length === 0 ? (
                         <p className={posSettlementFormStyles.noPartnerReceivables}>결제할 금액 없음</p>
@@ -526,7 +561,7 @@ export function PosSettlementForm() {
                     </label>
                   </div>
                   <button className={posSettlementFormStyles.submit} disabled={isSubmitting || selectedReceivables.length === 0} type="submit">
-                    {isSubmitting ? "결제 기록 저장 중…" : "결제 기록 저장"}
+                    {isSubmitting ? "선택한 결제할 금액 기록 중…" : "선택한 결제할 금액 기록하기"}
                   </button>
                 </form>
               ) : null}

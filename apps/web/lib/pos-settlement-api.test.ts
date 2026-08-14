@@ -3,6 +3,9 @@ import {
   getRecentPosSettlements,
   getOutstandingReceivables,
   recordPosSettlement,
+  takePosSettlementSelectionSeed,
+  writePosSettlementSelectionSeed,
+  POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY,
   UnexpectedPosSettlementResponseError,
 } from "./pos-settlement-api";
 import { ApiError } from "./store-api";
@@ -160,5 +163,30 @@ describe("POS settlement API", () => {
       mealUsageIds: [receivable.mealUsageId],
     }, "00000000-0000-0000-0000-000000000004"))
       .rejects.toEqual(new UnexpectedPosSettlementResponseError());
+  });
+
+  it("writes and consumes a short-lived same-tab selection seed while leaving amount and contract untrusted", () => {
+    const usageId = receivable.mealUsageId;
+    expect(writePosSettlementSelectionSeed({
+      mealUsageIds: [usageId],
+      mealContractId: receivable.mealContractId,
+      amountMinor: 12_000,
+    })).toBe(true);
+    expect(window.sessionStorage.getItem(POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY)).toContain(usageId);
+
+    window.sessionStorage.setItem(POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      mealUsageIds: [usageId],
+      mealContractId: "tampered-contract",
+      amountMinor: 1,
+      createdAt: Date.now(),
+    }));
+    expect(takePosSettlementSelectionSeed()).toMatchObject({
+      mealUsageIds: [usageId],
+      mealContractId: "tampered-contract",
+      amountMinor: 1,
+    });
+    expect(window.sessionStorage.getItem(POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY)).toBeNull();
+    expect(takePosSettlementSelectionSeed()).toBeNull();
   });
 });

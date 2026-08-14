@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/store-api";
 import { getMonthlyMealUsages } from "@/lib/monthly-meal-usage-api";
+import { getOutstandingReceivables, POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY } from "@/lib/pos-settlement-api";
 import { MonthlyMealUsageList } from "./MonthlyMealUsageList";
 
 const replace = vi.fn();
@@ -15,7 +16,13 @@ vi.mock("@/lib/monthly-meal-usage-api", async (importOriginal) => {
   return { ...original, getMonthlyMealUsages: vi.fn() };
 });
 
+vi.mock("@/lib/pos-settlement-api", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/pos-settlement-api")>();
+  return { ...original, getOutstandingReceivables: vi.fn() };
+});
+
 const getMonthlyMealUsagesMock = vi.mocked(getMonthlyMealUsages);
+const getOutstandingReceivablesMock = vi.mocked(getOutstandingReceivables);
 
 const items = [
   {
@@ -53,6 +60,7 @@ async function flushUpdates() {
 
 afterEach(() => {
   cleanup();
+  window.sessionStorage.clear();
   vi.resetAllMocks();
 });
 
@@ -63,7 +71,7 @@ describe("MonthlyMealUsageList", () => {
 
     expect(await screen.findByText("월별 장부")).toBeVisible();
     expect(screen.getByText("확인자 HK")).toBeVisible();
-    expect(screen.getByText("결제할 금액")).toBeVisible();
+    expect(screen.getByText("결제 전")).toBeVisible();
     expect(screen.getByText("협력사 A")).toBeVisible();
     expect(screen.getByText("조회 기간 합계")).toBeVisible();
     expect(screen.getByLabelText("조회 기간 합계")).toHaveTextContent("₩12,000");
@@ -143,10 +151,59 @@ describe("MonthlyMealUsageList", () => {
     }));
     render(<MonthlyMealUsageList />);
 
-    expect(await screen.findByText("결제할 금액")).toBeVisible();
-    expect(screen.getByText("결제 기록")).toBeVisible();
-    expect(screen.getByText("선불로 처리됨")).toBeVisible();
+    expect(await screen.findByText("결제 전")).toBeVisible();
+    expect(screen.getByText("결제 완료")).toBeVisible();
+    expect(screen.getByText("결제 완료(선불)")).toBeVisible();
+    expect(screen.getByText("직원이 입력한 POS 정산 내역이 저장된 상태")).toBeInTheDocument();
+    expect(screen.getByText("선불 잔액으로 처리되어 추가 결제할 금액 없음")).toBeInTheDocument();
     expect(screen.getAllByText("확인자 HK")).toHaveLength(4);
-    expect(screen.getAllByText("결제할 금액")).toHaveLength(1);
+    expect(screen.getAllByText("결제 전")).toHaveLength(1);
+  });
+
+  it("selects only current-page payment-due rows and hands off the authoritative receivable amount", async () => {
+    const authoritativeAmount = 7_500;
+    getMonthlyMealUsagesMock.mockResolvedValue(page({
+      items: [
+        items[0],
+        { ...items[0], id: "00000000-0000-0000-0000-000000000002", settlementStatus: "PAYMENT_RECORDED" },
+      ],
+      hasNext: false,
+    }));
+    getOutstandingReceivablesMock.mockResolvedValue({
+      items: [{
+        mealUsageId: items[0].id,
+        mealContractId: "00000000-0000-0000-0000-000000000011",
+        partnerDisplayName: items[0].partnerDisplayName,
+        confirmedAt: items[0].createdAt,
+        receivableCreatedMinor: authoritativeAmount,
+      }],
+      partners: [{
+        mealContractId: "00000000-0000-0000-0000-000000000011",
+        partnerDisplayName: items[0].partnerDisplayName,
+        previousPosBusinessDate: null,
+        periodConfirmedUsageTotalMinor: authoritativeAmount,
+        periodPrepaidAppliedTotalMinor: 0,
+        outstandingReceivableCount: 1,
+        outstandingReceivableTotalMinor: authoritativeAmount,
+      }],
+    });
+    render(<MonthlyMealUsageList />);
+
+    const dueSelection = await screen.findByRole("checkbox", { name: /협력사 A .* 선택/ });
+    expect(dueSelection).toBeVisible();
+    expect(screen.getByRole("button", { name: "전체 선택 (현재 페이지 2건)" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "미결제 모두 선택 (현재 페이지 1건)" })).toBeVisible();
+
+    fireEvent.click(dueSelection);
+    expect(await screen.findByText("1건 선택")).toBeVisible();
+    expect(await screen.findByText("결제할 금액 ₩7,500")).toBeVisible();
+    expect(screen.getByRole("link", { name: "선택한 결제할 금액 기록하기" })).toBeVisible();
+    expect(getOutstandingReceivablesMock).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+
+    const handoff = screen.getByRole("link", { name: "선택한 결제할 금액 기록하기" });
+    fireEvent.click(handoff);
+    expect(window.sessionStorage.getItem(POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY)).toContain(items[0].id);
+    expect(window.sessionStorage.getItem(POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY)).toContain(String(authoritativeAmount));
   });
 });
