@@ -8,8 +8,12 @@ import com.tieat.settlement.domain.PosSettlementSlice;
 import com.tieat.store.domain.StoreId;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -116,41 +120,139 @@ public class PosSettlementPersistenceAdapter implements PosSettlementRepository 
     }
 
     @Override
-    public List<OutstandingReceivable> findOutstandingReceivablesByStoreId(StoreId storeId) {
+    public OutstandingReceivableOverview findOutstandingReceivableOverviewByStoreId(StoreId storeId) {
         Objects.requireNonNull(storeId, "Store id must be supplied");
-        return jdbcTemplate.query(
+        List<OutstandingReceivable> items = new ArrayList<>();
+        Map<UUID, PartnerReceivableSummary> partnersByMealContractId = new LinkedHashMap<>();
+        jdbcTemplate.query(
             """
-                select meal_usage.id as meal_usage_id,
-                       meal_usage.meal_contract_id,
-                       coalesce(meal_usage.partner_display_name, partner_organization.display_name) as partner_display_name,
-                       meal_usage.confirmed_at,
-                       meal_usage.receivable_created
-                from meal_usages meal_usage
-                join meal_contracts meal_contract
-                    on meal_contract.id = meal_usage.meal_contract_id
-                   and meal_contract.store_id = ?
-                left join partner_organizations partner_organization
-                    on partner_organization.id = meal_contract.partner_organization_id
-                where meal_usage.store_id = ?
-                  and meal_usage.status = 'CONFIRMED'
-                  and meal_usage.receivable_created > 0
-                  and not exists (
-                      select 1
-                      from pos_settlement_allocations allocation
-                      where allocation.meal_usage_id = meal_usage.id
-                  )
-                order by meal_usage.meal_contract_id asc, meal_usage.confirmed_at asc, meal_usage.id asc
-                """,
-            (resultSet, rowNum) -> new OutstandingReceivable(
-                resultSet.getObject("meal_usage_id", UUID.class),
-                new MealContractId(resultSet.getObject("meal_contract_id", UUID.class)),
-                resultSet.getString("partner_display_name"),
-                resultSet.getTimestamp("confirmed_at").toInstant(),
-                resultSet.getLong("receivable_created")
-            ),
+                with latest_pos_settlement as (
+                    select meal_contract_id, max(pos_business_date) as previous_pos_business_date
+                    from pos_settlements
+                    where store_id = ?
+                    group by meal_contract_id
+                ),
+                confirmed_meal_usage as (
+                    select meal_usage.id as meal_usage_id,
+                           meal_usage.meal_contract_id,
+                           meal_contract.partner_organization_id,
+                           meal_usage.partner_display_name,
+                           meal_usage.confirmed_at,
+                           meal_usage.amount,
+                           coalesce(meal_usage.prepaid_applied, 0) as prepaid_applied,
+                           meal_usage.receivable_created,
+                           exists (
+                               select 1
+                               from pos_settlement_allocations allocation
+                               where allocation.meal_usage_id = meal_usage.id
+                           ) as allocated
+                    from meal_usages meal_usage
+                    join meal_contracts meal_contract
+                        on meal_contract.id = meal_usage.meal_contract_id
+                       and meal_contract.store_id = ?
+                    where meal_usage.store_id = ?
+                      and meal_usage.status = 'CONFIRMED'
+                ),
+                partner_summary as (
+                    select confirmed.meal_contract_id,
+                           coalesce(partner_organization.display_name, max(confirmed.partner_display_name)) as partner_display_name,
+                           latest_pos_settlement.previous_pos_business_date,
+                           coalesce(sum(confirmed.amount) filter (
+                               where latest_pos_settlement.previous_pos_business_date is null
+                                  or confirmed.confirmed_at >= (
+                                      (latest_pos_settlement.previous_pos_business_date + 1)::timestamp
+                                      at time zone 'Asia/Seoul'
+                                  )
+                           ), 0) as period_confirmed_usage_total_minor,
+                           coalesce(sum(confirmed.prepaid_applied) filter (
+                               where latest_pos_settlement.previous_pos_business_date is null
+                                  or confirmed.confirmed_at >= (
+                                      (latest_pos_settlement.previous_pos_business_date + 1)::timestamp
+                                      at time zone 'Asia/Seoul'
+                                  )
+                           ), 0) as period_prepaid_applied_total_minor,
+                           count(*) filter (
+                               where confirmed.receivable_created > 0
+                                 and not confirmed.allocated
+                           ) as outstanding_receivable_count,
+                           coalesce(sum(confirmed.receivable_created) filter (
+                               where confirmed.receivable_created > 0
+                                 and not confirmed.allocated
+                           ), 0) as outstanding_receivable_total_minor
+                    from confirmed_meal_usage confirmed
+                    left join latest_pos_settlement
+                        on latest_pos_settlement.meal_contract_id = confirmed.meal_contract_id
+                    left join partner_organizations partner_organization
+                        on partner_organization.id = confirmed.partner_organization_id
+                    group by confirmed.meal_contract_id,
+                             partner_organization.display_name,
+                             latest_pos_settlement.previous_pos_business_date
+                    having coalesce(sum(confirmed.amount) filter (
+                        where latest_pos_settlement.previous_pos_business_date is null
+                           or confirmed.confirmed_at >= (
+                               (latest_pos_settlement.previous_pos_business_date + 1)::timestamp
+                               at time zone 'Asia/Seoul'
+                           )
+                    ), 0) > 0
+                        or count(*) filter (
+                            where confirmed.receivable_created > 0
+                              and not confirmed.allocated
+                        ) > 0
+                )
+                select partner_summary.meal_contract_id,
+                       partner_summary.partner_display_name,
+                       partner_summary.previous_pos_business_date,
+                       partner_summary.period_confirmed_usage_total_minor,
+                       partner_summary.period_prepaid_applied_total_minor,
+                       partner_summary.outstanding_receivable_count,
+                       partner_summary.outstanding_receivable_total_minor,
+                       candidate.meal_usage_id,
+                       coalesce(candidate.partner_display_name, partner_summary.partner_display_name) as candidate_partner_display_name,
+                       candidate.confirmed_at,
+                       candidate.receivable_created
+                from partner_summary
+                left join confirmed_meal_usage candidate
+                    on candidate.meal_contract_id = partner_summary.meal_contract_id
+                   and candidate.receivable_created > 0
+                   and not candidate.allocated
+                order by partner_summary.meal_contract_id asc,
+                         candidate.confirmed_at asc,
+                         candidate.meal_usage_id asc
+            """,
+            resultSet -> {
+                UUID mealContractId = resultSet.getObject("meal_contract_id", UUID.class);
+                if (!partnersByMealContractId.containsKey(mealContractId)) {
+                    partnersByMealContractId.put(mealContractId, new PartnerReceivableSummary(
+                        new MealContractId(mealContractId),
+                        resultSet.getString("partner_display_name"),
+                        resultSet.getObject("previous_pos_business_date", LocalDate.class),
+                        resultSet.getLong("period_confirmed_usage_total_minor"),
+                        resultSet.getLong("period_prepaid_applied_total_minor"),
+                        resultSet.getLong("outstanding_receivable_count"),
+                        resultSet.getLong("outstanding_receivable_total_minor")
+                    ));
+                }
+                UUID mealUsageId = resultSet.getObject("meal_usage_id", UUID.class);
+                if (mealUsageId != null) {
+                    items.add(new OutstandingReceivable(
+                        mealUsageId,
+                        new MealContractId(mealContractId),
+                        resultSet.getString("candidate_partner_display_name"),
+                        resultSet.getTimestamp("confirmed_at").toInstant(),
+                        resultSet.getLong("receivable_created")
+                    ));
+                }
+            },
+            storeId.value(),
             storeId.value(),
             storeId.value()
         );
+        List<PartnerReceivableSummary> partners = partnersByMealContractId.values().stream()
+            .sorted(Comparator
+                .comparing(PartnerReceivableSummary::partnerDisplayName, Comparator.nullsLast(String::compareTo))
+                .thenComparing(summary -> summary.mealContractId().value()))
+            .toList();
+        return new OutstandingReceivableOverview(items, partners);
     }
 
     @Override

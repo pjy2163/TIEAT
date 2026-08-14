@@ -81,10 +81,13 @@ class PosSettlementController {
             .body(PosSettlementHistoryResponse.from(settlements, this::toResponse, principal.storeId()));
     }
 
-    @Operation(summary = "List outstanding confirmed receivables for the authenticated store")
+    @Operation(
+        summary = "List partner receivable summaries and outstanding candidates for the authenticated store",
+        description = "Returns partner-visible summaries alongside request-only outstanding receivable candidate items."
+    )
     @SecurityRequirement(name = "sessionCookie")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Outstanding receivables", content = @Content(schema = @Schema(implementation = OutstandingReceivableListResponse.class))),
+        @ApiResponse(responseCode = "200", description = "Partner receivable summaries and outstanding candidate items", content = @Content(schema = @Schema(implementation = OutstandingReceivableListResponse.class))),
         @ApiResponse(responseCode = "401", description = "Authentication required", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "403", description = "Access denied", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "500", description = "Internal error", content = @Content(schema = @Schema(implementation = ProblemResponse.class)))
@@ -93,14 +96,10 @@ class PosSettlementController {
     ResponseEntity<OutstandingReceivableListResponse> listOutstandingReceivables(
         @AuthenticationPrincipal StoreAccountPrincipal principal
     ) {
-        List<OutstandingReceivableResponse> items = recordPosSettlementUseCase
-            .listOutstandingReceivables(principal.storeId())
-            .stream()
-            .map(OutstandingReceivableResponse::from)
-            .toList();
+        var overview = recordPosSettlementUseCase.listOutstandingReceivableOverview(principal.storeId());
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
-            .body(new OutstandingReceivableListResponse(items));
+            .body(OutstandingReceivableListResponse.from(overview));
     }
 
     @Operation(summary = "Record an already-completed POS settlement")
@@ -155,7 +154,19 @@ class PosSettlementController {
         }
     }
 
-    record OutstandingReceivableListResponse(List<OutstandingReceivableResponse> items) {
+    record OutstandingReceivableListResponse(
+        List<OutstandingReceivableResponse> items,
+        List<PartnerReceivableSummaryResponse> partners
+    ) {
+
+        static OutstandingReceivableListResponse from(
+            RecordPosSettlementUseCase.OutstandingReceivableOverview overview
+        ) {
+            return new OutstandingReceivableListResponse(
+                overview.items().stream().map(OutstandingReceivableResponse::from).toList(),
+                overview.partners().stream().map(PartnerReceivableSummaryResponse::from).toList()
+            );
+        }
     }
 
     record PosSettlementHistoryResponse(List<PosSettlementResponse> items, int page, int size, boolean hasNext) {
@@ -189,6 +200,31 @@ class PosSettlementController {
                 receivable.partnerDisplayName(),
                 receivable.confirmedAt(),
                 receivable.receivableCreatedMinor()
+            );
+        }
+    }
+
+    record PartnerReceivableSummaryResponse(
+        UUID mealContractId,
+        String partnerDisplayName,
+        LocalDate previousPosBusinessDate,
+        long periodConfirmedUsageTotalMinor,
+        long periodPrepaidAppliedTotalMinor,
+        long outstandingReceivableCount,
+        long outstandingReceivableTotalMinor
+    ) {
+
+        static PartnerReceivableSummaryResponse from(
+            PosSettlementRepository.PartnerReceivableSummary summary
+        ) {
+            return new PartnerReceivableSummaryResponse(
+                summary.mealContractId().value(),
+                summary.partnerDisplayName(),
+                summary.previousPosBusinessDate(),
+                summary.periodConfirmedUsageTotalMinor(),
+                summary.periodPrepaidAppliedTotalMinor(),
+                summary.outstandingReceivableCount(),
+                summary.outstandingReceivableTotalMinor()
             );
         }
     }

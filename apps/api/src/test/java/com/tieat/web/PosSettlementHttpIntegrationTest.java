@@ -186,10 +186,20 @@ class PosSettlementHttpIntegrationTest {
                 "협력사 계약", "협력사 B"
             )))
             .andReturn();
-        JsonNode receivableItems = objectMapper.readTree(receivables.getResponse().getContentAsString()).get("items");
+        JsonNode receivableOverview = objectMapper.readTree(receivables.getResponse().getContentAsString());
+        JsonNode receivableItems = receivableOverview.get("items");
         assertThat(fieldNames(receivableItems.get(0))).containsExactlyInAnyOrder(
             "mealUsageId", "mealContractId", "partnerDisplayName", "confirmedAt", "receivableCreatedMinor"
         );
+        JsonNode contractSummary = partnerSummary(receivableOverview.get("partners"), contract.id());
+        assertThat(fieldNames(contractSummary)).containsExactlyInAnyOrder(
+            "mealContractId", "partnerDisplayName", "previousPosBusinessDate",
+            "periodConfirmedUsageTotalMinor", "periodPrepaidAppliedTotalMinor",
+            "outstandingReceivableCount", "outstandingReceivableTotalMinor"
+        );
+        assertThat(contractSummary.get("previousPosBusinessDate").asText()).isEqualTo("2026-08-10");
+        assertThat(contractSummary.get("outstandingReceivableCount").asLong()).isEqualTo(2);
+        assertThat(contractSummary.get("outstandingReceivableTotalMinor").asLong()).isEqualTo(3_000);
 
         UUID idempotencyKey = UUID.randomUUID();
         MvcResult result = mockMvc.perform(recordRequest(
@@ -254,9 +264,14 @@ class PosSettlementHttpIntegrationTest {
             ))
             .andExpect(problem(HttpStatus.CONFLICT.value(), "IDEMPOTENCY_KEY_REUSED"));
 
-        mockMvc.perform(get("/api/v1/pos-settlements/receivables").session(session))
+        MvcResult noCandidatesAfterAllocation = mockMvc.perform(get("/api/v1/pos-settlements/receivables").session(session))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.items").isEmpty());
+            .andExpect(jsonPath("$.items").isEmpty())
+            .andReturn();
+        JsonNode allocatedOverview = objectMapper.readTree(noCandidatesAfterAllocation.getResponse().getContentAsString());
+        JsonNode allocatedContractSummary = partnerSummary(allocatedOverview.get("partners"), contract.id());
+        assertThat(allocatedContractSummary.get("outstandingReceivableCount").asLong()).isZero();
+        assertThat(allocatedContractSummary.get("outstandingReceivableTotalMinor").asLong()).isZero();
     }
 
     @Test
@@ -724,6 +739,15 @@ class PosSettlementHttpIntegrationTest {
 
     private Set<String> fieldNames(JsonNode node) {
         return Set.copyOf(node.propertyNames());
+    }
+
+    private JsonNode partnerSummary(JsonNode summaries, MealContractId mealContractId) {
+        for (JsonNode summary : summaries) {
+            if (mealContractId.value().toString().equals(summary.get("mealContractId").asText())) {
+                return summary;
+            }
+        }
+        throw new AssertionError("Partner receivable summary was not found");
     }
 
     private record SettlementAllocationFixture(UUID mealUsageId, long receivableAmountMinor) {

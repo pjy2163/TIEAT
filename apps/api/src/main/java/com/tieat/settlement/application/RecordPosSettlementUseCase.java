@@ -26,9 +26,13 @@ public class RecordPosSettlementUseCase {
     }
 
     @Transactional(readOnly = true)
-    public List<PosSettlementRepository.OutstandingReceivable> listOutstandingReceivables(StoreId actorStoreId) {
+    public OutstandingReceivableOverview listOutstandingReceivableOverview(StoreId actorStoreId) {
         Objects.requireNonNull(actorStoreId, "Actor store id must be supplied");
-        return repository.findOutstandingReceivablesByStoreId(actorStoreId);
+        var overview = repository.findOutstandingReceivableOverviewByStoreId(actorStoreId);
+        return new OutstandingReceivableOverview(
+            overview.items(),
+            overview.partners()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -108,5 +112,16 @@ public class RecordPosSettlementUseCase {
         );
         repository.insert(settlement);
         return settlement;
+    }
+
+    public record OutstandingReceivableOverview(
+        List<PosSettlementRepository.OutstandingReceivable> items,
+        List<PosSettlementRepository.PartnerReceivableSummary> partners
+    ) {
+
+        public OutstandingReceivableOverview {
+            items = List.copyOf(Objects.requireNonNull(items, "Outstanding receivable items must be supplied"));
+            partners = List.copyOf(Objects.requireNonNull(partners, "Partner receivable summaries must be supplied"));
+        }
     }
 }

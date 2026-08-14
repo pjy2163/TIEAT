@@ -204,8 +204,8 @@ class RecordPosSettlementUseCaseTest {
         }
 
         @Override
-        public List<OutstandingReceivable> findOutstandingReceivablesByStoreId(StoreId storeId) {
-            return List.of();
+        public OutstandingReceivableOverview findOutstandingReceivableOverviewByStoreId(StoreId storeId) {
+            return new OutstandingReceivableOverview(List.of(), List.of());
         }
 
         @Override

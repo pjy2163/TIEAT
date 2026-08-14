@@ -4,6 +4,7 @@ import com.tieat.ledger.domain.MealUsageStatus;
 import com.tieat.partnership.domain.MealContractId;
 import com.tieat.store.domain.StoreId;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -19,7 +20,7 @@ public interface PosSettlementRepository {
 
     List<LockedReceivable> lockReceivablesByIdAndStoreId(List<UUID> mealUsageIds, StoreId storeId);
 
-    List<OutstandingReceivable> findOutstandingReceivablesByStoreId(StoreId storeId);
+    OutstandingReceivableOverview findOutstandingReceivableOverviewByStoreId(StoreId storeId);
 
     PosSettlementSlice findByStoreId(StoreId storeId, int page, int size);
 
@@ -60,6 +61,38 @@ public interface PosSettlementRepository {
                 throw new IllegalArgumentException("Receivable amount must be positive");
             }
             Objects.requireNonNull(confirmedAt, "Confirmation time must be supplied");
+        }
+    }
+
+    record PartnerReceivableSummary(
+        MealContractId mealContractId,
+        String partnerDisplayName,
+        LocalDate previousPosBusinessDate,
+        long periodConfirmedUsageTotalMinor,
+        long periodPrepaidAppliedTotalMinor,
+        long outstandingReceivableCount,
+        long outstandingReceivableTotalMinor
+    ) {
+
+        public PartnerReceivableSummary {
+            Objects.requireNonNull(mealContractId, "Meal contract id must be supplied");
+            if (periodConfirmedUsageTotalMinor < 0
+                || periodPrepaidAppliedTotalMinor < 0
+                || outstandingReceivableCount < 0
+                || outstandingReceivableTotalMinor < 0) {
+                throw new IllegalArgumentException("Receivable summary amounts must not be negative");
+            }
+        }
+    }
+
+    record OutstandingReceivableOverview(
+        List<OutstandingReceivable> items,
+        List<PartnerReceivableSummary> partners
+    ) {
+
+        public OutstandingReceivableOverview {
+            items = List.copyOf(Objects.requireNonNull(items, "Outstanding receivable items must be supplied"));
+            partners = List.copyOf(Objects.requireNonNull(partners, "Partner receivable summaries must be supplied"));
         }
     }
 
