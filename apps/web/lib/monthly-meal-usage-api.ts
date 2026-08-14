@@ -1,6 +1,7 @@
 import { ApiError, InvalidApiResponseError } from "./store-api";
 
 export type MonthlyMealUsageStatus = "CONFIRMED";
+export type MonthlyMealUsageSettlementStatus = "PAYMENT_DUE" | "PAYMENT_RECORDED" | "PREPAID_SETTLED";
 
 export type MonthlyMealUsage = {
   id: string;
@@ -9,6 +10,7 @@ export type MonthlyMealUsage = {
   amountMinor: number;
   createdAt: string;
   confirmedStaffInitials: string;
+  settlementStatus: MonthlyMealUsageSettlementStatus | null;
 };
 
 export type MonthlyMealUsagePage = {
@@ -69,7 +71,7 @@ function hasExactlyFields(value: Record<string, unknown>, expectedFields: readon
 
 function parseMonthlyMealUsage(value: unknown): MonthlyMealUsage {
   if (!isRecord(value)
-    || !hasExactlyFields(value, ["id", "status", "partnerDisplayName", "amountMinor", "createdAt", "confirmedStaffInitials"])
+    || !hasExactlyFields(value, ["id", "status", "partnerDisplayName", "amountMinor", "createdAt", "confirmedStaffInitials", "settlementStatus"])
     || !isUuid(value.id)
     || value.status !== "CONFIRMED"
     || (value.partnerDisplayName !== null && !isNonEmptyString(value.partnerDisplayName))
@@ -77,7 +79,11 @@ function parseMonthlyMealUsage(value: unknown): MonthlyMealUsage {
     || !Number.isSafeInteger(value.amountMinor)
     || value.amountMinor <= 0
     || !isIsoInstant(value.createdAt)
-    || !isNonEmptyString(value.confirmedStaffInitials)) {
+    || !isNonEmptyString(value.confirmedStaffInitials)
+    || (value.settlementStatus !== null
+      && value.settlementStatus !== "PAYMENT_DUE"
+      && value.settlementStatus !== "PAYMENT_RECORDED"
+      && value.settlementStatus !== "PREPAID_SETTLED")) {
     throw new InvalidApiResponseError();
   }
   return {
@@ -87,6 +93,7 @@ function parseMonthlyMealUsage(value: unknown): MonthlyMealUsage {
     amountMinor: value.amountMinor,
     createdAt: value.createdAt,
     confirmedStaffInitials: value.confirmedStaffInitials,
+    settlementStatus: value.settlementStatus,
   };
 }
 

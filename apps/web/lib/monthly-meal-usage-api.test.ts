@@ -16,6 +16,7 @@ const item = {
   amountMinor: 12_000,
   createdAt: "2026-08-05T01:00:00Z",
   confirmedStaffInitials: "HK",
+  settlementStatus: "PAYMENT_DUE",
 };
 
 describe("monthly meal usage API", () => {

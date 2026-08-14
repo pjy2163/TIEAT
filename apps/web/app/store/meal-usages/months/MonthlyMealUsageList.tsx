@@ -54,6 +54,19 @@ function errorMessage(error: unknown): string {
   return "월별 장부를 불러오지 못했습니다. 다시 시도해 주세요.";
 }
 
+function settlementStatusLabel(status: MonthlyMealUsage["settlementStatus"]): string | null {
+  switch (status) {
+    case "PAYMENT_DUE":
+      return "결제할 금액";
+    case "PAYMENT_RECORDED":
+      return "결제 기록";
+    case "PREPAID_SETTLED":
+      return "선불로 처리됨";
+    default:
+      return null;
+  }
+}
+
 export function MonthlyMealUsageList() {
   const router = useRouter();
   const [fromMonth, setFromMonth] = useState(currentKoreanMonth);
@@ -223,6 +236,11 @@ export function MonthlyMealUsageList() {
                       <p className={monthlyMealUsageListStyles.amount}>{amountFormatter.format(item.amountMinor)}</p>
                       <div className={monthlyMealUsageListStyles.statusBlock}>
                         <p className={monthlyMealUsageListStyles.confirmedInitials}>확인자 {item.confirmedStaffInitials}</p>
+                        {settlementStatusLabel(item.settlementStatus) ? (
+                          <p className={monthlyMealUsageListStyles.settlementStatus}>
+                            {settlementStatusLabel(item.settlementStatus)}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                     <div className={monthlyMealUsageListStyles.metadata}>

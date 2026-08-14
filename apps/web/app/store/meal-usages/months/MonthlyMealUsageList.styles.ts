@@ -30,6 +30,7 @@ export const monthlyMealUsageListStyles = {
   amount: "text-base font-semibold tabular-nums text-[var(--text-primary)]",
   statusBlock: "mt-1 flex flex-col items-end gap-1",
   confirmedInitials: "text-xs font-medium text-[var(--text-secondary)]",
+  settlementStatus: "text-xs font-semibold text-[#244cda]",
   metadata: "text-sm text-[var(--text-secondary)] md:col-span-2",
   metadataLabel: "mr-2 text-[var(--text-muted)]",
   pager: "flex items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-4 sm:px-6",

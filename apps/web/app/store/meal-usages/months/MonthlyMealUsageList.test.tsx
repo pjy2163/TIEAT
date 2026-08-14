@@ -25,6 +25,7 @@ const items = [
     amountMinor: 12_000,
     createdAt: "2026-08-05T01:00:00Z",
     confirmedStaffInitials: "HK",
+    settlementStatus: "PAYMENT_DUE" as const,
   },
 ];
 
@@ -62,6 +63,7 @@ describe("MonthlyMealUsageList", () => {
 
     expect(await screen.findByText("월별 장부")).toBeVisible();
     expect(screen.getByText("확인자 HK")).toBeVisible();
+    expect(screen.getByText("결제할 금액")).toBeVisible();
     expect(screen.getByText("협력사 A")).toBeVisible();
     expect(screen.getByText("조회 기간 합계")).toBeVisible();
     expect(screen.getByLabelText("조회 기간 합계")).toHaveTextContent("₩12,000");
@@ -128,5 +130,23 @@ describe("MonthlyMealUsageList", () => {
     fireEvent.change(screen.getByLabelText("종료 월"), { target: { value: "2026-09" } });
     await waitFor(() => expect(getMonthlyMealUsagesMock).toHaveBeenLastCalledWith("2026-07", "2026-09", 0, 20));
     await flushUpdates();
+  });
+
+  it("renders each additive settlement status and safely omits an absent status", async () => {
+    getMonthlyMealUsagesMock.mockResolvedValue(page({
+      items: [
+        { ...items[0], id: "00000000-0000-0000-0000-000000000001", settlementStatus: "PAYMENT_DUE" },
+        { ...items[0], id: "00000000-0000-0000-0000-000000000002", settlementStatus: "PAYMENT_RECORDED" },
+        { ...items[0], id: "00000000-0000-0000-0000-000000000003", settlementStatus: "PREPAID_SETTLED" },
+        { ...items[0], id: "00000000-0000-0000-0000-000000000004", settlementStatus: null },
+      ],
+    }));
+    render(<MonthlyMealUsageList />);
+
+    expect(await screen.findByText("결제할 금액")).toBeVisible();
+    expect(screen.getByText("결제 기록")).toBeVisible();
+    expect(screen.getByText("선불로 처리됨")).toBeVisible();
+    expect(screen.getAllByText("확인자 HK")).toHaveLength(4);
+    expect(screen.getAllByText("결제할 금액")).toHaveLength(1);
   });
 });
