@@ -6,6 +6,7 @@ import {
   getOutstandingReceivables,
   getRecentPosSettlements,
   recordPosSettlement,
+  type OutstandingReceivableOverview,
   type PosSettlement,
   type PosSettlementHistoryPage,
 } from "@/lib/pos-settlement-api";
@@ -91,6 +92,33 @@ function historyPage(items: PosSettlement[]): PosSettlementHistoryPage {
   return { items, page: 0, size: 20, hasNext: false };
 }
 
+function receivableOverview(items: typeof firstReceivable[]): OutstandingReceivableOverview {
+  const byMealContractId = new Map<string, typeof firstReceivable[]>();
+  for (const item of items) {
+    const candidates = byMealContractId.get(item.mealContractId) ?? [];
+    candidates.push(item);
+    byMealContractId.set(item.mealContractId, candidates);
+  }
+  return {
+    items,
+    partners: Array.from(byMealContractId, ([mealContractId, candidates]) => ({
+      mealContractId,
+      partnerDisplayName: candidates[0]?.partnerDisplayName ?? null,
+      previousPosBusinessDate: "2026-08-11",
+      periodConfirmedUsageTotalMinor: candidates.reduce(
+        (total, candidate) => total + candidate.receivableCreatedMinor,
+        0,
+      ),
+      periodPrepaidAppliedTotalMinor: 0,
+      outstandingReceivableCount: candidates.length,
+      outstandingReceivableTotalMinor: candidates.reduce(
+        (total, candidate) => total + candidate.receivableCreatedMinor,
+        0,
+      ),
+    })),
+  };
+}
+
 function selectionLabel(receivable: typeof firstReceivable): string {
   return (receivable.partnerDisplayName ?? "협력사 정보 없음")
     + " "
@@ -117,7 +145,11 @@ afterEach(() => {
 describe("PosSettlementForm", () => {
   it("requires explicit same-contract selection and a typed settlement total, then refreshes saved history from the API", async () => {
     const user = userEvent.setup();
-    getOutstandingReceivablesMock.mockResolvedValue([firstReceivable, secondReceivable, otherContractReceivable]);
+    getOutstandingReceivablesMock.mockResolvedValue(receivableOverview([
+      firstReceivable,
+      secondReceivable,
+      otherContractReceivable,
+    ]));
     getRecentPosSettlementsMock
       .mockResolvedValueOnce(historyPage([]))
       .mockResolvedValueOnce(historyPage([savedSettlement]));
@@ -128,14 +160,27 @@ describe("PosSettlementForm", () => {
 
     const firstCheckbox = await screen.findByRole("checkbox", { name: selectionLabel(firstReceivable) });
     await user.click(firstCheckbox);
-    expect(screen.getByText("선택한 미수금 합계").parentElement).toHaveTextContent("₩1,000");
+    expect(screen.getByText("선택한 결제할 금액").parentElement).toHaveTextContent("₩1,000");
+    expect(screen.getByRole("heading", { name: "결제할 금액", level: 1 })).toBeVisible();
+    expect(screen.getAllByText(/마지막 결제일:/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("마지막 결제일 이후 사용 금액").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("선불로 처리된 금액").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("결제할 금액").length).toBeGreaterThan(1);
+    expect(screen.getAllByText("남은 금액").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/모든 달에서 아직 남아 있는 금액/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/선불로 처리됨:/).length).toBeGreaterThan(0);
+    const secondCheckbox = screen.getByRole("checkbox", { name: selectionLabel(secondReceivable) });
+    await user.click(secondCheckbox);
+    expect(screen.getByText("선택한 결제할 금액").parentElement).toHaveTextContent("₩3,000");
+    await user.click(secondCheckbox);
+    expect(screen.getByText("선택한 결제할 금액").parentElement).toHaveTextContent("₩1,000");
     expect(screen.getByRole("checkbox", { name: selectionLabel(otherContractReceivable) })).toBeDisabled();
     expect(screen.queryByText("계약 " + firstReceivable.mealContractId)).not.toBeInTheDocument();
     expect(screen.queryByText("계약 " + otherContractReceivable.mealContractId)).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("결제일"), { target: { value: "2026-08-11" } });
     fireEvent.change(screen.getByLabelText("결제 금액"), { target: { value: "1000" } });
-    await user.click(screen.getByRole("button", { name: "정산 기록 저장" }));
+    await user.click(screen.getByRole("button", { name: "결제 기록 저장" }));
 
     await waitFor(() => expect(recordPosSettlementMock).toHaveBeenCalledWith({
       mealContractId: firstReceivable.mealContractId,
@@ -143,39 +188,39 @@ describe("PosSettlementForm", () => {
       submittedTotalMinor: 1_000,
       mealUsageIds: [firstReceivable.mealUsageId],
     }, "00000000-0000-0000-0000-000000000200"));
-    expect(await screen.findByRole("status")).toHaveTextContent("정산 기록 저장 완료");
-    expect(screen.getByRole("status")).not.toHaveTextContent("직원이 입력한 정산 기록을 저장했습니다.");
-    expect(screen.getByRole("list", { name: "기록된 미수금 배분" })).toHaveTextContent(firstReceivable.partnerDisplayName);
-    expect(screen.getByRole("list", { name: "기록된 미수금 배분" })).toHaveTextContent("₩1,000");
-    expect(screen.getByRole("list", { name: "기록된 미수금 배분" })).not.toHaveTextContent(firstReceivable.mealUsageId);
+    expect(await screen.findByRole("status")).toHaveTextContent("결제 기록 저장 완료");
+    expect(screen.getByRole("status")).not.toHaveTextContent("직원이 입력한 결제 기록을 저장했습니다.");
+    expect(screen.getByRole("list", { name: "결제 기록에 포함된 금액" })).toHaveTextContent(firstReceivable.partnerDisplayName);
+    expect(screen.getByRole("list", { name: "결제 기록에 포함된 금액" })).toHaveTextContent("₩1,000");
+    expect(screen.getByRole("list", { name: "결제 기록에 포함된 금액" })).not.toHaveTextContent(firstReceivable.mealUsageId);
     await waitFor(() => expect(getRecentPosSettlementsMock).toHaveBeenCalledTimes(2));
     await user.click(await screen.findByRole("button", {
       name: "결제일 " + savedSettlement.posBusinessDate + " 상세 보기",
     }));
     expect(await screen.findByRole("list", {
-      name: "결제일 " + savedSettlement.posBusinessDate + " 미수금 배분",
+      name: "결제일 " + savedSettlement.posBusinessDate + " 결제 기록에 포함된 금액",
     })).toHaveTextContent(firstReceivable.partnerDisplayName);
   });
 
   it("does not replace a staff-entered settlement total with the derived total", async () => {
     const user = userEvent.setup();
-    getOutstandingReceivablesMock.mockResolvedValue([firstReceivable]);
+    getOutstandingReceivablesMock.mockResolvedValue(receivableOverview([firstReceivable]));
     getRecentPosSettlementsMock.mockResolvedValue(historyPage([]));
     render(<PosSettlementForm />);
 
     await user.click(await screen.findByRole("checkbox", { name: selectionLabel(firstReceivable) }));
     fireEvent.change(screen.getByLabelText("결제일"), { target: { value: "2026-08-11" } });
     fireEvent.change(screen.getByLabelText("결제 금액"), { target: { value: "999" } });
-    await user.click(screen.getByRole("button", { name: "정산 기록 저장" }));
+    await user.click(screen.getByRole("button", { name: "결제 기록 저장" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("결제 금액과 선택한 미수금 합계가 다릅니다.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("결제 금액과 선택한 결제할 금액이 다릅니다.");
     expect(recordPosSettlementMock).not.toHaveBeenCalled();
     expect(screen.getByLabelText("결제 금액")).toHaveValue(999);
   });
 
   it("keeps one idempotency key for an ambiguous network retry until staff changes the input", async () => {
     const user = userEvent.setup();
-    getOutstandingReceivablesMock.mockResolvedValue([firstReceivable]);
+    getOutstandingReceivablesMock.mockResolvedValue(receivableOverview([firstReceivable]));
     getRecentPosSettlementsMock.mockResolvedValue(historyPage([]));
     recordPosSettlementMock
       .mockRejectedValueOnce(new TypeError("network failed"))
@@ -186,7 +231,7 @@ describe("PosSettlementForm", () => {
     await user.click(await screen.findByRole("checkbox", { name: selectionLabel(firstReceivable) }));
     fireEvent.change(screen.getByLabelText("결제일"), { target: { value: "2026-08-11" } });
     fireEvent.change(screen.getByLabelText("결제 금액"), { target: { value: "1000" } });
-    const submit = screen.getByRole("button", { name: "정산 기록 저장" });
+    const submit = screen.getByRole("button", { name: "결제 기록 저장" });
     await user.click(submit);
     await screen.findByRole("alert");
     await user.click(submit);
@@ -200,18 +245,18 @@ describe("PosSettlementForm", () => {
 
   it("renders saved history and all immutable allocations even when there are no outstanding receivables", async () => {
     const user = userEvent.setup();
-    getOutstandingReceivablesMock.mockResolvedValue([]);
+    getOutstandingReceivablesMock.mockResolvedValue(receivableOverview([]));
     getRecentPosSettlementsMock.mockResolvedValue(historyPage([savedHistorySettlement]));
 
     render(<PosSettlementForm />);
 
-    expect(await screen.findByText("정산할 미수금 거래가 없습니다")).toBeVisible();
+    expect(await screen.findByText("결제할 금액 없음")).toBeVisible();
     await user.click(await screen.findByRole("button", {
       name: "결제일 " + savedHistorySettlement.posBusinessDate + " 상세 보기",
     }));
-    expect(screen.queryByText("직원이 입력해 저장한 정산 기록입니다.")).not.toBeInTheDocument();
+    expect(screen.queryByText("직원이 입력해 저장한 결제 기록입니다.")).not.toBeInTheDocument();
     const allocationList = await screen.findByRole("list", {
-      name: "결제일 " + savedHistorySettlement.posBusinessDate + " 미수금 배분",
+      name: "결제일 " + savedHistorySettlement.posBusinessDate + " 결제 기록에 포함된 금액",
     });
     expect(allocationList).toHaveTextContent(firstReceivable.partnerDisplayName);
     expect(allocationList).toHaveTextContent(secondReceivable.partnerDisplayName);
@@ -226,7 +271,7 @@ describe("PosSettlementForm", () => {
 
   it("retries history independently after a history-only failure", async () => {
     const user = userEvent.setup();
-    getOutstandingReceivablesMock.mockResolvedValue([firstReceivable]);
+    getOutstandingReceivablesMock.mockResolvedValue(receivableOverview([firstReceivable]));
     getRecentPosSettlementsMock
       .mockRejectedValueOnce(new ApiError(500, "INTERNAL_SERVER_ERROR"))
       .mockResolvedValueOnce(historyPage([savedHistorySettlement]));
@@ -234,21 +279,21 @@ describe("PosSettlementForm", () => {
     render(<PosSettlementForm />);
 
     expect(await screen.findByRole("checkbox", { name: selectionLabel(firstReceivable) })).toBeVisible();
-    expect(await screen.findByRole("alert")).toHaveTextContent("저장된 정산 기록을 불러오지 못했습니다.");
-    await user.click(screen.getByRole("button", { name: "정산 기록 다시 불러오기" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("최근 결제 기록을 불러오지 못했습니다.");
+    await user.click(screen.getByRole("button", { name: "결제 기록 다시 불러오기" }));
 
     await user.click(await screen.findByRole("button", {
       name: "결제일 " + savedHistorySettlement.posBusinessDate + " 상세 보기",
     }));
     expect(await screen.findByRole("list", {
-      name: "결제일 " + savedHistorySettlement.posBusinessDate + " 미수금 배분",
+      name: "결제일 " + savedHistorySettlement.posBusinessDate + " 결제 기록에 포함된 금액",
     })).toHaveTextContent(secondReceivable.partnerDisplayName);
     expect(getOutstandingReceivablesMock).toHaveBeenCalledTimes(1);
     expect(getRecentPosSettlementsMock).toHaveBeenCalledTimes(2);
   });
 
   it("loads saved history again after a browser reload instead of reconstructing it from the form", async () => {
-    getOutstandingReceivablesMock.mockResolvedValue([]);
+    getOutstandingReceivablesMock.mockResolvedValue(receivableOverview([]));
     getRecentPosSettlementsMock.mockResolvedValue(historyPage([savedHistorySettlement]));
     const firstRender = render(<PosSettlementForm />);
 
@@ -276,7 +321,7 @@ describe("PosSettlementForm", () => {
 
   it("clears both panels on a forbidden history response", async () => {
     const pendingHistory = deferred<PosSettlementHistoryPage>();
-    getOutstandingReceivablesMock.mockResolvedValue([firstReceivable]);
+    getOutstandingReceivablesMock.mockResolvedValue(receivableOverview([firstReceivable]));
     getRecentPosSettlementsMock.mockImplementation(() => pendingHistory.promise);
     render(<PosSettlementForm />);
 

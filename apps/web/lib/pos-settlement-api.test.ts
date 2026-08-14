@@ -23,6 +23,21 @@ const receivable = {
   receivableCreatedMinor: 12_000,
 };
 
+const partnerSummary = {
+  mealContractId: receivable.mealContractId,
+  partnerDisplayName: receivable.partnerDisplayName,
+  previousPosBusinessDate: "2026-08-11",
+  periodConfirmedUsageTotalMinor: 12_000,
+  periodPrepaidAppliedTotalMinor: 0,
+  outstandingReceivableCount: 1,
+  outstandingReceivableTotalMinor: 12_000,
+};
+
+const receivableOverview = {
+  items: [receivable],
+  partners: [partnerSummary],
+};
+
 const settlement = {
   posBusinessDate: "2026-08-11",
   submittedTotalMinor: 12_000,
@@ -48,10 +63,10 @@ describe("POS settlement API", () => {
   });
 
   it("gets only the server-scoped outstanding receivable projection", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(response(200, { items: [receivable] }));
+    const fetchMock = vi.fn().mockResolvedValue(response(200, receivableOverview));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(getOutstandingReceivables()).resolves.toEqual([receivable]);
+    await expect(getOutstandingReceivables()).resolves.toEqual(receivableOverview);
 
     expect(fetchMock).toHaveBeenCalledWith("/api/v1/pos-settlements/receivables", {
       cache: "no-store",

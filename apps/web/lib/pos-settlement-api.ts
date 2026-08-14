@@ -8,6 +8,21 @@ export type OutstandingReceivable = {
   receivableCreatedMinor: number;
 };
 
+export type OutstandingReceivableOverview = {
+  items: OutstandingReceivable[];
+  partners: PartnerReceivableSummary[];
+};
+
+export type PartnerReceivableSummary = {
+  mealContractId: string;
+  partnerDisplayName: string | null;
+  previousPosBusinessDate: string | null;
+  periodConfirmedUsageTotalMinor: number;
+  periodPrepaidAppliedTotalMinor: number;
+  outstandingReceivableCount: number;
+  outstandingReceivableTotalMinor: number;
+};
+
 export type PosSettlement = {
   posBusinessDate: string;
   submittedTotalMinor: number;
@@ -71,6 +86,10 @@ function isPositiveSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
 function isIsoInstant(value: unknown): value is string {
   if (!isNonEmptyString(value)) return false;
   const match = /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/.exec(value);
@@ -115,6 +134,66 @@ function parseOutstandingReceivable(value: unknown): OutstandingReceivable {
     confirmedAt: value.confirmedAt,
     receivableCreatedMinor: value.receivableCreatedMinor,
   };
+}
+
+function parsePartnerReceivableSummary(value: unknown): PartnerReceivableSummary {
+  if (!isRecord(value)
+    || !isUuid(value.mealContractId)
+    || (value.partnerDisplayName !== null && !isNonEmptyString(value.partnerDisplayName))
+    || (value.previousPosBusinessDate !== null && !isIsoDate(value.previousPosBusinessDate))
+    || !isNonNegativeSafeInteger(value.periodConfirmedUsageTotalMinor)
+    || !isNonNegativeSafeInteger(value.periodPrepaidAppliedTotalMinor)
+    || !isNonNegativeSafeInteger(value.outstandingReceivableCount)
+    || !isNonNegativeSafeInteger(value.outstandingReceivableTotalMinor)
+    || value.periodPrepaidAppliedTotalMinor > value.periodConfirmedUsageTotalMinor) {
+    throw new InvalidApiResponseError();
+  }
+  return {
+    mealContractId: value.mealContractId,
+    partnerDisplayName: value.partnerDisplayName,
+    previousPosBusinessDate: value.previousPosBusinessDate,
+    periodConfirmedUsageTotalMinor: value.periodConfirmedUsageTotalMinor,
+    periodPrepaidAppliedTotalMinor: value.periodPrepaidAppliedTotalMinor,
+    outstandingReceivableCount: value.outstandingReceivableCount,
+    outstandingReceivableTotalMinor: value.outstandingReceivableTotalMinor,
+  };
+}
+
+function parseOutstandingReceivableOverview(value: unknown): OutstandingReceivableOverview {
+  if (!isRecord(value) || !Array.isArray(value.items) || !Array.isArray(value.partners)) {
+    throw new InvalidApiResponseError();
+  }
+  const items = value.items.map(parseOutstandingReceivable);
+  const partners = value.partners.map(parsePartnerReceivableSummary);
+  const summariesByMealContractId = new Map<string, PartnerReceivableSummary>();
+  for (const partner of partners) {
+    if (summariesByMealContractId.has(partner.mealContractId)) {
+      throw new InvalidApiResponseError();
+    }
+    summariesByMealContractId.set(partner.mealContractId, partner);
+  }
+  const candidatesByMealContractId = new Map<string, OutstandingReceivable[]>();
+  for (const item of items) {
+    if (!summariesByMealContractId.has(item.mealContractId)) {
+      throw new InvalidApiResponseError();
+    }
+    const candidates = candidatesByMealContractId.get(item.mealContractId) ?? [];
+    candidates.push(item);
+    candidatesByMealContractId.set(item.mealContractId, candidates);
+  }
+  for (const partner of partners) {
+    const candidates = candidatesByMealContractId.get(partner.mealContractId) ?? [];
+    const candidateTotalMinor = candidates.reduce(
+      (total, candidate) => total + candidate.receivableCreatedMinor,
+      0,
+    );
+    if (!Number.isSafeInteger(candidateTotalMinor)
+      || partner.outstandingReceivableCount !== candidates.length
+      || partner.outstandingReceivableTotalMinor !== candidateTotalMinor) {
+      throw new InvalidApiResponseError();
+    }
+  }
+  return { items, partners };
 }
 
 function parsePosSettlementAllocation(value: unknown): PosSettlementAllocation {
@@ -188,7 +267,7 @@ async function csrfToken(): Promise<CsrfToken> {
   return parseCsrfToken(await response.json() as unknown);
 }
 
-export async function getOutstandingReceivables(): Promise<OutstandingReceivable[]> {
+export async function getOutstandingReceivables(): Promise<OutstandingReceivableOverview> {
   const response = await fetch(RECEIVABLES_PATH, {
     cache: "no-store",
     credentials: "same-origin",
@@ -197,10 +276,7 @@ export async function getOutstandingReceivables(): Promise<OutstandingReceivable
     throw await apiError(response);
   }
   const body: unknown = await response.json();
-  if (!isRecord(body) || !Array.isArray(body.items)) {
-    throw new InvalidApiResponseError();
-  }
-  return body.items.map(parseOutstandingReceivable);
+  return parseOutstandingReceivableOverview(body);
 }
 
 export async function getRecentPosSettlements(): Promise<PosSettlementHistoryPage> {
