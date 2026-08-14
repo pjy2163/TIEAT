@@ -31,11 +31,14 @@ const items = [
 function page(overrides: Partial<Awaited<ReturnType<typeof getMonthlyMealUsages>>> = {}) {
   return {
     month: "2026-08",
+    fromMonth: "2026-08",
+    toMonth: "2026-08",
     timeZone: "Asia/Seoul" as const,
     items,
     page: 0,
     size: 20,
     hasNext: true,
+    totalAmountMinor: 12_000,
     ...overrides,
   };
 }
@@ -60,13 +63,16 @@ describe("MonthlyMealUsageList", () => {
     expect(await screen.findByText("월별 장부")).toBeVisible();
     expect(screen.getByText("확인자 HK")).toBeVisible();
     expect(screen.getByText("협력사 A")).toBeVisible();
+    expect(screen.getByText("조회 기간 합계")).toBeVisible();
+    expect(screen.getByLabelText("조회 기간 합계")).toHaveTextContent("₩12,000");
     expect(screen.getByText("이름 미입력")).toBeVisible();
+    expect(screen.getByRole("link", { name: "결제할 금액 보기" })).toHaveAttribute("href", "/store/pos-settlements");
     expect(screen.queryByText("모바일 QR 입력")).not.toBeInTheDocument();
     expect(screen.queryByText("매장 태블릿 입력")).not.toBeInTheDocument();
     expect(screen.queryByText("거절")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "확인 대기로 이동" })).toHaveAttribute("href", "/store/meal-usages");
     expect(getMonthlyMealUsagesMock).toHaveBeenCalledTimes(1);
-    expect(getMonthlyMealUsagesMock).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])$/), 0, 20);
+    expect(getMonthlyMealUsagesMock).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])$/), expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])$/), 0, 20);
 
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0));
@@ -74,7 +80,7 @@ describe("MonthlyMealUsageList", () => {
     expect(getMonthlyMealUsagesMock).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "다음 페이지" }));
-    await waitFor(() => expect(getMonthlyMealUsagesMock).toHaveBeenLastCalledWith(expect.any(String), 1, 20));
+    await waitFor(() => expect(getMonthlyMealUsagesMock).toHaveBeenLastCalledWith(expect.any(String), expect.any(String), 1, 20));
     expect(screen.getByText("2페이지")).toBeVisible();
   });
 
@@ -116,9 +122,11 @@ describe("MonthlyMealUsageList", () => {
     render(<MonthlyMealUsageList />);
     await screen.findByText("협력사 A");
 
-    const monthInput = screen.getByLabelText("조회 월");
+    const monthInput = screen.getByLabelText("시작 월");
     fireEvent.change(monthInput, { target: { value: "2026-07" } });
-    await waitFor(() => expect(getMonthlyMealUsagesMock).toHaveBeenLastCalledWith("2026-07", 0, 20));
+    await waitFor(() => expect(getMonthlyMealUsagesMock).toHaveBeenLastCalledWith("2026-07", "2026-08", 0, 20));
+    fireEvent.change(screen.getByLabelText("종료 월"), { target: { value: "2026-09" } });
+    await waitFor(() => expect(getMonthlyMealUsagesMock).toHaveBeenLastCalledWith("2026-07", "2026-09", 0, 20));
     await flushUpdates();
   });
 });

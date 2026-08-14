@@ -13,18 +13,22 @@ export type MonthlyMealUsage = {
 
 export type MonthlyMealUsagePage = {
   month: string;
+  fromMonth: string;
+  toMonth: string;
   timeZone: "Asia/Seoul";
   items: MonthlyMealUsage[];
   page: number;
   size: number;
   hasNext: boolean;
+  totalAmountMinor: number;
 };
 
 const API_PATH = "/api/v1";
 const YEAR_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 
-function monthlyLedgerPath(month: string, page: number, size: number): string {
-  return `${API_PATH}/meal-usages/months/${encodeURIComponent(month)}?page=${page}&size=${size}`;
+function monthlyLedgerPath(fromMonth: string, toMonth: string, page: number, size: number): string {
+  const toQuery = fromMonth === toMonth ? "" : `&to=${encodeURIComponent(toMonth)}`;
+  return `${API_PATH}/meal-usages/months/${encodeURIComponent(fromMonth)}?page=${page}&size=${size}${toQuery}`;
 }
 
 async function apiError(response: Response): Promise<ApiError> {
@@ -88,38 +92,78 @@ function parseMonthlyMealUsage(value: unknown): MonthlyMealUsage {
 
 function parseMonthlyMealUsagePage(
   value: unknown,
-  expectedMonth: string,
+  expectedFromMonth: string,
+  expectedToMonth: string,
   expectedPage: number,
   expectedSize: number,
 ): MonthlyMealUsagePage {
   if (!isRecord(value)
-    || value.month !== expectedMonth
+    || value.month !== expectedFromMonth
+    || value.fromMonth !== expectedFromMonth
+    || value.toMonth !== expectedToMonth
     || value.timeZone !== "Asia/Seoul"
     || !Array.isArray(value.items)
     || value.page !== expectedPage
     || value.size !== expectedSize
-    || typeof value.hasNext !== "boolean") {
+    || typeof value.hasNext !== "boolean"
+    || typeof value.totalAmountMinor !== "number"
+    || !Number.isSafeInteger(value.totalAmountMinor)
+    || value.totalAmountMinor < 0) {
     throw new InvalidApiResponseError();
   }
   return {
     month: value.month,
+    fromMonth: value.fromMonth,
+    toMonth: value.toMonth,
     timeZone: value.timeZone,
     items: value.items.map(parseMonthlyMealUsage),
     page: value.page,
     size: value.size,
     hasNext: value.hasNext,
+    totalAmountMinor: value.totalAmountMinor,
   };
 }
 
-export async function getMonthlyMealUsages(
+export function getMonthlyMealUsages(
+  fromMonth: string,
+  toMonth: string,
+  page: number,
+  size: number,
+): Promise<MonthlyMealUsagePage>;
+export function getMonthlyMealUsages(
   month: string,
   page: number,
   size: number,
+  toMonth?: string,
+): Promise<MonthlyMealUsagePage>;
+export async function getMonthlyMealUsages(
+  fromMonth: string,
+  toMonthOrPage: string | number,
+  pageOrSize: number,
+  sizeOrToMonth?: number | string,
 ): Promise<MonthlyMealUsagePage> {
-  if (!YEAR_MONTH_PATTERN.test(month) || !Number.isInteger(page) || page < 0 || !Number.isInteger(size) || size < 1 || size > 100) {
+  let toMonth: string;
+  let page: number;
+  let size: number;
+  if (typeof toMonthOrPage === "string") {
+    toMonth = toMonthOrPage;
+    page = pageOrSize;
+    size = typeof sizeOrToMonth === "number" ? sizeOrToMonth : Number.NaN;
+  } else {
+    toMonth = typeof sizeOrToMonth === "string" ? sizeOrToMonth : fromMonth;
+    page = toMonthOrPage;
+    size = pageOrSize;
+  }
+  if (!YEAR_MONTH_PATTERN.test(fromMonth)
+    || !YEAR_MONTH_PATTERN.test(toMonth)
+    || !Number.isInteger(page)
+    || page < 0
+    || !Number.isInteger(size)
+    || size < 1
+    || size > 100) {
     throw new InvalidApiResponseError();
   }
-  const response = await fetch(monthlyLedgerPath(month, page, size), {
+  const response = await fetch(monthlyLedgerPath(fromMonth, toMonth, page, size), {
     cache: "no-store",
     credentials: "same-origin",
   });
@@ -128,5 +172,5 @@ export async function getMonthlyMealUsages(
     throw await apiError(response);
   }
 
-  return parseMonthlyMealUsagePage(await response.json() as unknown, month, page, size);
+  return parseMonthlyMealUsagePage(await response.json() as unknown, fromMonth, toMonth, page, size);
 }

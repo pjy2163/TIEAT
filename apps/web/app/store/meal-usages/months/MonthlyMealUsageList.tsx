@@ -41,6 +41,12 @@ function monthLabel(month: string): string {
   return `${year}년 ${Number(monthNumber)}월`;
 }
 
+function rangeLabel(fromMonth: string, toMonth: string): string {
+  return fromMonth === toMonth
+    ? monthLabel(fromMonth)
+    : `${monthLabel(fromMonth)}~${monthLabel(toMonth)}`;
+}
+
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError && error.errorCode === "INTERNAL_SERVER_ERROR") {
     return "월별 장부를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
@@ -50,7 +56,8 @@ function errorMessage(error: unknown): string {
 
 export function MonthlyMealUsageList() {
   const router = useRouter();
-  const [month, setMonth] = useState(currentKoreanMonth);
+  const [fromMonth, setFromMonth] = useState(currentKoreanMonth);
+  const [toMonth, setToMonth] = useState(currentKoreanMonth);
   const [page, setPage] = useState(0);
   const [result, setResult] = useState<MonthlyMealUsagePage | null>(null);
   const [viewState, setViewState] = useState<"loading" | "ready" | "empty" | "forbidden" | "error">("loading");
@@ -72,7 +79,7 @@ export function MonthlyMealUsageList() {
     setLoadError(null);
   }, [replaceResult]);
 
-  const load = useCallback(async (requestedMonth: string, requestedPage: number) => {
+  const load = useCallback(async (requestedFromMonth: string, requestedToMonth: string, requestedPage: number) => {
     const requestEpoch = requestEpochRef.current + 1;
     requestEpochRef.current = requestEpoch;
     setIsLoading(true);
@@ -82,7 +89,7 @@ export function MonthlyMealUsageList() {
     }
 
     try {
-      const next = await getMonthlyMealUsages(requestedMonth, requestedPage, PAGE_SIZE);
+      const next = await getMonthlyMealUsages(requestedFromMonth, requestedToMonth, requestedPage, PAGE_SIZE);
       if (!mountedRef.current || requestEpochRef.current !== requestEpoch) return;
       replaceResult(next);
       setViewState(next.items.length === 0 ? "empty" : "ready");
@@ -120,17 +127,18 @@ export function MonthlyMealUsageList() {
   }, []);
 
   useEffect(() => {
-    void load(month, page);
-  }, [load, month, page]);
+    void load(fromMonth, toMonth, page);
+  }, [fromMonth, load, page, toMonth]);
 
-  const onMonthChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+  const onMonthChange = useCallback((event: ChangeEvent<HTMLInputElement>, setMonth: (month: string) => void) => {
     const nextMonth = event.target.value;
     if (!YEAR_MONTH_PATTERN.test(nextMonth)) return;
     setMonth(nextMonth);
     setPage(0);
   }, []);
 
-  const isDisplayingEarlierSafePage = result !== null && (result.month !== month || result.page !== page);
+  const isDisplayingEarlierSafePage = result !== null
+    && (result.fromMonth !== fromMonth || result.toMonth !== toMonth || result.page !== page);
   const hasNext = result !== null && !isDisplayingEarlierSafePage && result.hasNext;
 
   if (viewState === "loading" && result === null) {
@@ -152,7 +160,7 @@ export function MonthlyMealUsageList() {
   }
 
   if (viewState === "error") {
-    return <StatePanel title="월별 장부를 불러오지 못했습니다" description="네트워크 상태를 확인한 뒤 다시 시도해 주세요." onRetry={() => void load(month, page)} />;
+    return <StatePanel title="월별 장부를 불러오지 못했습니다" description="네트워크 상태를 확인한 뒤 다시 시도해 주세요." onRetry={() => void load(fromMonth, toMonth, page)} />;
   }
 
   return (
@@ -162,16 +170,23 @@ export function MonthlyMealUsageList() {
           <div>
             <p className={monthlyMealUsageListStyles.eyebrow}>TIEAT STORE</p>
             <h1 id="monthly-ledger-title" className={monthlyMealUsageListStyles.title}>월별 장부</h1>
-            <p className={monthlyMealUsageListStyles.description}>입력 시각 기준으로 해당 월의 식대 내역을 표시합니다.</p>
+            <p className={monthlyMealUsageListStyles.description}>
+              월별 장부는 사용 이력입니다. 결제할 금액은 월과 관계없이 따로 확인하세요.
+            </p>
           </div>
           <div className={monthlyMealUsageListStyles.controls}>
             <label className={monthlyMealUsageListStyles.field}>
-              <span className={monthlyMealUsageListStyles.label}>조회 월</span>
-              <input className={monthlyMealUsageListStyles.monthInput} type="month" value={month} onChange={onMonthChange} />
+              <span className={monthlyMealUsageListStyles.label}>시작 월</span>
+              <input className={monthlyMealUsageListStyles.monthInput} type="month" value={fromMonth} onChange={(event) => onMonthChange(event, setFromMonth)} />
             </label>
-            <button className={monthlyMealUsageListStyles.reload} type="button" onClick={() => void load(month, page)} disabled={isLoading}>
+            <label className={monthlyMealUsageListStyles.field}>
+              <span className={monthlyMealUsageListStyles.label}>종료 월</span>
+              <input className={monthlyMealUsageListStyles.monthInput} type="month" value={toMonth} onChange={(event) => onMonthChange(event, setToMonth)} />
+            </label>
+            <button className={monthlyMealUsageListStyles.reload} type="button" onClick={() => void load(fromMonth, toMonth, page)} disabled={isLoading}>
               {isLoading ? "불러오는 중…" : "다시 불러오기"}
             </button>
+            <a className={monthlyMealUsageListStyles.settlementLink} href="/store/pos-settlements">결제할 금액 보기</a>
             <a className={monthlyMealUsageListStyles.pendingLink} href="/store/meal-usages">확인 대기로 이동</a>
           </div>
         </header>
@@ -180,35 +195,43 @@ export function MonthlyMealUsageList() {
           {loadError ? <p className={monthlyMealUsageListStyles.alert} role="alert">{loadError}</p> : null}
           {isDisplayingEarlierSafePage ? (
             <p className={monthlyMealUsageListStyles.loadingNotice} role="status">
-              마지막으로 불러온 {monthLabel(result.month)} {result.page + 1}페이지를 유지하고 있습니다.
+              마지막으로 불러온 {rangeLabel(result.fromMonth, result.toMonth)} {result.page + 1}페이지를 유지하고 있습니다.
             </p>
           ) : null}
           {isLoading && result !== null ? <p className={monthlyMealUsageListStyles.loadingNotice} role="status">월별 장부를 불러오는 중입니다.</p> : null}
+          {result !== null ? (
+            <div className={monthlyMealUsageListStyles.total} aria-label="조회 기간 합계">
+              <span className={monthlyMealUsageListStyles.totalLabel}>조회 기간 합계</span>
+              <strong className={monthlyMealUsageListStyles.totalAmount}>{amountFormatter.format(result.totalAmountMinor)}</strong>
+            </div>
+          ) : null}
           {viewState === "empty" ? (
             <div className={monthlyMealUsageListStyles.state}>
-              <h2 className={monthlyMealUsageListStyles.stateTitle}>{monthLabel(month)} 식대 내역이 없습니다</h2>
-              <p className={monthlyMealUsageListStyles.stateDescription}>해당 월에 표시할 식대 사용 내역이 없습니다.</p>
+              <h2 className={monthlyMealUsageListStyles.stateTitle}>{rangeLabel(fromMonth, toMonth)} 식대 내역이 없습니다</h2>
+              <p className={monthlyMealUsageListStyles.stateDescription}>해당 기간에 표시할 식대 사용 내역이 없습니다.</p>
             </div>
           ) : (
-            <ul className={monthlyMealUsageListStyles.list} aria-label="월별 장부 목록">
-              {result?.items.map((item) => (
-                <li className={monthlyMealUsageListStyles.row} key={item.id}>
-                  <div>
-                    <p className={monthlyMealUsageListStyles.partner}>{item.partnerDisplayName ?? "협력사 정보 미입력"}</p>
-                    <p className={monthlyMealUsageListStyles.customer}><span>입력자</span>이름 미입력</p>
-                  </div>
-                  <div className={monthlyMealUsageListStyles.side}>
-                    <p className={monthlyMealUsageListStyles.amount}>{amountFormatter.format(item.amountMinor)}</p>
-                    <div className={monthlyMealUsageListStyles.statusBlock}>
-                      <p className={monthlyMealUsageListStyles.confirmedInitials}>확인자 {item.confirmedStaffInitials}</p>
+            <>
+              <ul className={monthlyMealUsageListStyles.list} aria-label="월별 장부 목록">
+                {result?.items.map((item) => (
+                  <li className={monthlyMealUsageListStyles.row} key={item.id}>
+                    <div>
+                      <p className={monthlyMealUsageListStyles.partner}>{item.partnerDisplayName ?? "협력사 정보 미입력"}</p>
+                      <p className={monthlyMealUsageListStyles.customer}><span>입력자</span>이름 미입력</p>
                     </div>
-                  </div>
-                  <div className={monthlyMealUsageListStyles.metadata}>
-                    <p><span className={monthlyMealUsageListStyles.metadataLabel}>입력 시각</span>{dateFormatter.format(new Date(item.createdAt))}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                    <div className={monthlyMealUsageListStyles.side}>
+                      <p className={monthlyMealUsageListStyles.amount}>{amountFormatter.format(item.amountMinor)}</p>
+                      <div className={monthlyMealUsageListStyles.statusBlock}>
+                        <p className={monthlyMealUsageListStyles.confirmedInitials}>확인자 {item.confirmedStaffInitials}</p>
+                      </div>
+                    </div>
+                    <div className={monthlyMealUsageListStyles.metadata}>
+                      <p><span className={monthlyMealUsageListStyles.metadataLabel}>입력 시각</span>{dateFormatter.format(new Date(item.createdAt))}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
           <nav className={monthlyMealUsageListStyles.pager} aria-label="월별 장부 페이지">
             <button className={monthlyMealUsageListStyles.pagerButton} type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0 || isLoading}>
