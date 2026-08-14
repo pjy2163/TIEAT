@@ -3,6 +3,8 @@ package com.tieat.ledger.adapter.out.persistence;
 import jakarta.persistence.LockModeType;
 import com.tieat.ledger.domain.MealUsageStatus;
 import java.util.UUID;
+import java.util.Collection;
+import java.util.List;
 import java.time.Instant;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Query;
@@ -35,6 +37,18 @@ interface MealUsageJpaRepository extends JpaRepository<MealUsageJpaEntity, UUID>
         @Param("startInclusive") Instant startInclusive,
         @Param("endExclusive") Instant endExclusive,
         Pageable pageable
+    );
+
+    @Query(value = """
+        select allocation.meal_usage_id
+        from pos_settlement_allocations allocation
+        join meal_usages meal_usage on meal_usage.id = allocation.meal_usage_id
+        where meal_usage.store_id = :storeId
+          and allocation.meal_usage_id in (:mealUsageIds)
+        """, nativeQuery = true)
+    List<UUID> findSettlementAllocationUsageIds(
+        @Param("storeId") UUID storeId,
+        @Param("mealUsageIds") Collection<UUID> mealUsageIds
     );
 
     @Query("""

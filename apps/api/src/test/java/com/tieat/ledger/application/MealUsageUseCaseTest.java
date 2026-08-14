@@ -10,6 +10,8 @@ import com.tieat.ledger.domain.MealUsageId;
 import com.tieat.ledger.domain.MealUsageRepository;
 import com.tieat.ledger.domain.MealUsageSlice;
 import com.tieat.ledger.domain.MealUsageStatus;
+import com.tieat.ledger.domain.MonthlyMealUsageRow;
+import com.tieat.ledger.domain.MonthlyMealUsageSlice;
 import com.tieat.ledger.domain.PublicMealUsageIdempotency;
 import com.tieat.ledger.domain.PublicMealUsageIdempotencyRepository;
 import com.tieat.partnership.domain.MealContract;
@@ -367,7 +369,7 @@ class MealUsageUseCaseTest {
         }
 
         @Override
-        public MealUsageSlice findConfirmedByStoreIdAndCreatedAtBetween(
+        public MonthlyMealUsageSlice findConfirmedByStoreIdAndCreatedAtBetween(
             StoreId storeId,
             Instant startInclusive,
             Instant endExclusive,
@@ -384,7 +386,12 @@ class MealUsageUseCaseTest {
                 .toList();
             int fromIndex = Math.min(page * size, monthly.size());
             int toIndex = Math.min(fromIndex + size, monthly.size());
-            return new MealUsageSlice(monthly.subList(fromIndex, toIndex), toIndex < monthly.size());
+            return new MonthlyMealUsageSlice(
+                monthly.subList(fromIndex, toIndex).stream()
+                    .map(usage -> new MonthlyMealUsageRow(usage, false))
+                    .toList(),
+                toIndex < monthly.size()
+            );
         }
 
         @Override

@@ -4,6 +4,8 @@ import com.tieat.ledger.domain.MealUsage;
 import com.tieat.ledger.domain.MealUsageId;
 import com.tieat.ledger.domain.MealUsageRepository;
 import com.tieat.ledger.domain.MealUsageSlice;
+import com.tieat.ledger.domain.MonthlyMealUsageRow;
+import com.tieat.ledger.domain.MonthlyMealUsageSlice;
 import com.tieat.ledger.domain.MealUsageStatus;
 import com.tieat.ledger.domain.PrepaidAllocation;
 import com.tieat.ledger.domain.Confirmation;
@@ -13,6 +15,7 @@ import com.tieat.partnership.domain.MealContractId;
 import com.tieat.store.domain.StoreId;
 import com.tieat.qr.domain.MealUsageQrContextId;
 import java.time.Instant;
+import java.util.Set;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.data.domain.PageRequest;
@@ -64,7 +67,7 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
     }
 
     @Override
-    public MealUsageSlice findConfirmedByStoreIdAndCreatedAtBetween(
+    public MonthlyMealUsageSlice findConfirmedByStoreIdAndCreatedAtBetween(
         StoreId storeId,
         Instant startInclusive,
         Instant endExclusive,
@@ -82,7 +85,18 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
         var result = repository.findByStoreIdAndStatusAndCreatedAtBetween(
             storeId.value(), MealUsageStatus.CONFIRMED, startInclusive, endExclusive, pageable
         );
-        return new MealUsageSlice(result.getContent().stream().map(this::toDomain).toList(), result.hasNext());
+        var content = result.getContent();
+        Set<java.util.UUID> allocatedUsageIds = content.isEmpty()
+            ? Set.of()
+            : Set.copyOf(repository.findSettlementAllocationUsageIds(
+                storeId.value(), content.stream().map(MealUsageJpaEntity::id).toList()
+            ));
+        return new MonthlyMealUsageSlice(
+            content.stream()
+                .map(entity -> new MonthlyMealUsageRow(toDomain(entity), allocatedUsageIds.contains(entity.id())))
+                .toList(),
+            result.hasNext()
+        );
     }
 
     @Override

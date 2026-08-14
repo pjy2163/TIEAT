@@ -18,7 +18,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.tieat.ledger.domain.MealUsage;
 import com.tieat.ledger.domain.MealUsageRepository;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -77,7 +80,10 @@ class MonthlyMealUsageHttpIntegrationTest {
     @BeforeEach
     void clearDatabase() {
         jdbcTemplate.update("delete from public_meal_usage_idempotency_keys");
+        jdbcTemplate.update("delete from pos_settlement_allocations");
+        jdbcTemplate.update("delete from pos_settlements");
         jdbcTemplate.update("delete from meal_usages");
+        jdbcTemplate.update("delete from meal_contracts");
         jdbcTemplate.update("delete from meal_usage_qr_contexts");
         jdbcTemplate.update("delete from store_accounts");
     }
@@ -136,10 +142,12 @@ class MonthlyMealUsageHttpIntegrationTest {
             .andExpect(jsonPath("$.items.length()").value(2))
             .andExpect(jsonPath("$.items[0].id").value(sameMomentHigherIdConfirmed.id().value().toString()))
             .andExpect(jsonPath("$.items[0].status").value("CONFIRMED"))
+            .andExpect(jsonPath("$.items[0].settlementStatus").value("PAYMENT_DUE"))
             .andExpect(jsonPath("$.items[0].partnerDisplayName").value("협력사 확정"))
             .andExpect(jsonPath("$.items[0].confirmedStaffInitials").value("HK"))
             .andExpect(jsonPath("$.items[1].id").value(sameMomentLowerIdConfirmed.id().value().toString()))
             .andExpect(jsonPath("$.items[1].status").value("CONFIRMED"))
+            .andExpect(jsonPath("$.items[1].settlementStatus").value("PAYMENT_DUE"))
             .andExpect(jsonPath("$.items[1].confirmedStaffInitials").value("HK"))
             .andExpect(jsonPath("$.page").value(0))
             .andExpect(jsonPath("$.size").value(2))
@@ -153,7 +161,7 @@ class MonthlyMealUsageHttpIntegrationTest {
         );
         assertThat(fieldNames(firstPageJson.get("items").get(0)))
             .containsExactlyInAnyOrder(
-                "id", "status", "partnerDisplayName", "amountMinor", "createdAt", "confirmedStaffInitials"
+                "id", "status", "partnerDisplayName", "amountMinor", "createdAt", "confirmedStaffInitials", "settlementStatus"
             );
 
         mockMvc.perform(monthlyRequest(session, "2026-08", 1, 2))
@@ -162,6 +170,7 @@ class MonthlyMealUsageHttpIntegrationTest {
             .andExpect(jsonPath("$.items.length()").value(1))
             .andExpect(jsonPath("$.items[0].id").value(monthStartConfirmed.id().value().toString()))
             .andExpect(jsonPath("$.items[0].status").value("CONFIRMED"))
+            .andExpect(jsonPath("$.items[0].settlementStatus").value("PAYMENT_DUE"))
             .andExpect(jsonPath("$.items[0].confirmedStaffInitials").value("HK"))
             .andExpect(jsonPath("$.hasNext").value(false));
 
@@ -177,6 +186,71 @@ class MonthlyMealUsageHttpIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usages", Long.class)).isEqualTo(initialCount);
         assertThat(jdbcTemplate.queryForObject("select coalesce(sum(version), 0) from meal_usages", Long.class))
             .isEqualTo(initialVersionSum);
+    }
+
+    @Test
+    void derivesSettlementStatusFromConfirmedAllocationAndPrepaidSourceValuesWithoutDuplicatingRows() throws Exception {
+        seedAccount(jdbcTemplate, passwordEncoder, "store-hk", "correct-password", STORE_ID);
+        jdbcTemplate.update(
+            "insert into meal_contracts (id, store_id, payment_type, prepaid_balance) values (?, ?, 'POSTPAID', 0)",
+            MonthlyMealUsageHttpIntegrationFixture.MEAL_CONTRACT_ID.value(), STORE_ID.value()
+        );
+        MealUsage unpaid = confirmed(
+            STORE_ID, "00000000-0000-0000-0000-000000000011", "2026-08-15T01:00:00Z", "미배분 미수"
+        );
+        MealUsage recorded = confirmed(
+            STORE_ID, "00000000-0000-0000-0000-000000000012", "2026-08-15T02:00:00Z", "기록된 미수"
+        );
+        MealUsage prepaidOnly = confirmed(
+            STORE_ID, "00000000-0000-0000-0000-000000000013", "2026-08-15T03:00:00Z", "선불 처리", 12_000, 0
+        );
+        MealUsage mixed = confirmed(
+            STORE_ID, "00000000-0000-0000-0000-000000000014", "2026-08-15T04:00:00Z", "혼합 미수", 5_000, 7_000
+        );
+        mealUsageRepository.save(unpaid);
+        mealUsageRepository.save(recorded);
+        mealUsageRepository.save(prepaidOnly);
+        mealUsageRepository.save(mixed);
+        recordSettlementAllocation(recorded);
+
+        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        mockMvc.perform(monthlyRequest(session, "2026-08", 0, 20))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items.length()").value(4))
+            .andExpect(jsonPath("$.items[0].id").value(mixed.id().value().toString()))
+            .andExpect(jsonPath("$.items[0].settlementStatus").value("PAYMENT_DUE"))
+            .andExpect(jsonPath("$.items[1].id").value(prepaidOnly.id().value().toString()))
+            .andExpect(jsonPath("$.items[1].settlementStatus").value("PREPAID_SETTLED"))
+            .andExpect(jsonPath("$.items[2].id").value(recorded.id().value().toString()))
+            .andExpect(jsonPath("$.items[2].settlementStatus").value("PAYMENT_RECORDED"))
+            .andExpect(jsonPath("$.items[3].id").value(unpaid.id().value().toString()))
+            .andExpect(jsonPath("$.items[3].settlementStatus").value("PAYMENT_DUE"));
+    }
+
+    private void recordSettlementAllocation(MealUsage mealUsage) {
+        UUID settlementId = UUID.randomUUID();
+        jdbcTemplate.update(
+            """
+                insert into pos_settlements
+                    (id, store_id, meal_contract_id, pos_business_date, submitted_total_minor,
+                     recorded_by_login_id, recorded_at, idempotency_key)
+                values (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+            settlementId,
+            STORE_ID.value(),
+            MonthlyMealUsageHttpIntegrationFixture.MEAL_CONTRACT_ID.value(),
+            java.sql.Date.valueOf(LocalDate.of(2026, 8, 31)),
+            mealUsage.amount(),
+            "store-hk",
+            java.sql.Timestamp.from(Instant.parse("2026-09-01T01:00:00Z")),
+            UUID.randomUUID()
+        );
+        jdbcTemplate.update(
+            "insert into pos_settlement_allocations (pos_settlement_id, meal_usage_id, receivable_amount_minor) values (?, ?, ?)",
+            settlementId,
+            mealUsage.id().value(),
+            mealUsage.amount()
+        );
     }
 
     @Test

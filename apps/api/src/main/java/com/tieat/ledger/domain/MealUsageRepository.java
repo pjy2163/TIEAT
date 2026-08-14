@@ -15,7 +15,7 @@ public interface MealUsageRepository {
 
     MealUsageSlice findPendingByStoreId(StoreId storeId, int page, int size);
 
-    MealUsageSlice findConfirmedByStoreIdAndCreatedAtBetween(
+    MonthlyMealUsageSlice findConfirmedByStoreIdAndCreatedAtBetween(
         StoreId storeId,
         Instant startInclusive,
         Instant endExclusive,

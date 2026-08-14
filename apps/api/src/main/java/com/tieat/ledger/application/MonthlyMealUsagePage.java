@@ -1,6 +1,6 @@
 package com.tieat.ledger.application;
 
-import com.tieat.ledger.domain.MealUsage;
+import com.tieat.ledger.domain.MonthlyMealUsageRow;
 import java.util.List;
 import java.util.Objects;
 
@@ -8,14 +8,14 @@ public record MonthlyMealUsagePage(
     String month,
     String fromMonth,
     String toMonth,
-    List<MealUsage> items,
+    List<MonthlyMealUsageRow> items,
     int page,
     int size,
     boolean hasNext,
     long totalAmountMinor
 ) {
 
-    public MonthlyMealUsagePage(String month, List<MealUsage> items, int page, int size, boolean hasNext) {
+    public MonthlyMealUsagePage(String month, List<MonthlyMealUsageRow> items, int page, int size, boolean hasNext) {
         this(month, month, month, items, page, size, hasNext, 0);
     }
 

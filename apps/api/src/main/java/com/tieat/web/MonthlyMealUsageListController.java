@@ -6,6 +6,7 @@ import com.tieat.ledger.application.ListMonthlyMealUsagesUseCase;
 import com.tieat.ledger.application.MonthlyMealUsagePage;
 import com.tieat.ledger.domain.MealUsage;
 import com.tieat.ledger.domain.MealUsageStatus;
+import com.tieat.ledger.domain.MonthlyMealUsageRow;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -99,10 +100,12 @@ class MonthlyMealUsageListController {
         String partnerDisplayName,
         long amountMinor,
         Instant createdAt,
-        String confirmedStaffInitials
+        String confirmedStaffInitials,
+        SettlementStatus settlementStatus
     ) {
 
-        static MonthlyMealUsageItemResponse from(MealUsage mealUsage) {
+        static MonthlyMealUsageItemResponse from(MonthlyMealUsageRow row) {
+            MealUsage mealUsage = row.mealUsage();
             if (mealUsage.status() != MealUsageStatus.CONFIRMED) {
                 throw new IllegalStateException("Monthly ledger accepts confirmed meal usages only");
             }
@@ -116,8 +119,27 @@ class MonthlyMealUsageListController {
                 mealUsage.partnerDisplayNameSnapshot().orElse(null),
                 mealUsage.amount(),
                 mealUsage.createdAt(),
-                confirmedStaffInitials
+                confirmedStaffInitials,
+                settlementStatus(mealUsage, row.settlementAllocationExists())
             );
         }
+
+        private static SettlementStatus settlementStatus(MealUsage mealUsage, boolean allocationExists) {
+            var allocation = mealUsage.prepaidAllocation()
+                .orElseThrow(() -> new IllegalStateException("Confirmed meal usage requires allocation data"));
+            if (allocation.receivableCreated() > 0) {
+                return allocationExists ? SettlementStatus.PAYMENT_RECORDED : SettlementStatus.PAYMENT_DUE;
+            }
+            if (allocation.prepaidApplied() > 0) {
+                return SettlementStatus.PREPAID_SETTLED;
+            }
+            return null;
+        }
+    }
+
+    enum SettlementStatus {
+        PAYMENT_DUE,
+        PAYMENT_RECORDED,
+        PREPAID_SETTLED
     }
 }

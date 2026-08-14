@@ -49,6 +49,17 @@ final class MonthlyMealUsageHttpIntegrationFixture {
     }
 
     static MealUsage confirmed(StoreId storeId, String id, String createdAt, String partnerDisplayName) {
+        return confirmed(storeId, id, createdAt, partnerDisplayName, 0, 12_000);
+    }
+
+    static MealUsage confirmed(
+        StoreId storeId,
+        String id,
+        String createdAt,
+        String partnerDisplayName,
+        long prepaidApplied,
+        long receivableCreated
+    ) {
         return MealUsage.restoreConfirmed(
             new MealUsageId(UUID.fromString(id)),
             storeId,
@@ -58,7 +69,7 @@ final class MonthlyMealUsageHttpIntegrationFixture {
             Instant.parse(createdAt),
             0,
             new Confirmation("HK", Instant.parse("2026-08-15T02:00:00Z")),
-            new PrepaidAllocation(12_000, 0, 12_000, 0),
+            new PrepaidAllocation(12_000, prepaidApplied, receivableCreated, 0),
             partnerDisplayName,
             null
         );
