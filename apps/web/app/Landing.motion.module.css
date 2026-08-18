@@ -1,0 +1,144 @@
+/* The preflight mode on html is the only source of truth for static mark visibility. */
+:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="header"],
+:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="hero"] [data-wordmark-segment="ti"],
+:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="hero"] [data-wordmark-segment="at"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="hero"] [data-wordmark-segment="e"] {
+  opacity: 1;
+  visibility: visible;
+}
+
+:global([data-tieat-landing-root][data-tieat-landing-mode="active"]) [data-tieat-wordmark="header"],
+:global([data-tieat-landing-root][data-tieat-landing-mode="active"]) [data-tieat-wordmark="hero"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+:global([data-tieat-landing-root][data-tieat-landing-mode="settle"]) [data-tieat-wordmark="header"],
+:global([data-tieat-landing-root][data-tieat-landing-mode="done"]) [data-tieat-wordmark="header"],
+:global([data-tieat-landing-root][data-tieat-landing-mode="skip"]) [data-tieat-wordmark="header"] {
+  opacity: 1;
+  visibility: visible;
+}
+
+:global([data-tieat-landing-root][data-tieat-landing-mode="settle"]) [data-tieat-wordmark="hero"],
+:global([data-tieat-landing-root][data-tieat-landing-mode="done"]) [data-tieat-wordmark="hero"],
+:global([data-tieat-landing-root][data-tieat-landing-mode="skip"]) [data-tieat-wordmark="hero"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+:global([data-tieat-landing-root][data-tieat-landing-mode="settle"]) [data-hero-brand],
+:global([data-tieat-landing-root][data-tieat-landing-mode="done"]) [data-hero-brand],
+:global([data-tieat-landing-root][data-tieat-landing-mode="skip"]) [data-hero-brand] {
+  height: 0 !important;
+  max-height: 0 !important;
+  min-height: 0 !important;
+  margin-bottom: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+.sectionReveal {
+  animation: sectionReveal 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.brandIntroMark {
+  position: absolute;
+  transform-origin: center;
+  opacity: 0;
+  transform: scale(0.94);
+  transition: opacity 520ms cubic-bezier(0.22, 1, 0.36, 1), transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.brandIntroReady {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.brandIntroMove {
+  opacity: 1;
+  transform: translate3d(var(--brand-target-x), var(--brand-target-y), 0) scale(var(--brand-target-scale));
+  transition: transform 1200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.brandIntroSettle {
+  opacity: 0;
+  transform: translate3d(var(--brand-target-x), var(--brand-target-y), 0) scale(var(--brand-target-scale));
+  transition: opacity 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.brandIntroSegmentHidden {
+  opacity: 0;
+}
+
+.brandIntroSegmentVisible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.brandIntroSegmentAtReveal {
+  animation: brandIntroSegmentAtReveal 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.brandIntroSegmentTiReveal {
+  animation: brandIntroSegmentTiReveal 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sectionReveal {
+  from {
+    opacity: 0.92;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes brandIntroSegmentAtReveal {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes brandIntroSegmentTiReveal {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sectionReveal,
+  .brandIntroMark,
+  .brandIntroReady,
+  .brandIntroMove,
+  .brandIntroSettle,
+  .brandIntroSegmentHidden,
+  .brandIntroSegmentVisible,
+  .brandIntroSegmentAtReveal,
+  .brandIntroSegmentTiReveal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
