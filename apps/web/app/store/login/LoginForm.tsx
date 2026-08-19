@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ApiError, login } from "@/lib/store-api";
+import { ApiError, getStoreOnboardingStatus, login } from "@/lib/store-api";
 import { loginStyles } from "./LoginForm.styles";
 
 function safeNext(value: string | null): string {
@@ -25,12 +25,21 @@ export function LoginForm() {
 
     setIsSubmitting(true);
     setErrorMessage(null);
+    let sessionCreated = false;
     try {
       await login(loginId, password);
-      router.replace(safeNext(searchParams.get("next")));
+      sessionCreated = true;
+      const onboarding = await getStoreOnboardingStatus();
+      router.replace(
+        onboarding.onboardingStatus === "PARTNER_REQUIRED"
+          ? "/store/onboarding/partner"
+          : safeNext(searchParams.get("next")),
+      );
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
+      if (!sessionCreated && error instanceof ApiError && error.status === 401) {
         setErrorMessage("로그인 정보를 다시 확인해 주세요.");
+      } else if (sessionCreated) {
+        setErrorMessage("로그인은 완료됐지만 초기 설정을 확인하지 못했습니다. 다시 시도해 주세요.");
       } else {
         setErrorMessage("로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.");
       }
@@ -60,6 +69,9 @@ export function LoginForm() {
             {isSubmitting ? "로그인 중…" : "로그인"}
           </button>
         </form>
+        <p className={loginStyles.signupPrompt}>
+          처음 사용하시나요? <a className={loginStyles.signupLink} href="/store/signup">매장 계정 만들기</a>
+        </p>
       </section>
     </main>
   );

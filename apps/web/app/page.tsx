@@ -87,7 +87,7 @@ export default function Home() {
               QR 입력부터 매장 확인, 결제할 금액 확인까지 한 큐에.
             </p>
             <div className={landingStyles.heroActions}>
-              <a className={landingStyles.primaryAction} href="/store/meal-usages/months">
+              <a className={landingStyles.primaryAction} href="/store/signup">
                 서비스 시작하기
                 <span aria-hidden="true">→</span>
               </a>
@@ -183,7 +183,7 @@ export default function Home() {
               <p className={landingStyles.footerDescription}>QR 입력부터 매장 확인과 장부까지.</p>
             </div>
             <nav className={landingStyles.footerNav} aria-label="하단 메뉴">
-              <a className={landingStyles.footerNavLink} href="/store/meal-usages/months">서비스 시작하기</a>
+              <a className={landingStyles.footerNavLink} href="/store/signup">서비스 시작하기</a>
               <a className={landingStyles.footerNavLink} href="#flow">사용 방법</a>
               <a className={landingStyles.footerNavLink} href="#contact">문의하기</a>
             </nav>

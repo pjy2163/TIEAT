@@ -10,4 +10,6 @@ export const loginStyles = {
   input: "block h-12 w-full rounded-lg border border-[var(--border-strong)] bg-white px-3 text-base text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
   error: "rounded-lg border border-[#f1c7cd] bg-[#fff7f8] px-3 py-3 text-sm leading-5 text-[var(--danger)]",
   button: "flex h-12 w-full items-center justify-center rounded-lg bg-[var(--accent)] px-4 text-base font-semibold text-white transition-colors hover:bg-[#244cda] disabled:cursor-not-allowed disabled:bg-[#9caeea]",
+  signupPrompt: "mt-6 text-center text-sm leading-6 text-[var(--text-secondary)]",
+  signupLink: "font-semibold text-[var(--accent)] underline underline-offset-4",
 };

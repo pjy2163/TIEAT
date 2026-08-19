@@ -261,7 +261,7 @@ describe("public landing page", () => {
     const flowSection = document.getElementById("flow");
 
     expect(heroSection?.nextElementSibling).toBe(flowSection);
-    expect(screen.getAllByRole("link", { name: "서비스 시작하기" })[0]).toHaveAttribute("href", "/store/meal-usages/months");
+    expect(screen.getAllByRole("link", { name: "서비스 시작하기" })[0]).toHaveAttribute("href", "/store/signup");
     expect(screen.getAllByRole("link", { name: "문의하기" })[0]).toHaveAttribute("href", "#contact");
     expect(screen.getByText("QR로 입력")).toBeVisible();
     expect(screen.getByText("매장에서 확인")).toBeVisible();
@@ -277,7 +277,7 @@ describe("public landing page", () => {
     expect(footerBrand.querySelector("img")).toHaveAttribute("alt", "");
     expect(within(footer).getByText("TIEAT")).toBeVisible();
     expect(within(footer).getByText("QR 입력부터 매장 확인과 장부까지.")).toBeVisible();
-    expect(within(footerNav).getByRole("link", { name: "서비스 시작하기" })).toHaveAttribute("href", "/store/meal-usages/months");
+    expect(within(footerNav).getByRole("link", { name: "서비스 시작하기" })).toHaveAttribute("href", "/store/signup");
     expect(within(footerNav).getByRole("link", { name: "사용 방법" })).toHaveAttribute("href", "#flow");
     expect(within(footerNav).getByRole("link", { name: "문의하기" })).toHaveAttribute("href", "#contact");
     expect(within(footer).getByText("© 2026 TIEAT. All rights reserved.")).toBeVisible();
