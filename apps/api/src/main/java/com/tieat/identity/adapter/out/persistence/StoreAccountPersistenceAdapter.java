@@ -17,9 +17,21 @@ public class StoreAccountPersistenceAdapter implements StoreAccountRepository {
     }
 
     @Override
+    public StoreAccount save(StoreAccount account) {
+        Objects.requireNonNull(account, "Store account must be supplied");
+        return toDomain(repository.saveAndFlush(new StoreAccountJpaEntity(
+            account.loginId(), account.passwordHash(), account.storeId().value(), account.enabled()
+        )));
+    }
+
+    @Override
     public Optional<StoreAccount> findByLoginId(String loginId) {
-        return repository.findByLoginId(loginId).map(account -> new StoreAccount(
+        return repository.findByLoginId(loginId).map(this::toDomain);
+    }
+
+    private StoreAccount toDomain(StoreAccountJpaEntity account) {
+        return new StoreAccount(
             account.loginId(), account.passwordHash(), new StoreId(account.storeId()), account.enabled()
-        ));
+        );
     }
 }
