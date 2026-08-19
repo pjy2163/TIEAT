@@ -2,9 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ApiError,
   confirmMealUsage,
+  getStoreOnboardingStatus,
   getPendingMealUsages,
   login,
+  registerFirstPartner,
   rejectMealUsage,
+  searchStoreCatalog,
+  signUpStoreAccount,
   UnexpectedConfirmationResponseError,
   UnexpectedRejectionResponseError,
 } from "./store-api";
@@ -45,6 +49,105 @@ describe("store API", () => {
     }));
     const body = fetchMock.mock.calls[1][1].body as URLSearchParams;
     expect(body.toString()).toBe("loginId=store-hk&password=correct-password");
+  });
+
+  it("uses CSRF for signup and sends no client-controlled store scope", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "signup-csrf", headerName: "X-CSRF-TOKEN", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(201, { onboardingStatus: "PARTNER_REQUIRED" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(signUpStoreAccount({
+      inviteCode: "pilot-code",
+      loginId: "store-hk",
+      password: "correct-password",
+      manualStoreName: "TIEAT 강남점",
+    })).resolves.toEqual({ onboardingStatus: "PARTNER_REQUIRED", legacy: false });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/store-signups", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-TOKEN": "signup-csrf",
+      },
+      body: JSON.stringify({
+        inviteCode: "pilot-code",
+        loginId: "store-hk",
+        password: "correct-password",
+        manualStoreName: "TIEAT 강남점",
+      }),
+    });
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("storeId");
+  });
+
+  it("accepts only public local-logo catalog metadata and checks onboarding before partner recovery", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, {
+        items: [{
+          catalogEntryId: "00000000-0000-0000-0000-000000000001",
+          storeDisplayName: "TIEAT 강남점",
+          brandDisplayName: "TIEAT",
+          logoPath: "/logos/tieat.svg",
+        }],
+      }))
+      .mockResolvedValueOnce(response(200, { onboardingStatus: "PARTNER_REQUIRED", legacy: false }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchStoreCatalog("TIEAT")).resolves.toEqual([{
+      catalogEntryId: "00000000-0000-0000-0000-000000000001",
+      storeDisplayName: "TIEAT 강남점",
+      brandDisplayName: "TIEAT",
+      logoPath: "/logos/tieat.svg",
+    }]);
+    await expect(getStoreOnboardingStatus()).resolves.toEqual({ onboardingStatus: "PARTNER_REQUIRED", legacy: false });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/store-catalog?query=TIEAT", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/store-onboarding", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+  });
+
+  it("posts every explicit first-partner contract field with a fresh CSRF token", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "partner-csrf", headerName: "X-PARTNER-CSRF", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(201, {
+        onboardingStatus: "COMPLETE",
+        legacy: false,
+        created: true,
+        partnerDisplayName: "협력사 A",
+        paymentType: "POSTPAID",
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(registerFirstPartner({
+      partnerName: "협력사 A",
+      paymentType: "POSTPAID",
+      initialPrepaidBalanceMinor: 0,
+      qrSelectable: true,
+    })).resolves.toMatchObject({ onboardingStatus: "COMPLETE", created: true });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/store-onboarding/partners", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-PARTNER-CSRF": "partner-csrf",
+      },
+      body: JSON.stringify({
+        partnerName: "협력사 A",
+        paymentType: "POSTPAID",
+        initialPrepaidBalanceMinor: 0,
+        qrSelectable: true,
+      }),
+    });
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("storeId");
   });
 
   it("always requests only the fixed server-scoped pending page", async () => {

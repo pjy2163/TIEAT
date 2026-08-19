@@ -15,6 +15,31 @@ export type PendingMealUsagePage = {
   hasNext: boolean;
 };
 
+export type StoreCatalogEntry = {
+  catalogEntryId: string;
+  storeDisplayName: string;
+  brandDisplayName: string;
+  logoPath: string | null;
+};
+
+export type StoreOnboardingStatus = {
+  onboardingStatus: "PARTNER_REQUIRED" | "COMPLETE";
+  legacy: boolean;
+};
+
+export type FirstPartnerRegistration = {
+  partnerName: string;
+  paymentType: "POSTPAID" | "PREPAID_WITH_RECEIVABLE_OVERFLOW";
+  initialPrepaidBalanceMinor: number;
+  qrSelectable: boolean;
+};
+
+export type FirstPartnerRegistrationResult = StoreOnboardingStatus & {
+  created: boolean;
+  partnerDisplayName: string | null;
+  paymentType: "POSTPAID" | "PREPAID_WITH_RECEIVABLE_OVERFLOW" | null;
+};
+
 type CsrfToken = {
   token: string;
   headerName: string;
@@ -48,6 +73,18 @@ export class UnexpectedRejectionResponseError extends ApiError {
   }
 }
 
+export class UnexpectedSignupResponseError extends ApiError {
+  constructor() {
+    super(0, "UNEXPECTED_SIGNUP_RESPONSE");
+  }
+}
+
+export class UnexpectedPartnerRegistrationResponseError extends ApiError {
+  constructor() {
+    super(0, "UNEXPECTED_PARTNER_REGISTRATION_RESPONSE");
+  }
+}
+
 const API_PATH = "/api/v1";
 const PENDING_LIST_PATH = `${API_PATH}/meal-usages?status=PENDING&page=0&size=50`;
 
@@ -78,6 +115,10 @@ function isUuid(value: unknown): value is string {
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
+function isLocalLogoPath(value: string): boolean {
+  return value.startsWith("/") && !value.startsWith("//") && !value.includes("..");
+}
+
 function isIsoInstant(value: unknown): value is string {
   if (!isNonEmptyString(value)) return false;
   const match = /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/.exec(value);
@@ -101,6 +142,66 @@ function parseCsrfToken(value: unknown): CsrfToken {
     token: value.token,
     headerName: value.headerName,
     parameterName: value.parameterName,
+  };
+}
+
+function parseStoreCatalogEntry(value: unknown): StoreCatalogEntry {
+  if (!isRecord(value)
+    || !isUuid(value.catalogEntryId)
+    || !isNonEmptyString(value.storeDisplayName)
+    || !isNonEmptyString(value.brandDisplayName)
+    || (value.logoPath !== null && (!isNonEmptyString(value.logoPath) || !isLocalLogoPath(value.logoPath)))) {
+    throw new InvalidApiResponseError();
+  }
+  return {
+    catalogEntryId: value.catalogEntryId,
+    storeDisplayName: value.storeDisplayName,
+    brandDisplayName: value.brandDisplayName,
+    logoPath: value.logoPath,
+  };
+}
+
+function parseStoreCatalog(value: unknown): StoreCatalogEntry[] {
+  if (!isRecord(value) || !Array.isArray(value.items) || value.items.length > 10) {
+    throw new InvalidApiResponseError();
+  }
+  return value.items.map(parseStoreCatalogEntry);
+}
+
+function parseOnboardingStatus(value: unknown): StoreOnboardingStatus {
+  if (!isRecord(value)
+    || (value.onboardingStatus !== "PARTNER_REQUIRED" && value.onboardingStatus !== "COMPLETE")
+    || typeof value.legacy !== "boolean") {
+    throw new InvalidApiResponseError();
+  }
+  return {
+    onboardingStatus: value.onboardingStatus,
+    legacy: value.legacy,
+  };
+}
+
+function parseSignupResult(value: unknown): StoreOnboardingStatus {
+  if (!isRecord(value) || value.onboardingStatus !== "PARTNER_REQUIRED") {
+    throw new InvalidApiResponseError();
+  }
+  return { onboardingStatus: value.onboardingStatus, legacy: false };
+}
+
+function parseFirstPartnerRegistrationResult(value: unknown): FirstPartnerRegistrationResult {
+  const status = parseOnboardingStatus(value);
+  if (!isRecord(value)
+    || typeof value.created !== "boolean"
+    || (value.partnerDisplayName !== null && !isNonEmptyString(value.partnerDisplayName))
+    || (value.paymentType !== null
+      && value.paymentType !== "POSTPAID"
+      && value.paymentType !== "PREPAID_WITH_RECEIVABLE_OVERFLOW")) {
+    throw new InvalidApiResponseError();
+  }
+  return {
+    ...status,
+    created: value.created,
+    partnerDisplayName: value.partnerDisplayName,
+    paymentType: value.paymentType,
   };
 }
 
@@ -144,7 +245,7 @@ function parsePendingMealUsagePage(value: unknown): PendingMealUsagePage {
   };
 }
 
-export async function login(loginId: string, password: string): Promise<void> {
+async function getCsrfToken(): Promise<CsrfToken> {
   const csrfResponse = await fetch(`${API_PATH}/csrf`, {
     cache: "no-store",
     credentials: "same-origin",
@@ -154,7 +255,11 @@ export async function login(loginId: string, password: string): Promise<void> {
     throw await apiError(csrfResponse);
   }
 
-  const csrf = parseCsrfToken(await csrfResponse.json() as unknown);
+  return parseCsrfToken(await csrfResponse.json() as unknown);
+}
+
+export async function login(loginId: string, password: string): Promise<void> {
+  const csrf = await getCsrfToken();
   const body = new URLSearchParams({ loginId, password });
   const response = await fetch(`${API_PATH}/sessions`, {
     method: "POST",
@@ -172,6 +277,82 @@ export async function login(loginId: string, password: string): Promise<void> {
   }
 }
 
+export async function searchStoreCatalog(query: string): Promise<StoreCatalogEntry[]> {
+  const response = await fetch(`${API_PATH}/store-catalog?query=${encodeURIComponent(query)}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return parseStoreCatalog(await response.json() as unknown);
+}
+
+export async function signUpStoreAccount(request: {
+  inviteCode: string;
+  loginId: string;
+  password: string;
+  catalogEntryId?: string;
+  manualStoreName?: string;
+}): Promise<StoreOnboardingStatus> {
+  const csrf = await getCsrfToken();
+  const response = await fetch(`${API_PATH}/store-signups`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      [csrf.headerName]: csrf.token,
+    },
+    body: JSON.stringify(request),
+  });
+  if (response.status !== 201) {
+    if (response.ok) {
+      throw new UnexpectedSignupResponseError();
+    }
+    throw await apiError(response);
+  }
+  return parseSignupResult(await response.json() as unknown);
+}
+
+export async function getStoreOnboardingStatus(): Promise<StoreOnboardingStatus> {
+  const response = await fetch(`${API_PATH}/store-onboarding`, {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return parseOnboardingStatus(await response.json() as unknown);
+}
+
+export async function registerFirstPartner(
+  request: FirstPartnerRegistration,
+): Promise<FirstPartnerRegistrationResult> {
+  const csrf = await getCsrfToken();
+  const response = await fetch(`${API_PATH}/store-onboarding/partners`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      [csrf.headerName]: csrf.token,
+    },
+    body: JSON.stringify(request),
+  });
+  if (response.status !== 201 && response.status !== 200) {
+    throw await apiError(response);
+  }
+  try {
+    return parseFirstPartnerRegistrationResult(await response.json() as unknown);
+  } catch (error) {
+    if (error instanceof InvalidApiResponseError) {
+      throw new UnexpectedPartnerRegistrationResponseError();
+    }
+    throw error;
+  }
+}
+
 export async function getPendingMealUsages(): Promise<PendingMealUsagePage> {
   const response = await fetch(PENDING_LIST_PATH, {
     cache: "no-store",
@@ -186,16 +367,7 @@ export async function getPendingMealUsages(): Promise<PendingMealUsagePage> {
 }
 
 export async function confirmMealUsage(mealUsageId: string, confirmerInitials: string): Promise<void> {
-  const csrfResponse = await fetch(`${API_PATH}/csrf`, {
-    cache: "no-store",
-    credentials: "same-origin",
-  });
-
-  if (!csrfResponse.ok) {
-    throw await apiError(csrfResponse);
-  }
-
-  const csrf = parseCsrfToken(await csrfResponse.json() as unknown);
+  const csrf = await getCsrfToken();
   const response = await fetch(confirmationPath(mealUsageId), {
     method: "POST",
     cache: "no-store",
@@ -216,16 +388,7 @@ export async function confirmMealUsage(mealUsageId: string, confirmerInitials: s
 }
 
 export async function rejectMealUsage(mealUsageId: string): Promise<void> {
-  const csrfResponse = await fetch(`${API_PATH}/csrf`, {
-    cache: "no-store",
-    credentials: "same-origin",
-  });
-
-  if (!csrfResponse.ok) {
-    throw await apiError(csrfResponse);
-  }
-
-  const csrf = parseCsrfToken(await csrfResponse.json() as unknown);
+  const csrf = await getCsrfToken();
   const response = await fetch(rejectionPath(mealUsageId), {
     method: "POST",
     cache: "no-store",
