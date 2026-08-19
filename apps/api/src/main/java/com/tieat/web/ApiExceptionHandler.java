@@ -9,6 +9,7 @@ import com.tieat.ledger.application.PublicQrMealContractNotFoundException;
 import com.tieat.ledger.application.MealUsageNotFoundException;
 import com.tieat.ledger.application.InvalidPendingMealUsageQueryException;
 import com.tieat.ledger.application.InvalidMonthlyMealUsageQueryException;
+import com.tieat.onboarding.application.OnboardingException;
 import com.tieat.settlement.application.InvalidPosSettlementHistoryQueryException;
 import com.tieat.ledger.domain.PublicMealUsageIdempotency.InvalidPublicRequestKeyException;
 import com.tieat.qr.application.PublicMealUsageQrNotFoundException;
@@ -36,6 +37,39 @@ public class ApiExceptionHandler {
 
     public ApiExceptionHandler(ProblemDetailFactory problemDetailFactory) {
         this.problemDetailFactory = problemDetailFactory;
+    }
+
+    @ExceptionHandler(OnboardingException.class)
+    ResponseEntity<ProblemDetail> handleOnboarding(
+        OnboardingException exception,
+        HttpServletRequest request
+    ) {
+        return switch (exception.reason()) {
+            case INVITE_INVALID -> problem(
+                request,
+                HttpStatus.FORBIDDEN,
+                "ONBOARDING_INVITE_INVALID",
+                "Invitation code is invalid"
+            );
+            case VALIDATION_FAILED -> problem(
+                request,
+                HttpStatus.BAD_REQUEST,
+                "ONBOARDING_VALIDATION_FAILED",
+                "Onboarding input is invalid"
+            );
+            case LOGIN_ID_ALREADY_IN_USE -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "ONBOARDING_LOGIN_ID_IN_USE",
+                "An account may already exist. Sign in instead"
+            );
+            case CATALOG_ENTRY_NOT_FOUND -> problem(
+                request,
+                HttpStatus.BAD_REQUEST,
+                "ONBOARDING_CATALOG_ENTRY_UNAVAILABLE",
+                "Selected catalog entry is unavailable"
+            );
+        };
     }
 
     @ExceptionHandler(MealUsageNotFoundException.class)
@@ -178,7 +212,8 @@ public class ApiExceptionHandler {
         ResponseEntity.BodyBuilder response = ResponseEntity.status(status);
         if (problemDetailFactory.isPublicMealUsageQrRequest(request)
             || problemDetailFactory.isMonthlyMealUsageRequest(request)
-            || problemDetailFactory.isPosSettlementRequest(request)) {
+            || problemDetailFactory.isPosSettlementRequest(request)
+            || problemDetailFactory.isStoreOnboardingRequest(request)) {
             response.cacheControl(CacheControl.noStore());
         }
         return response.body(problemDetailFactory.create(request, status, errorCode, detail));

@@ -17,6 +17,9 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.InvalidCsrfTokenException;
 import org.springframework.security.web.csrf.MissingCsrfTokenException;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
@@ -30,10 +33,13 @@ public class SecurityConfiguration {
     SecurityFilterChain securityFilterChain(
         HttpSecurity http,
         AuthenticationProvider storeAccountAuthenticationProvider,
+        SessionAuthenticationStrategy sessionAuthenticationStrategy,
+        SecurityContextRepository securityContextRepository,
         ProblemDetailFactory problemDetailFactory
     ) throws Exception {
         return http
             .authenticationProvider(storeAccountAuthenticationProvider)
+            .securityContext(securityContext -> securityContext.securityContextRepository(securityContextRepository))
             .csrf(csrf -> csrf
                 .csrfTokenRepository(new HttpSessionCsrfTokenRepository())
                 .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(
@@ -42,11 +48,11 @@ public class SecurityConfiguration {
                     HttpMethod.POST, "/api/v1/public/meal-usage-qr/{token}/meal-usages/{mealUsageId}/cancellations"
                 ))
             )
-            .sessionManagement(session -> session.sessionAuthenticationStrategy(
-                new ChangeSessionIdAuthenticationStrategy()
-            ))
+            .sessionManagement(session -> session.sessionAuthenticationStrategy(sessionAuthenticationStrategy))
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/actuator/health", "/actuator/info", "/api/v1/csrf", "/api/v1/sessions", "/v3/api-docs/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/store-catalog").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/store-signups").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/public/meal-usage-qr/*").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/public/meal-usage-qr/*/meal-usages").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/public/meal-usage-qr/*/meal-usages/*").permitAll()
@@ -97,6 +103,16 @@ public class SecurityConfiguration {
         return provider;
     }
 
+    @Bean
+    SessionAuthenticationStrategy sessionAuthenticationStrategy() {
+        return new ChangeSessionIdAuthenticationStrategy();
+    }
+
+    @Bean
+    SecurityContextRepository securityContextRepository() {
+        return new HttpSessionSecurityContextRepository();
+    }
+
     private AuthenticationEntryPoint authenticationEntryPoint(ProblemDetailFactory problemDetailFactory) {
         return (request, response, exception) -> problemDetailFactory.write(
             request,
@@ -111,6 +127,7 @@ public class SecurityConfiguration {
         return (request, response, exception) -> {
             if (hasCause(exception, InvalidCsrfTokenException.class) || hasCause(exception, MissingCsrfTokenException.class)) {
                 if (!"/api/v1/sessions".equals(request.getRequestURI())
+                    && !"/api/v1/store-signups".equals(request.getRequestURI())
                     && SecurityContextHolder.getContext().getAuthentication() == null) {
                     problemDetailFactory.write(
                         request,

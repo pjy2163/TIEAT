@@ -44,7 +44,8 @@ public class ProblemDetailFactory {
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         if (isPublicMealUsageQrRequest(request)
             || isMonthlyMealUsageRequest(request)
-            || isPosSettlementRequest(request)) {
+            || isPosSettlementRequest(request)
+            || isStoreOnboardingRequest(request)) {
             response.setHeader(HttpHeaders.CACHE_CONTROL, CacheControl.noStore().getHeaderValue());
         }
         objectMapper.writeValue(response.getOutputStream(), create(request, status, errorCode, detail));
@@ -63,5 +64,10 @@ public class ProblemDetailFactory {
     boolean isMonthlyMealUsageRequest(HttpServletRequest request) {
         String monthlyLedgerPrefix = request.getContextPath() + "/api/v1/meal-usages/months/";
         return request.getRequestURI().startsWith(monthlyLedgerPrefix);
+    }
+
+    boolean isStoreOnboardingRequest(HttpServletRequest request) {
+        String onboardingPrefix = request.getContextPath() + "/api/v1/store-";
+        return request.getRequestURI().startsWith(onboardingPrefix);
     }
 }
