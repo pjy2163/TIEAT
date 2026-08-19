@@ -51,7 +51,7 @@ public class SecurityConfiguration {
             .sessionManagement(session -> session.sessionAuthenticationStrategy(sessionAuthenticationStrategy))
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/actuator/health", "/actuator/info", "/api/v1/csrf", "/api/v1/sessions", "/v3/api-docs/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/v1/store-catalog").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/store-place-searches").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/store-signups").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/public/meal-usage-qr/*").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/public/meal-usage-qr/*/meal-usages").permitAll()

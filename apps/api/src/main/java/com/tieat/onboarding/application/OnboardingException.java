@@ -6,7 +6,8 @@ public final class OnboardingException extends RuntimeException {
         INVITE_INVALID,
         VALIDATION_FAILED,
         LOGIN_ID_ALREADY_IN_USE,
-        CATALOG_ENTRY_NOT_FOUND
+        PLACE_SEARCH_INVALID,
+        PLACE_SEARCH_UNAVAILABLE
     }
 
     private final Reason reason;
@@ -27,8 +28,12 @@ public final class OnboardingException extends RuntimeException {
         return new OnboardingException(Reason.LOGIN_ID_ALREADY_IN_USE);
     }
 
-    public static OnboardingException catalogEntryNotFound() {
-        return new OnboardingException(Reason.CATALOG_ENTRY_NOT_FOUND);
+    public static OnboardingException placeSearchInvalid() {
+        return new OnboardingException(Reason.PLACE_SEARCH_INVALID);
+    }
+
+    public static OnboardingException placeSearchUnavailable() {
+        return new OnboardingException(Reason.PLACE_SEARCH_UNAVAILABLE);
     }
 
     public Reason reason() {

@@ -63,11 +63,17 @@ public class ApiExceptionHandler {
                 "ONBOARDING_LOGIN_ID_IN_USE",
                 "An account may already exist. Sign in instead"
             );
-            case CATALOG_ENTRY_NOT_FOUND -> problem(
+            case PLACE_SEARCH_INVALID -> problem(
                 request,
                 HttpStatus.BAD_REQUEST,
-                "ONBOARDING_CATALOG_ENTRY_UNAVAILABLE",
-                "Selected catalog entry is unavailable"
+                "STORE_PLACE_SEARCH_INVALID",
+                "Store place search input is invalid"
+            );
+            case PLACE_SEARCH_UNAVAILABLE -> problem(
+                request,
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "STORE_PLACE_SEARCH_UNAVAILABLE",
+                "Store place search is temporarily unavailable"
             );
         };
     }

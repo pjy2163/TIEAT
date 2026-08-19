@@ -11,8 +11,6 @@ import com.tieat.partnership.domain.PartnerOrganization;
 import com.tieat.partnership.domain.PartnerOrganizationId;
 import com.tieat.partnership.domain.PartnerOrganizationRepository;
 import com.tieat.store.domain.Store;
-import com.tieat.store.domain.StoreCatalogEntry;
-import com.tieat.store.domain.StoreCatalogRepository;
 import com.tieat.store.domain.StoreId;
 import com.tieat.store.domain.StoreOnboardingStatus;
 import com.tieat.store.domain.StoreRepository;
@@ -20,7 +18,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -33,33 +30,31 @@ import org.springframework.transaction.annotation.Transactional;
 public class StoreOnboardingUseCase {
 
     private static final Pattern NEW_LOGIN_ID = Pattern.compile("[a-z0-9._-]{4,120}");
-    private static final int MAX_CATALOG_RESULTS = 10;
-
     private final StoreRepository storeRepository;
-    private final StoreCatalogRepository storeCatalogRepository;
     private final StoreAccountRepository storeAccountRepository;
     private final PartnerOrganizationRepository partnerOrganizationRepository;
     private final MealContractRepository mealContractRepository;
     private final InviteCodeVerifier inviteCodeVerifier;
+    private final StorePlaceSearchGateway storePlaceSearchGateway;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
 
     public StoreOnboardingUseCase(
         StoreRepository storeRepository,
-        StoreCatalogRepository storeCatalogRepository,
         StoreAccountRepository storeAccountRepository,
         PartnerOrganizationRepository partnerOrganizationRepository,
         MealContractRepository mealContractRepository,
         InviteCodeVerifier inviteCodeVerifier,
+        StorePlaceSearchGateway storePlaceSearchGateway,
         PasswordEncoder passwordEncoder,
         Clock clock
     ) {
         this.storeRepository = Objects.requireNonNull(storeRepository);
-        this.storeCatalogRepository = Objects.requireNonNull(storeCatalogRepository);
         this.storeAccountRepository = Objects.requireNonNull(storeAccountRepository);
         this.partnerOrganizationRepository = Objects.requireNonNull(partnerOrganizationRepository);
         this.mealContractRepository = Objects.requireNonNull(mealContractRepository);
         this.inviteCodeVerifier = Objects.requireNonNull(inviteCodeVerifier);
+        this.storePlaceSearchGateway = Objects.requireNonNull(storePlaceSearchGateway);
         this.passwordEncoder = Objects.requireNonNull(passwordEncoder);
         this.clock = Objects.requireNonNull(clock);
     }
@@ -73,7 +68,7 @@ public class StoreOnboardingUseCase {
 
         String loginId = normalizeLoginId(command.loginId());
         validatePassword(command.password());
-        ResolvedStoreSelection storeSelection = resolveStoreSelection(command.catalogEntryId(), command.manualStoreName());
+        String storeDisplayName = normalizeDisplayName(command.manualStoreName());
 
         if (storeAccountRepository.findByLoginId(loginId).isPresent()) {
             throw OnboardingException.loginIdAlreadyInUse();
@@ -81,8 +76,8 @@ public class StoreOnboardingUseCase {
 
         Store store = new Store(
             new StoreId(UUID.randomUUID()),
-            storeSelection.displayName(),
-            storeSelection.catalogEntryId(),
+            storeDisplayName,
+            null,
             StoreOnboardingStatus.PARTNER_REQUIRED,
             Instant.now(clock)
         );
@@ -108,10 +103,11 @@ public class StoreOnboardingUseCase {
             .orElseGet(() -> new OnboardingStatus(StoreOnboardingStatus.COMPLETE, true));
     }
 
-    @Transactional(readOnly = true)
-    public List<StoreCatalogEntry> searchCatalog(String rawQuery) {
-        String query = normalizeCatalogQuery(rawQuery);
-        return storeCatalogRepository.search(query, MAX_CATALOG_RESULTS);
+    public List<StorePlaceSearchGateway.PlaceSearchResult> searchPlaces(String inviteCode, String rawQuery) {
+        if (!inviteCodeVerifier.matches(inviteCode)) {
+            throw OnboardingException.inviteInvalid();
+        }
+        return storePlaceSearchGateway.search(normalizePlaceSearchQuery(rawQuery));
     }
 
     @Transactional
@@ -146,22 +142,6 @@ public class StoreOnboardingUseCase {
         return PartnerRegistrationResult.created(partnerOrganization.displayName(), mealContract.paymentType());
     }
 
-    private ResolvedStoreSelection resolveStoreSelection(UUID catalogEntryId, String manualStoreName) {
-        String normalizedManualStoreName = normalizeOptionalDisplayName(manualStoreName);
-        if (catalogEntryId != null && normalizedManualStoreName != null) {
-            throw OnboardingException.validationFailed();
-        }
-        if (catalogEntryId != null) {
-            StoreCatalogEntry catalogEntry = storeCatalogRepository.findById(catalogEntryId)
-                .orElseThrow(OnboardingException::catalogEntryNotFound);
-            return new ResolvedStoreSelection(catalogEntry.storeDisplayName(), catalogEntry.id());
-        }
-        if (normalizedManualStoreName == null) {
-            throw OnboardingException.validationFailed();
-        }
-        return new ResolvedStoreSelection(normalizedManualStoreName, null);
-    }
-
     private String normalizeLoginId(String rawLoginId) {
         if (rawLoginId == null) {
             throw OnboardingException.validationFailed();
@@ -181,15 +161,15 @@ public class StoreOnboardingUseCase {
         }
     }
 
-    private String normalizeCatalogQuery(String rawQuery) {
+    private String normalizePlaceSearchQuery(String rawQuery) {
         if (rawQuery == null) {
-            throw OnboardingException.validationFailed();
+            throw OnboardingException.placeSearchInvalid();
         }
         String query = rawQuery.trim();
-        if (query.isEmpty() || query.length() > 100) {
-            throw OnboardingException.validationFailed();
+        if (query.length() < 2 || query.length() > 100) {
+            throw OnboardingException.placeSearchInvalid();
         }
-        return query.toLowerCase(Locale.ROOT);
+        return query;
     }
 
     private String normalizeDisplayName(String rawName) {
@@ -235,7 +215,6 @@ public class StoreOnboardingUseCase {
         String inviteCode,
         String loginId,
         String password,
-        UUID catalogEntryId,
         String manualStoreName
     ) {
     }
@@ -288,6 +267,4 @@ public class StoreOnboardingUseCase {
         }
     }
 
-    private record ResolvedStoreSelection(String displayName, UUID catalogEntryId) {
-    }
 }

@@ -3,13 +3,12 @@ package com.tieat.web;
 import com.tieat.identity.adapter.in.security.StoreAccountPrincipal;
 import com.tieat.identity.adapter.in.security.StoreAccountUserDetailsService;
 import com.tieat.onboarding.application.StoreOnboardingUseCase;
+import com.tieat.onboarding.application.StorePlaceSearchGateway;
 import com.tieat.partnership.domain.MealContractPaymentType;
-import com.tieat.store.domain.StoreCatalogEntry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,7 +23,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -48,14 +46,16 @@ class StoreOnboardingController {
         this.securityContextRepository = Objects.requireNonNull(securityContextRepository);
     }
 
-    @GetMapping("/store-catalog")
-    ResponseEntity<StoreCatalogResponse> searchCatalog(@RequestParam String query) {
-        List<StoreCatalogEntryResponse> entries = storeOnboardingUseCase.searchCatalog(query).stream()
-            .map(StoreCatalogEntryResponse::from)
+    @PostMapping("/store-place-searches")
+    ResponseEntity<StorePlaceSearchResponse> searchPlaces(@RequestBody StorePlaceSearchRequest request) {
+        List<StorePlaceSearchItemResponse> entries = storeOnboardingUseCase.searchPlaces(
+                request.inviteCode(), request.query()
+            ).stream()
+            .map(StorePlaceSearchItemResponse::from)
             .toList();
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
-            .body(new StoreCatalogResponse(entries));
+            .body(new StorePlaceSearchResponse("KAKAO", entries));
     }
 
     @PostMapping("/store-signups")
@@ -69,7 +69,6 @@ class StoreOnboardingController {
                 request.inviteCode(),
                 request.loginId(),
                 request.password(),
-                request.catalogEntryId(),
                 request.manualStoreName()
             )
         );
@@ -137,7 +136,6 @@ class StoreOnboardingController {
         String inviteCode,
         String loginId,
         String password,
-        UUID catalogEntryId,
         String manualStoreName
     ) {
     }
@@ -145,22 +143,25 @@ class StoreOnboardingController {
     record SignupResponse(String onboardingStatus) {
     }
 
-    record StoreCatalogResponse(List<StoreCatalogEntryResponse> items) {
+    record StorePlaceSearchRequest(String inviteCode, String query) {
     }
 
-    record StoreCatalogEntryResponse(
-        UUID catalogEntryId,
+    record StorePlaceSearchResponse(String source, List<StorePlaceSearchItemResponse> items) {
+    }
+
+    record StorePlaceSearchItemResponse(
+        String placeId,
         String storeDisplayName,
-        String brandDisplayName,
-        String logoPath
+        String address,
+        String category
     ) {
 
-        static StoreCatalogEntryResponse from(StoreCatalogEntry catalogEntry) {
-            return new StoreCatalogEntryResponse(
-                catalogEntry.id(),
-                catalogEntry.storeDisplayName(),
-                catalogEntry.brandDisplayName(),
-                catalogEntry.logoPath().orElse(null)
+        static StorePlaceSearchItemResponse from(StorePlaceSearchGateway.PlaceSearchResult result) {
+            return new StorePlaceSearchItemResponse(
+                result.placeId(),
+                result.storeDisplayName(),
+                result.address(),
+                result.category()
             );
         }
     }
