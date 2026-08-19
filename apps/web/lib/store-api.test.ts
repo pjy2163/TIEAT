@@ -7,7 +7,7 @@ import {
   login,
   registerFirstPartner,
   rejectMealUsage,
-  searchStoreCatalog,
+  searchStorePlaces,
   signUpStoreAccount,
   UnexpectedConfirmationResponseError,
   UnexpectedRejectionResponseError,
@@ -82,32 +82,44 @@ describe("store API", () => {
     expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("storeId");
   });
 
-  it("accepts only public local-logo catalog metadata and checks onboarding before partner recovery", async () => {
+  it("uses CSRF for a Kakao store-place projection and checks onboarding before partner recovery", async () => {
     const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "place-csrf", headerName: "X-PLACE-CSRF", parameterName: "_csrf" }))
       .mockResolvedValueOnce(response(200, {
+        source: "KAKAO",
         items: [{
-          catalogEntryId: "00000000-0000-0000-0000-000000000001",
+          placeId: "26338954",
           storeDisplayName: "TIEAT 강남점",
-          brandDisplayName: "TIEAT",
-          logoPath: "/logos/tieat.svg",
+          address: "서울 강남구 테헤란로 123",
+          category: "음식점 > 한식",
         }],
       }))
       .mockResolvedValueOnce(response(200, { onboardingStatus: "PARTNER_REQUIRED", legacy: false }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(searchStoreCatalog("TIEAT")).resolves.toEqual([{
-      catalogEntryId: "00000000-0000-0000-0000-000000000001",
+    await expect(searchStorePlaces({ inviteCode: "pilot-code", query: "TIEAT" })).resolves.toEqual([{
+      placeId: "26338954",
       storeDisplayName: "TIEAT 강남점",
-      brandDisplayName: "TIEAT",
-      logoPath: "/logos/tieat.svg",
+      address: "서울 강남구 테헤란로 123",
+      category: "음식점 > 한식",
     }]);
     await expect(getStoreOnboardingStatus()).resolves.toEqual({ onboardingStatus: "PARTNER_REQUIRED", legacy: false });
 
-    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/store-catalog?query=TIEAT", {
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/csrf", {
       cache: "no-store",
       credentials: "same-origin",
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/store-onboarding", {
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/store-place-searches", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-PLACE-CSRF": "place-csrf",
+      },
+      body: JSON.stringify({ inviteCode: "pilot-code", query: "TIEAT" }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/v1/store-onboarding", {
       cache: "no-store",
       credentials: "same-origin",
     });

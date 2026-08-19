@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, searchStoreCatalog, signUpStoreAccount } from "@/lib/store-api";
+import { ApiError, searchStorePlaces, signUpStoreAccount } from "@/lib/store-api";
 import { SignupForm } from "./SignupForm";
 
 const replace = vi.fn();
@@ -12,10 +12,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/store-api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/store-api")>();
-  return { ...original, searchStoreCatalog: vi.fn(), signUpStoreAccount: vi.fn() };
+  return { ...original, searchStorePlaces: vi.fn(), signUpStoreAccount: vi.fn() };
 });
 
-const searchStoreCatalogMock = vi.mocked(searchStoreCatalog);
+const searchStorePlacesMock = vi.mocked(searchStorePlaces);
 const signUpStoreAccountMock = vi.mocked(signUpStoreAccount);
 
 afterEach(() => {
@@ -31,13 +31,13 @@ async function fillAccountStep(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("SignupForm", () => {
-  it("creates an account from server-derived catalog metadata and continues to partner registration", async () => {
+  it("shows Kakao name, address, and category then registers only the selected name", async () => {
     const user = userEvent.setup();
-    searchStoreCatalogMock.mockResolvedValue([{
-      catalogEntryId: "00000000-0000-0000-0000-000000000001",
+    searchStorePlacesMock.mockResolvedValue([{
+      placeId: "26338954",
       storeDisplayName: "TIEAT 강남점",
-      brandDisplayName: "TIEAT",
-      logoPath: "/logos/tieat.svg",
+      address: "서울 강남구 테헤란로 123",
+      category: "음식점 > 한식",
     }]);
     signUpStoreAccountMock.mockResolvedValue({ onboardingStatus: "PARTNER_REQUIRED", legacy: false });
     render(<SignupForm />);
@@ -48,20 +48,25 @@ describe("SignupForm", () => {
     await user.click(await screen.findByRole("button", { name: /TIEAT 강남점/ }));
     await user.click(screen.getByRole("button", { name: "계정 만들기" }));
 
+    await waitFor(() => expect(searchStorePlacesMock).toHaveBeenCalledWith({
+      inviteCode: "pilot-code",
+      query: "TIEAT",
+    }));
     await waitFor(() => expect(signUpStoreAccountMock).toHaveBeenCalledWith({
       inviteCode: "pilot-code",
       loginId: "store-hk",
       password: "correct-password",
-      catalogEntryId: "00000000-0000-0000-0000-000000000001",
+      manualStoreName: "TIEAT 강남점",
     }));
-    expect(JSON.stringify(signUpStoreAccountMock.mock.calls)).not.toContain("storeId");
+    expect(screen.getByRole("button", { name: /TIEAT 강남점/ })).toHaveTextContent("서울 강남구 테헤란로 123 · 음식점 > 한식");
+    expect(JSON.stringify(signUpStoreAccountMock.mock.calls)).not.toContain("placeId");
+    expect(document.querySelector("img")).toBeNull();
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/store/onboarding/partner"));
-    expect(document.querySelector("img")).toHaveAttribute("src", "/logos/tieat.svg");
   });
 
-  it("keeps a manual no-result path and shows the invite-code recovery message", async () => {
+  it("keeps the no-result direct-input path and maps an invalid invite on signup", async () => {
     const user = userEvent.setup();
-    searchStoreCatalogMock.mockResolvedValue([]);
+    searchStorePlacesMock.mockResolvedValue([]);
     signUpStoreAccountMock.mockRejectedValue(new ApiError(403, "ONBOARDING_INVITE_INVALID"));
     render(<SignupForm />);
 
@@ -69,7 +74,7 @@ describe("SignupForm", () => {
     await user.type(screen.getByLabelText("가게명 검색"), "새 가게");
     await user.click(screen.getByRole("button", { name: "검색" }));
     expect(await screen.findByText("검색 결과가 없습니다. 새 가게명을 직접 입력해 등록할 수 있습니다.")).toBeVisible();
-    await user.type(screen.getByLabelText("새 가게명"), "새 가게");
+    await user.type(screen.getByLabelText("가게명 직접 입력"), "새 가게");
     await user.click(screen.getByRole("button", { name: "계정 만들기" }));
 
     await waitFor(() => expect(signUpStoreAccountMock).toHaveBeenCalledWith({
@@ -81,20 +86,17 @@ describe("SignupForm", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("초대 코드를 확인해 주세요.");
   });
 
-  it("shows a local letter fallback when the catalog has no logo", async () => {
+  it("offers direct input when Kakao search is unavailable without exposing a logo path", async () => {
     const user = userEvent.setup();
-    searchStoreCatalogMock.mockResolvedValue([{
-      catalogEntryId: "00000000-0000-0000-0000-000000000002",
-      storeDisplayName: "로고 없는 가게",
-      brandDisplayName: "브랜드 B",
-      logoPath: null,
-    }]);
+    searchStorePlacesMock.mockRejectedValue(new ApiError(503, "STORE_PLACE_SEARCH_UNAVAILABLE"));
     render(<SignupForm />);
 
     await fillAccountStep(user);
-    await user.type(screen.getByLabelText("가게명 검색"), "브랜드");
+    await user.type(screen.getByLabelText("가게명 검색"), "TIEAT");
     await user.click(screen.getByRole("button", { name: "검색" }));
 
-    expect(await screen.findByRole("button", { name: /로고 없는 가게/ })).toHaveTextContent("브");
+    expect(await screen.findByRole("alert")).toHaveTextContent("장소 검색을 사용할 수 없습니다. 가게명을 직접 입력해 주세요.");
+    expect(screen.getByLabelText("가게명 직접 입력")).toBeVisible();
+    expect(document.querySelector("img")).toBeNull();
   });
 });

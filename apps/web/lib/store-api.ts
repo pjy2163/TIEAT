@@ -15,11 +15,11 @@ export type PendingMealUsagePage = {
   hasNext: boolean;
 };
 
-export type StoreCatalogEntry = {
-  catalogEntryId: string;
+export type StorePlaceSearchResult = {
+  placeId: string;
   storeDisplayName: string;
-  brandDisplayName: string;
-  logoPath: string | null;
+  address: string | null;
+  category: string | null;
 };
 
 export type StoreOnboardingStatus = {
@@ -115,10 +115,6 @@ function isUuid(value: unknown): value is string {
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-function isLocalLogoPath(value: string): boolean {
-  return value.startsWith("/") && !value.startsWith("//") && !value.includes("..");
-}
-
 function isIsoInstant(value: unknown): value is string {
   if (!isNonEmptyString(value)) return false;
   const match = /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/.exec(value);
@@ -145,27 +141,27 @@ function parseCsrfToken(value: unknown): CsrfToken {
   };
 }
 
-function parseStoreCatalogEntry(value: unknown): StoreCatalogEntry {
+function parseStorePlaceSearchResult(value: unknown): StorePlaceSearchResult {
   if (!isRecord(value)
-    || !isUuid(value.catalogEntryId)
+    || !isNonEmptyString(value.placeId)
     || !isNonEmptyString(value.storeDisplayName)
-    || !isNonEmptyString(value.brandDisplayName)
-    || (value.logoPath !== null && (!isNonEmptyString(value.logoPath) || !isLocalLogoPath(value.logoPath)))) {
+    || (value.address !== null && !isNonEmptyString(value.address))
+    || (value.category !== null && !isNonEmptyString(value.category))) {
     throw new InvalidApiResponseError();
   }
   return {
-    catalogEntryId: value.catalogEntryId,
+    placeId: value.placeId,
     storeDisplayName: value.storeDisplayName,
-    brandDisplayName: value.brandDisplayName,
-    logoPath: value.logoPath,
+    address: value.address,
+    category: value.category,
   };
 }
 
-function parseStoreCatalog(value: unknown): StoreCatalogEntry[] {
-  if (!isRecord(value) || !Array.isArray(value.items) || value.items.length > 10) {
+function parseStorePlaceSearch(value: unknown): StorePlaceSearchResult[] {
+  if (!isRecord(value) || value.source !== "KAKAO" || !Array.isArray(value.items) || value.items.length > 10) {
     throw new InvalidApiResponseError();
   }
-  return value.items.map(parseStoreCatalogEntry);
+  return value.items.map(parseStorePlaceSearchResult);
 }
 
 function parseOnboardingStatus(value: unknown): StoreOnboardingStatus {
@@ -277,23 +273,32 @@ export async function login(loginId: string, password: string): Promise<void> {
   }
 }
 
-export async function searchStoreCatalog(query: string): Promise<StoreCatalogEntry[]> {
-  const response = await fetch(`${API_PATH}/store-catalog?query=${encodeURIComponent(query)}`, {
+export async function searchStorePlaces(request: {
+  inviteCode: string;
+  query: string;
+}): Promise<StorePlaceSearchResult[]> {
+  const csrf = await getCsrfToken();
+  const response = await fetch(`${API_PATH}/store-place-searches`, {
+    method: "POST",
     cache: "no-store",
     credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      [csrf.headerName]: csrf.token,
+    },
+    body: JSON.stringify(request),
   });
   if (!response.ok) {
     throw await apiError(response);
   }
-  return parseStoreCatalog(await response.json() as unknown);
+  return parseStorePlaceSearch(await response.json() as unknown);
 }
 
 export async function signUpStoreAccount(request: {
   inviteCode: string;
   loginId: string;
   password: string;
-  catalogEntryId?: string;
-  manualStoreName?: string;
+  manualStoreName: string;
 }): Promise<StoreOnboardingStatus> {
   const csrf = await getCsrfToken();
   const response = await fetch(`${API_PATH}/store-signups`, {

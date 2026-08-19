@@ -4,17 +4,13 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ApiError,
-  type StoreCatalogEntry,
-  searchStoreCatalog,
+  type StorePlaceSearchResult,
+  searchStorePlaces,
   signUpStoreAccount,
 } from "@/lib/store-api";
 import { signupStyles } from "./SignupForm.styles";
 
 type SignupStep = "account" | "store";
-
-function catalogInitial(entry: StoreCatalogEntry): string {
-  return Array.from(entry.brandDisplayName.trim())[0] ?? "T";
-}
 
 export function SignupForm() {
   const router = useRouter();
@@ -22,11 +18,12 @@ export function SignupForm() {
   const [inviteCode, setInviteCode] = useState("");
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
-  const [catalogQuery, setCatalogQuery] = useState("");
-  const [catalogEntries, setCatalogEntries] = useState<StoreCatalogEntry[]>([]);
-  const [selectedEntry, setSelectedEntry] = useState<StoreCatalogEntry | null>(null);
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placeEntries, setPlaceEntries] = useState<StorePlaceSearchResult[]>([]);
+  const [selectedPlace, setSelectedPlace] = useState<StorePlaceSearchResult | null>(null);
   const [useManualName, setUseManualName] = useState(false);
   const [manualStoreName, setManualStoreName] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -38,26 +35,33 @@ export function SignupForm() {
     setStep("store");
   }
 
-  async function searchCatalog() {
-    const query = catalogQuery.trim();
-    if (!query) {
-      setErrorMessage("가게명 또는 브랜드명을 입력해 주세요.");
+  async function searchPlaces() {
+    const query = placeQuery.trim();
+    if (query.length < 2) {
+      setErrorMessage("가게명을 두 글자 이상 입력해 주세요.");
       return;
     }
 
     setIsSearching(true);
     setErrorMessage(null);
-    setSelectedEntry(null);
+    setSelectedPlace(null);
+    setHasSearched(true);
     try {
-      const entries = await searchStoreCatalog(query);
-      setCatalogEntries(entries);
+      const entries = await searchStorePlaces({ inviteCode, query });
+      setPlaceEntries(entries);
       setUseManualName(entries.length === 0);
       if (entries.length > 0) {
         setManualStoreName("");
       }
-    } catch {
-      setCatalogEntries([]);
-      setErrorMessage("가게 검색에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+    } catch (error) {
+      setPlaceEntries([]);
+      setUseManualName(true);
+      setHasSearched(false);
+      if (error instanceof ApiError && error.errorCode === "ONBOARDING_INVITE_INVALID") {
+        setErrorMessage("초대 코드를 확인해 주세요.");
+      } else {
+        setErrorMessage("장소 검색을 사용할 수 없습니다. 가게명을 직접 입력해 주세요.");
+      }
     } finally {
       setIsSearching(false);
     }
@@ -65,7 +69,7 @@ export function SignupForm() {
 
   async function submitStore(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedEntry && !manualStoreName.trim()) {
+    if (!selectedPlace && !manualStoreName.trim()) {
       setErrorMessage("검색 결과를 선택하거나 새 가게명을 입력해 주세요.");
       return;
     }
@@ -78,7 +82,7 @@ export function SignupForm() {
         inviteCode,
         loginId,
         password,
-        ...(selectedEntry ? { catalogEntryId: selectedEntry.catalogEntryId } : { manualStoreName }),
+        manualStoreName: selectedPlace?.storeDisplayName ?? manualStoreName,
       });
       setSuccessMessage("매장 계정을 만들었습니다. 첫 협력사를 등록해 주세요.");
       router.replace("/store/onboarding/partner");
@@ -166,73 +170,68 @@ export function SignupForm() {
         ) : (
           <form className={signupStyles.form} onSubmit={submitStore}>
             <div className={signupStyles.field}>
-              <label className={signupStyles.label} htmlFor="storeCatalogQuery">가게명 검색</label>
+              <label className={signupStyles.label} htmlFor="storePlaceQuery">가게명 검색</label>
               <div className={signupStyles.searchRow}>
                 <input
                   className={signupStyles.input}
-                  id="storeCatalogQuery"
-                  value={catalogQuery}
-                  onChange={(event) => setCatalogQuery(event.target.value)}
-                  placeholder="가게명 또는 브랜드명"
+                  id="storePlaceQuery"
+                  value={placeQuery}
+                  onChange={(event) => setPlaceQuery(event.target.value)}
+                  placeholder="예: TIEAT 강남점"
                   autoComplete="organization"
                 />
-                <button className={signupStyles.searchButton} type="button" onClick={searchCatalog} disabled={isSearching}>
+                <button className={signupStyles.searchButton} type="button" onClick={searchPlaces} disabled={isSearching}>
                   {isSearching ? "검색 중…" : "검색"}
                 </button>
               </div>
-              <p className={signupStyles.hint}>표시용 브랜드 정보만 검색합니다. 기존 장부나 매장 권한에는 연결되지 않습니다.</p>
+              <p className={signupStyles.hint}>카카오 장소 검색으로 상호·주소·업종을 확인합니다. 선택한 상호명만 새 TIEAT 매장명으로 등록합니다.</p>
             </div>
 
-            {catalogEntries.length > 0 ? (
+            {placeEntries.length > 0 ? (
               <div className={signupStyles.resultList} role="list" aria-label="가게 검색 결과">
-                {catalogEntries.map((entry) => (
+                {placeEntries.map((entry) => (
                   <button
                     className={signupStyles.result}
                     type="button"
-                    key={entry.catalogEntryId}
-                    aria-pressed={selectedEntry?.catalogEntryId === entry.catalogEntryId}
+                    key={entry.placeId}
+                    aria-pressed={selectedPlace?.placeId === entry.placeId}
                     onClick={() => {
-                      setSelectedEntry(entry);
+                      setSelectedPlace(entry);
                       setUseManualName(false);
                       setManualStoreName("");
                     }}
                     >
-                    <span className={signupStyles.logo} aria-hidden="true">
-                      {entry.logoPath ? (
-                        // The server only emits rights-approved local paths; external image loading stays disabled.
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img className={signupStyles.logoImage} src={entry.logoPath} alt="" />
-                      ) : catalogInitial(entry)}
-                    </span>
                     <span className="min-w-0">
                       <span className={`${signupStyles.resultName} block truncate`}>{entry.storeDisplayName}</span>
-                      <span className={`${signupStyles.resultBrand} block truncate`}>{entry.brandDisplayName}</span>
+                      <span className={`${signupStyles.resultMeta} block truncate`}>
+                        {entry.address ?? "주소 정보 없음"}{entry.category ? ` · ${entry.category}` : ""}
+                      </span>
                     </span>
                   </button>
                 ))}
               </div>
             ) : null}
 
-            {catalogQuery.trim() && !isSearching && catalogEntries.length === 0 ? (
+            {hasSearched && !isSearching && placeEntries.length === 0 ? (
               <p className={signupStyles.empty}>검색 결과가 없습니다. 새 가게명을 직접 입력해 등록할 수 있습니다.</p>
             ) : null}
 
             <div className={signupStyles.field}>
-              {!useManualName && !selectedEntry ? (
+              {!useManualName && !selectedPlace ? (
                 <button className={signupStyles.secondaryButton} type="button" onClick={() => setUseManualName(true)}>
-                  검색 결과 없이 직접 입력
+                  가게명 직접 입력
                 </button>
               ) : null}
               {useManualName ? (
                 <>
-                  <label className={signupStyles.label} htmlFor="manualStoreName">새 가게명</label>
+                  <label className={signupStyles.label} htmlFor="manualStoreName">가게명 직접 입력</label>
                   <input
                     className={signupStyles.input}
                     id="manualStoreName"
                     value={manualStoreName}
                     onChange={(event) => {
                       setManualStoreName(event.target.value);
-                      setSelectedEntry(null);
+                      setSelectedPlace(null);
                     }}
                     maxLength={100}
                     required
