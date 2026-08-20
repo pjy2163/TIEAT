@@ -3,6 +3,9 @@
 import { FormEvent, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ApiError, getStoreOnboardingStatus, login } from "@/lib/store-api";
+import { StoreAuthField } from "../auth/StoreAuthField";
+import { StoreAuthShell } from "../auth/StoreAuthShell";
+import { storeAuthStyles } from "../auth/StoreAuth.styles";
 import { loginStyles } from "./LoginForm.styles";
 
 function safeNext(value: string | null): string {
@@ -49,30 +52,24 @@ export function LoginForm() {
   }
 
   return (
-    <main className={loginStyles.page}>
-      <section className={loginStyles.card} aria-labelledby="login-title">
-        <p className={loginStyles.eyebrow}>TIEAT STORE</p>
-        <h1 id="login-title" className={loginStyles.title}>매장 태블릿 로그인</h1>
-        <p className={loginStyles.description}>확인 대기 거래를 보려면 매장 계정으로 로그인해 주세요.</p>
-
-        <form className={loginStyles.form} onSubmit={onSubmit}>
-          <div className={loginStyles.field}>
-            <label className={loginStyles.label} htmlFor="loginId">로그인 ID</label>
-            <input className={loginStyles.input} id="loginId" name="loginId" autoComplete="username" required />
-          </div>
-          <div className={loginStyles.field}>
-            <label className={loginStyles.label} htmlFor="password">비밀번호</label>
-            <input className={loginStyles.input} id="password" name="password" type="password" autoComplete="current-password" required />
-          </div>
-          {errorMessage ? <p className={loginStyles.error} role="alert">{errorMessage}</p> : null}
-          <button className={loginStyles.button} type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "로그인 중…" : "로그인"}
-          </button>
-        </form>
-        <p className={loginStyles.signupPrompt}>
-          처음 사용하시나요? <a className={loginStyles.signupLink} href="/store/signup">매장 계정 만들기</a>
-        </p>
-      </section>
-    </main>
+    <StoreAuthShell
+      footer={<>처음 사용하시나요? <a className={storeAuthStyles.link} href="/store/signup">매장 계정 만들기</a></>}
+      title="매장 로그인"
+      titleId="login-title"
+      width="narrow"
+    >
+      <form className={storeAuthStyles.form} onSubmit={onSubmit}>
+        <StoreAuthField label="로그인 ID" htmlFor="loginId">
+          <input className={storeAuthStyles.input} id="loginId" name="loginId" autoComplete="username" required />
+        </StoreAuthField>
+        <StoreAuthField label="비밀번호" htmlFor="password">
+          <input className={storeAuthStyles.input} id="password" name="password" type="password" autoComplete="current-password" required />
+        </StoreAuthField>
+        {errorMessage ? <p className={storeAuthStyles.error} role="alert">{errorMessage}</p> : null}
+        <button className={loginStyles.button} type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "로그인 중…" : "로그인"}
+        </button>
+      </form>
+    </StoreAuthShell>
   );
 }

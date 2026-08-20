@@ -8,6 +8,9 @@ import {
   searchStorePlaces,
   signUpStoreAccount,
 } from "@/lib/store-api";
+import { StoreAuthField } from "../auth/StoreAuthField";
+import { StoreAuthShell } from "../auth/StoreAuthShell";
+import { storeAuthStyles } from "../auth/StoreAuth.styles";
 import { signupStyles } from "./SignupForm.styles";
 
 type SignupStep = "account" | "store";
@@ -102,11 +105,13 @@ export function SignupForm() {
   }
 
   return (
-    <main className={signupStyles.page}>
-      <section className={signupStyles.card} aria-labelledby="signup-title">
-        <p className={signupStyles.eyebrow}>TIEAT STORE</p>
-        <h1 id="signup-title" className={signupStyles.title}>매장 계정 만들기</h1>
-        <p className={signupStyles.description}>계정과 가게를 등록한 뒤 첫 협력사 설정까지 이어집니다.</p>
+    <StoreAuthShell
+      description="계정과 가게를 등록한 뒤 첫 협력사 설정까지 이어집니다."
+      footer={<>이미 계정이 있으신가요? <a className={storeAuthStyles.link} href="/store/login">로그인</a></>}
+      title="매장 계정 만들기"
+      titleId="signup-title"
+      width="wide"
+    >
         <div className={signupStyles.step} aria-label="가입 단계">
           <span className={step === "account" ? signupStyles.stepCurrent : signupStyles.stepPending}>1. 계정</span>
           <span aria-hidden="true">→</span>
@@ -114,11 +119,10 @@ export function SignupForm() {
         </div>
 
         {step === "account" ? (
-          <form className={signupStyles.form} onSubmit={continueToStore}>
-            <div className={signupStyles.field}>
-              <label className={signupStyles.label} htmlFor="inviteCode">초대 코드</label>
+          <form className={storeAuthStyles.form} onSubmit={continueToStore}>
+            <StoreAuthField label="초대 코드" htmlFor="inviteCode" hint="파일럿 매장에 전달된 코드입니다.">
               <input
-                className={signupStyles.input}
+                className={storeAuthStyles.input}
                 id="inviteCode"
                 name="inviteCode"
                 value={inviteCode}
@@ -126,12 +130,14 @@ export function SignupForm() {
                 autoComplete="off"
                 required
               />
-              <p className={signupStyles.hint}>파일럿 매장에 전달된 코드입니다.</p>
-            </div>
-            <div className={signupStyles.field}>
-              <label className={signupStyles.label} htmlFor="signupLoginId">로그인 ID</label>
+            </StoreAuthField>
+            <StoreAuthField
+              label="로그인 ID"
+              htmlFor="signupLoginId"
+              hint="영문 소문자, 숫자, 점(`.`), 밑줄(`_`), 하이픈(`-`)만 사용할 수 있습니다."
+            >
               <input
-                className={signupStyles.input}
+                className={storeAuthStyles.input}
                 id="signupLoginId"
                 name="loginId"
                 value={loginId}
@@ -144,12 +150,10 @@ export function SignupForm() {
                 pattern="[a-z0-9._-]+"
                 required
               />
-              <p className={signupStyles.hint}>영문 소문자, 숫자, 점(`.`), 밑줄(`_`), 하이픈(`-`)만 사용할 수 있습니다.</p>
-            </div>
-            <div className={signupStyles.field}>
-              <label className={signupStyles.label} htmlFor="signupPassword">비밀번호</label>
+            </StoreAuthField>
+            <StoreAuthField label="비밀번호" htmlFor="signupPassword" hint="10자 이상으로 입력해 주세요.">
               <input
-                className={signupStyles.input}
+                className={storeAuthStyles.input}
                 id="signupPassword"
                 name="password"
                 type="password"
@@ -159,21 +163,23 @@ export function SignupForm() {
                 minLength={10}
                 required
               />
-              <p className={signupStyles.hint}>10자 이상으로 입력해 주세요.</p>
-            </div>
-            {errorMessage ? <p className={signupStyles.error} role="alert">{errorMessage}</p> : null}
+            </StoreAuthField>
+            {errorMessage ? <p className={storeAuthStyles.error} role="alert">{errorMessage}</p> : null}
             <div className={signupStyles.actions}>
               <span />
               <button className={signupStyles.button} type="submit">가게 설정으로</button>
             </div>
           </form>
         ) : (
-          <form className={signupStyles.form} onSubmit={submitStore}>
-            <div className={signupStyles.field}>
-              <label className={signupStyles.label} htmlFor="storePlaceQuery">가게명 검색</label>
+          <form className={storeAuthStyles.form} onSubmit={submitStore}>
+            <StoreAuthField
+              label="가게명 검색"
+              htmlFor="storePlaceQuery"
+              hint="카카오 장소 검색으로 상호·주소·업종을 확인합니다. 선택한 상호명만 새 TIEAT 매장명으로 등록합니다."
+            >
               <div className={signupStyles.searchRow}>
                 <input
-                  className={signupStyles.input}
+                  className={storeAuthStyles.input}
                   id="storePlaceQuery"
                   value={placeQuery}
                   onChange={(event) => setPlaceQuery(event.target.value)}
@@ -184,8 +190,7 @@ export function SignupForm() {
                   {isSearching ? "검색 중…" : "검색"}
                 </button>
               </div>
-              <p className={signupStyles.hint}>카카오 장소 검색으로 상호·주소·업종을 확인합니다. 선택한 상호명만 새 TIEAT 매장명으로 등록합니다.</p>
-            </div>
+            </StoreAuthField>
 
             {placeEntries.length > 0 ? (
               <div className={signupStyles.resultList} role="list" aria-label="가게 검색 결과">
@@ -216,31 +221,30 @@ export function SignupForm() {
               <p className={signupStyles.empty}>검색 결과가 없습니다. 새 가게명을 직접 입력해 등록할 수 있습니다.</p>
             ) : null}
 
-            <div className={signupStyles.field}>
-              {!useManualName && !selectedPlace ? (
+            {!useManualName && !selectedPlace ? (
+              <div className={storeAuthStyles.field}>
                 <button className={signupStyles.secondaryButton} type="button" onClick={() => setUseManualName(true)}>
                   가게명 직접 입력
                 </button>
-              ) : null}
-              {useManualName ? (
-                <>
-                  <label className={signupStyles.label} htmlFor="manualStoreName">가게명 직접 입력</label>
-                  <input
-                    className={signupStyles.input}
-                    id="manualStoreName"
-                    value={manualStoreName}
-                    onChange={(event) => {
-                      setManualStoreName(event.target.value);
-                      setSelectedPlace(null);
-                    }}
-                    maxLength={100}
-                    required
-                  />
-                </>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
+            {useManualName ? (
+              <StoreAuthField label="가게명 직접 입력" htmlFor="manualStoreName">
+                <input
+                  className={storeAuthStyles.input}
+                  id="manualStoreName"
+                  value={manualStoreName}
+                  onChange={(event) => {
+                    setManualStoreName(event.target.value);
+                    setSelectedPlace(null);
+                  }}
+                  maxLength={100}
+                  required
+                />
+              </StoreAuthField>
+            ) : null}
 
-            {errorMessage ? <p className={signupStyles.error} role="alert">{errorMessage}</p> : null}
+            {errorMessage ? <p className={storeAuthStyles.error} role="alert">{errorMessage}</p> : null}
             {successMessage ? <p className={signupStyles.success} role="status">{successMessage}</p> : null}
             <div className={signupStyles.actions}>
               <button className={signupStyles.backButton} type="button" onClick={() => setStep("account")} disabled={isSubmitting}>
@@ -253,10 +257,6 @@ export function SignupForm() {
           </form>
         )}
 
-        <p className={signupStyles.loginPrompt}>
-          이미 계정이 있으신가요? <a className={signupStyles.loginLink} href="/store/login">로그인</a>
-        </p>
-      </section>
-    </main>
+    </StoreAuthShell>
   );
 }

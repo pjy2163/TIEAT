@@ -1,17 +1,9 @@
+import { storeAuthStyles } from "../auth/StoreAuth.styles";
+
 export const signupStyles = {
-  page: "min-h-dvh bg-[var(--surface-subtle)] px-4 py-6 sm:px-8 sm:py-12",
-  card: "mx-auto w-full max-w-xl rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[0_8px_30px_rgba(17,24,39,0.04)] sm:p-8",
-  eyebrow: "text-xs font-semibold tracking-[0.08em] text-[var(--accent)]",
-  title: "mt-3 text-2xl font-semibold tracking-[0.01em] text-[var(--text-primary)] sm:text-3xl",
-  description: "mt-2 text-sm leading-6 text-[var(--text-secondary)]",
   step: "mt-5 flex items-center gap-2 text-xs font-medium text-[var(--text-muted)]",
   stepCurrent: "rounded-full bg-[#edf2ff] px-2.5 py-1 text-[var(--accent)]",
   stepPending: "rounded-full bg-[var(--surface-subtle)] px-2.5 py-1",
-  form: "mt-8 space-y-5",
-  field: "space-y-2",
-  label: "block text-sm font-medium text-[var(--text-primary)]",
-  hint: "text-xs leading-5 text-[var(--text-muted)]",
-  input: "block h-12 w-full rounded-lg border border-[var(--border-strong)] bg-white px-3 text-base text-[var(--text-primary)] placeholder:text-[var(--text-muted)]",
   searchRow: "flex flex-col gap-2 sm:flex-row",
   searchButton: "h-12 shrink-0 rounded-lg border border-[var(--border-strong)] px-4 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-subtle)] disabled:cursor-not-allowed disabled:text-[var(--text-muted)]",
   resultList: "space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2",
@@ -20,11 +12,8 @@ export const signupStyles = {
   resultMeta: "mt-0.5 text-xs leading-5 text-[var(--text-secondary)]",
   empty: "rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--surface)] px-3 py-4 text-sm leading-6 text-[var(--text-secondary)]",
   secondaryButton: "h-11 rounded-lg border border-[var(--border-strong)] px-4 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-subtle)] disabled:cursor-not-allowed disabled:text-[var(--text-muted)]",
-  error: "rounded-lg border border-[#f1c7cd] bg-[#fff7f8] px-3 py-3 text-sm leading-5 text-[var(--danger)]",
   success: "rounded-lg border border-[#c7e7d0] bg-[#f3fff6] px-3 py-3 text-sm leading-5 text-[#16713a]",
   actions: "flex flex-col-reverse gap-3 sm:flex-row sm:justify-between",
-  button: "flex h-12 w-full items-center justify-center rounded-lg bg-[var(--accent)] px-4 text-base font-semibold text-white transition-colors hover:bg-[#244cda] disabled:cursor-not-allowed disabled:bg-[#9caeea] sm:w-auto sm:min-w-40",
+  button: `${storeAuthStyles.primaryButton} sm:w-auto sm:min-w-40`,
   backButton: "h-12 rounded-lg px-3 text-sm font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)]",
-  loginPrompt: "mt-6 text-center text-sm leading-6 text-[var(--text-secondary)]",
-  loginLink: "font-semibold text-[var(--accent)] underline underline-offset-4",
-};
+} as const;
