@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tieat.ledger.domain.MealUsageStatus;
 import com.tieat.partnership.domain.MealContractId;
+import com.tieat.settlement.domain.CumulativeSettlementSnapshot;
 import com.tieat.settlement.domain.PosSettlement;
 import com.tieat.settlement.domain.PosSettlementRepository;
 import com.tieat.settlement.domain.PosSettlementSlice;
@@ -206,6 +207,15 @@ class RecordPosSettlementUseCaseTest {
         @Override
         public OutstandingReceivableOverview findOutstandingReceivableOverviewByStoreId(StoreId storeId) {
             return new OutstandingReceivableOverview(List.of(), List.of());
+        }
+
+        @Override
+        public Optional<CumulativeSettlementSnapshot> findCumulativeSettlementSnapshotByMealContractIdAndStoreId(
+            MealContractId mealContractId,
+            StoreId storeId,
+            Instant generatedAt
+        ) {
+            return Optional.empty();
         }
 
         @Override

@@ -22,6 +22,12 @@ public interface PosSettlementRepository {
 
     OutstandingReceivableOverview findOutstandingReceivableOverviewByStoreId(StoreId storeId);
 
+    Optional<CumulativeSettlementSnapshot> findCumulativeSettlementSnapshotByMealContractIdAndStoreId(
+        MealContractId mealContractId,
+        StoreId storeId,
+        Instant generatedAt
+    );
+
     PosSettlementSlice findByStoreId(StoreId storeId, int page, int size);
 
     List<AllocationDisplay> findAllocationDisplaysBySettlementIdAndStoreId(

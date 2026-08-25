@@ -2,6 +2,7 @@ package com.tieat.settlement.adapter.out.persistence;
 
 import com.tieat.ledger.domain.MealUsageStatus;
 import com.tieat.partnership.domain.MealContractId;
+import com.tieat.settlement.domain.CumulativeSettlementSnapshot;
 import com.tieat.settlement.domain.PosSettlement;
 import com.tieat.settlement.domain.PosSettlementRepository;
 import com.tieat.settlement.domain.PosSettlementSlice;
@@ -9,6 +10,7 @@ import com.tieat.store.domain.StoreId;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -253,6 +255,84 @@ public class PosSettlementPersistenceAdapter implements PosSettlementRepository 
                 .thenComparing(summary -> summary.mealContractId().value()))
             .toList();
         return new OutstandingReceivableOverview(items, partners);
+    }
+
+    @Override
+    public Optional<CumulativeSettlementSnapshot> findCumulativeSettlementSnapshotByMealContractIdAndStoreId(
+        MealContractId mealContractId,
+        StoreId storeId,
+        Instant generatedAt
+    ) {
+        Objects.requireNonNull(mealContractId, "Meal contract id must be supplied");
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        Objects.requireNonNull(generatedAt, "Generated at must be supplied");
+        return jdbcTemplate.query(
+            """
+                with contract_scope as (
+                    select id, prepaid_balance
+                    from meal_contracts
+                    where id = ? and store_id = ?
+                ),
+                confirmed_usage_totals as (
+                    select coalesce(sum(amount), 0) as confirmed_usage_total_minor,
+                           coalesce(sum(prepaid_applied), 0) as prepaid_applied_total_minor,
+                           coalesce(sum(receivable_created), 0) as receivable_created_total_minor
+                    from meal_usages
+                    where store_id = ?
+                      and meal_contract_id = ?
+                      and status = 'CONFIRMED'
+                ),
+                recorded_payment_totals as (
+                    select coalesce(sum(submitted_total_minor), 0) as recorded_pos_payment_total_minor
+                    from pos_settlements
+                    where store_id = ?
+                      and meal_contract_id = ?
+                ),
+                allocated_receivable_totals as (
+                    select coalesce(sum(allocation.receivable_amount_minor), 0) as allocated_receivable_total_minor
+                    from pos_settlement_allocations allocation
+                    join pos_settlements settlement
+                        on settlement.id = allocation.pos_settlement_id
+                       and settlement.store_id = ?
+                    join meal_usages meal_usage
+                        on meal_usage.id = allocation.meal_usage_id
+                       and meal_usage.store_id = ?
+                       and meal_usage.meal_contract_id = ?
+                    where settlement.meal_contract_id = ?
+                )
+                select contract_scope.id as meal_contract_id,
+                       contract_scope.prepaid_balance,
+                       confirmed_usage_totals.confirmed_usage_total_minor,
+                       confirmed_usage_totals.prepaid_applied_total_minor,
+                       confirmed_usage_totals.receivable_created_total_minor,
+                       recorded_payment_totals.recorded_pos_payment_total_minor,
+                       allocated_receivable_totals.allocated_receivable_total_minor
+                from contract_scope
+                cross join confirmed_usage_totals
+                cross join recorded_payment_totals
+                cross join allocated_receivable_totals
+                """,
+            (resultSet, rowNum) -> new CumulativeSettlementSnapshot(
+                new MealContractId(resultSet.getObject("meal_contract_id", UUID.class)),
+                generatedAt,
+                resultSet.getLong("confirmed_usage_total_minor"),
+                resultSet.getLong("prepaid_applied_total_minor"),
+                resultSet.getLong("prepaid_balance"),
+                resultSet.getLong("receivable_created_total_minor"),
+                resultSet.getLong("recorded_pos_payment_total_minor"),
+                resultSet.getLong("allocated_receivable_total_minor")
+            ),
+            mealContractId.value(),
+            storeId.value(),
+            storeId.value(),
+            mealContractId.value(),
+            storeId.value(),
+            mealContractId.value(),
+            storeId.value(),
+            storeId.value(),
+            mealContractId.value(),
+            mealContractId.value()
+        ).stream().findFirst();
     }
 
     @Override
