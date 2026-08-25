@@ -9,7 +9,7 @@ public final class MealContract {
 
     private final MealContractId id;
     private final StoreId storeId;
-    private final MealContractPaymentType paymentType;
+    private MealContractPaymentType paymentType;
     private final PartnerOrganizationId partnerOrganizationId;
     private final boolean qrSelectable;
     private Instant archivedAt;
@@ -84,6 +84,41 @@ public final class MealContract {
         return new MealContractAllocation(usageAmount, prepaidApplied, receivableCreated, prepaidBalance);
     }
 
+    public PaymentTermTransition changePaymentType(
+        MealContractPaymentType expectedPaymentType,
+        MealContractPaymentType newPaymentType,
+        long newPrepaidBalance
+    ) {
+        if (expectedPaymentType == null || newPaymentType == null) {
+            throw new IllegalArgumentException("Payment types must be supplied");
+        }
+        if (paymentType != expectedPaymentType) {
+            throw new IllegalStateException("Payment type changed since the request was created");
+        }
+        if (paymentType == newPaymentType) {
+            throw new IllegalArgumentException("Payment type must change");
+        }
+        long previousPrepaidBalance = prepaidBalance;
+        if (newPaymentType == MealContractPaymentType.PREPAID_WITH_RECEIVABLE_OVERFLOW) {
+            if (newPrepaidBalance <= 0) {
+                throw new IllegalArgumentException("Prepaid transition balance must be positive");
+            }
+            prepaidBalance = newPrepaidBalance;
+        } else {
+            if (prepaidBalance != 0) {
+                throw new IllegalStateException("Prepaid balance must be zero before switching to postpaid");
+            }
+            prepaidBalance = 0;
+        }
+        paymentType = newPaymentType;
+        return new PaymentTermTransition(
+            expectedPaymentType,
+            newPaymentType,
+            previousPrepaidBalance,
+            prepaidBalance
+        );
+    }
+
     public MealContractId id() {
         return id;
     }
@@ -126,5 +161,13 @@ public final class MealContract {
         }
         this.archivedAt = Objects.requireNonNull(archivedAt, "Archive timestamp must be supplied");
         this.archivedByLoginId = actorLoginId;
+    }
+
+    public record PaymentTermTransition(
+        MealContractPaymentType previousPaymentType,
+        MealContractPaymentType newPaymentType,
+        long prepaidBalanceBefore,
+        long prepaidBalanceAfter
+    ) {
     }
 }
