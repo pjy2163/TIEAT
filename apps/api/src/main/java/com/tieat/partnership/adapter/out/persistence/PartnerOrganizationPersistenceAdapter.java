@@ -20,7 +20,11 @@ public class PartnerOrganizationPersistenceAdapter implements PartnerOrganizatio
     public PartnerOrganization save(PartnerOrganization partnerOrganization) {
         Objects.requireNonNull(partnerOrganization, "Partner organization must be supplied");
         return toDomain(repository.saveAndFlush(new PartnerOrganizationJpaEntity(
-            partnerOrganization.id().value(), partnerOrganization.displayName()
+            partnerOrganization.id().value(),
+            partnerOrganization.displayName(),
+            partnerOrganization.partnerKind(),
+            partnerOrganization.representativePhone(),
+            partnerOrganization.representativeEmail()
         )));
     }
 
@@ -31,6 +35,12 @@ public class PartnerOrganizationPersistenceAdapter implements PartnerOrganizatio
     }
 
     private PartnerOrganization toDomain(PartnerOrganizationJpaEntity entity) {
-        return new PartnerOrganization(new PartnerOrganizationId(entity.id()), entity.displayName());
+        return new PartnerOrganization(
+            new PartnerOrganizationId(entity.id()),
+            entity.displayName(),
+            entity.partnerKind(),
+            entity.representativePhone(),
+            entity.representativeEmail()
+        );
     }
 }
