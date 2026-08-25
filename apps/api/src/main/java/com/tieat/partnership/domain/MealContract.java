@@ -3,6 +3,7 @@ package com.tieat.partnership.domain;
 import com.tieat.store.domain.StoreId;
 import java.util.Objects;
 import java.util.Optional;
+import java.time.Instant;
 
 public final class MealContract {
 
@@ -11,6 +12,8 @@ public final class MealContract {
     private final MealContractPaymentType paymentType;
     private final PartnerOrganizationId partnerOrganizationId;
     private final boolean qrSelectable;
+    private Instant archivedAt;
+    private String archivedByLoginId;
     private long prepaidBalance;
 
     public MealContract(
@@ -30,6 +33,19 @@ public final class MealContract {
         PartnerOrganizationId partnerOrganizationId,
         boolean qrSelectable
     ) {
+        this(id, storeId, paymentType, prepaidBalance, partnerOrganizationId, qrSelectable, null, null);
+    }
+
+    public MealContract(
+        MealContractId id,
+        StoreId storeId,
+        MealContractPaymentType paymentType,
+        long prepaidBalance,
+        PartnerOrganizationId partnerOrganizationId,
+        boolean qrSelectable,
+        Instant archivedAt,
+        String archivedByLoginId
+    ) {
         this.id = Objects.requireNonNull(id, "Meal contract id must be supplied");
         this.storeId = Objects.requireNonNull(storeId, "Store id must be supplied");
         this.paymentType = Objects.requireNonNull(paymentType, "Payment type must be supplied");
@@ -45,6 +61,14 @@ public final class MealContract {
         this.prepaidBalance = prepaidBalance;
         this.partnerOrganizationId = partnerOrganizationId;
         this.qrSelectable = qrSelectable;
+        if (archivedAt == null && archivedByLoginId != null) {
+            throw new IllegalArgumentException("Archived contracts must have an archive timestamp");
+        }
+        if (archivedAt != null && (archivedByLoginId == null || archivedByLoginId.isBlank())) {
+            throw new IllegalArgumentException("Archived contracts must have an archive actor");
+        }
+        this.archivedAt = archivedAt;
+        this.archivedByLoginId = archivedByLoginId;
     }
 
     public MealContractAllocation allocate(long usageAmount) {
@@ -82,5 +106,25 @@ public final class MealContract {
 
     public long prepaidBalance() {
         return prepaidBalance;
+    }
+
+    public boolean isArchived() {
+        return archivedAt != null;
+    }
+
+    public Optional<Instant> archivedAt() {
+        return Optional.ofNullable(archivedAt);
+    }
+
+    public Optional<String> archivedByLoginId() {
+        return Optional.ofNullable(archivedByLoginId);
+    }
+
+    public void archive(String actorLoginId, Instant archivedAt) {
+        if (actorLoginId == null || actorLoginId.isBlank()) {
+            throw new IllegalArgumentException("Archive actor must be supplied");
+        }
+        this.archivedAt = Objects.requireNonNull(archivedAt, "Archive timestamp must be supplied");
+        this.archivedByLoginId = actorLoginId;
     }
 }

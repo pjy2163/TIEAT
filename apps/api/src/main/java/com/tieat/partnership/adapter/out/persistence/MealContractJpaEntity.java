@@ -7,10 +7,11 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.UUID;
 
-@Entity
 @Table(name = "meal_contracts")
+@Entity
 class MealContractJpaEntity {
 
     @Id
@@ -32,6 +33,12 @@ class MealContractJpaEntity {
     @Column(name = "qr_selectable", nullable = false)
     private boolean qrSelectable;
 
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
+    @Column(name = "archived_by_login_id", length = 120)
+    private String archivedByLoginId;
+
     protected MealContractJpaEntity() {
     }
 
@@ -43,12 +50,27 @@ class MealContractJpaEntity {
         UUID partnerOrganizationId,
         boolean qrSelectable
     ) {
+        this(id, storeId, paymentType, prepaidBalance, partnerOrganizationId, qrSelectable, null, null);
+    }
+
+    MealContractJpaEntity(
+        UUID id,
+        UUID storeId,
+        MealContractPaymentType paymentType,
+        long prepaidBalance,
+        UUID partnerOrganizationId,
+        boolean qrSelectable,
+        Instant archivedAt,
+        String archivedByLoginId
+    ) {
         this.id = id;
         this.storeId = storeId;
         this.paymentType = paymentType;
         this.prepaidBalance = prepaidBalance;
         this.partnerOrganizationId = partnerOrganizationId;
         this.qrSelectable = qrSelectable;
+        this.archivedAt = archivedAt;
+        this.archivedByLoginId = archivedByLoginId;
     }
 
     UUID id() {
@@ -73,5 +95,13 @@ class MealContractJpaEntity {
 
     boolean qrSelectable() {
         return qrSelectable;
+    }
+
+    Instant archivedAt() {
+        return archivedAt;
+    }
+
+    String archivedByLoginId() {
+        return archivedByLoginId;
     }
 }
