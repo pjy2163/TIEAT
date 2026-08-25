@@ -2,7 +2,7 @@ export const LANDING_BRAND_INTRO_SEEN_KEY = "tieat.landingBrandIntro.seen.v7";
 
 export const LANDING_BRAND_INTRO_PREFLIGHT_SCRIPT = `(() => {
   const key = "${LANDING_BRAND_INTRO_SEEN_KEY}";
-  const root = document.currentScript?.parentElement;
+  const root = document.querySelector("[data-tieat-landing-root]");
   if (!root) return;
   let mode = "play";
 

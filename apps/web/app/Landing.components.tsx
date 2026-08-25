@@ -54,7 +54,7 @@ export function FlowStepCard({ number, title, description, active = false, cardR
   return (
     <li
       ref={cardRef}
-      className={`${landingStyles.flowCard} ${active ? landingStyles.flowCardActive : landingStyles.flowCardIdle}`}
+      className={`${landingStyles.flowCard} ${motionStyles.flowCard} ${active ? landingStyles.flowCardActive : landingStyles.flowCardIdle}`}
       data-flow-step-index={index}
       aria-current={active ? "step" : undefined}
     >

@@ -206,7 +206,10 @@ export function LandingBrandIntro() {
       window.setTimeout(() => setPhase("at"), AT_START_MS),
       window.setTimeout(() => setPhase("ti"), TI_START_MS),
       window.setTimeout(() => setPhase("hold"), HOLD_START_MS),
-      window.setTimeout(() => setPhase("move"), MOVE_START_MS),
+      window.setTimeout(() => {
+        setHeroBrandCollapsed(true);
+        setPhase("move");
+      }, MOVE_START_MS),
       window.setTimeout(() => {
         setLandingMode("settle");
         setHeroBrandCollapsed(true);

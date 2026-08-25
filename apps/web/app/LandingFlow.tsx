@@ -3,18 +3,26 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FlowStepCard, type LandingFlowStep } from "./Landing.components";
 import { landingStyles } from "./Landing.styles";
+import motionStyles from "./Landing.motion.module.css";
 
 type LandingFlowProps = {
   steps: readonly LandingFlowStep[];
 };
 
-function ProductFlowPreview({ step }: { step: LandingFlowStep }) {
+type ProductFlowPreviewProps = {
+  step: LandingFlowStep;
+  className?: string;
+  screenClassName?: string;
+};
+
+function ProductFlowPreview({ step, className = "", screenClassName = "" }: ProductFlowPreviewProps) {
   let screen: ReactNode = null;
+  const previewScreenClassName = `${landingStyles.productPreviewScreen} ${screenClassName}`.trim();
 
   switch (step.number) {
     case "01":
       screen = (
-        <div className={landingStyles.productPreviewScreen}>
+        <div className={previewScreenClassName}>
           <p className={landingStyles.productPreviewEyebrow}>모바일 QR 입력</p>
           <h3 className={landingStyles.productPreviewTitle}>강남점 식대 요청</h3>
           <div className={landingStyles.productPreviewRows}>
@@ -37,7 +45,7 @@ function ProductFlowPreview({ step }: { step: LandingFlowStep }) {
       break;
     case "02":
       screen = (
-        <div className={landingStyles.productPreviewScreen}>
+        <div className={previewScreenClassName}>
           <p className={landingStyles.productPreviewEyebrow}>매장 확인</p>
           <h3 className={landingStyles.productPreviewTitle}>확인 대기 거래</h3>
           <div className={landingStyles.productPreviewRows}>
@@ -70,7 +78,7 @@ function ProductFlowPreview({ step }: { step: LandingFlowStep }) {
       break;
     case "03":
       screen = (
-        <div className={landingStyles.productPreviewScreen}>
+        <div className={previewScreenClassName}>
           <p className={landingStyles.productPreviewEyebrow}>매장 장부</p>
           <h3 className={landingStyles.productPreviewTitle}>월별 장부</h3>
           <div className={landingStyles.productPreviewTotal}>
@@ -100,7 +108,7 @@ function ProductFlowPreview({ step }: { step: LandingFlowStep }) {
   }
 
   return (
-    <div className={landingStyles.productPreview} data-product-flow-preview data-preview-step={step.number} aria-hidden="true">
+    <div className={`${landingStyles.productPreview} ${className}`.trim()} data-product-flow-preview data-preview-step={step.number} aria-hidden="true">
       <div className={landingStyles.productPreviewTopline}>
         <span className={landingStyles.productPreviewLabel}>화면 예시</span>
       </div>
@@ -111,7 +119,9 @@ function ProductFlowPreview({ step }: { step: LandingFlowStep }) {
 
 export function LandingFlow({ steps }: LandingFlowProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [previewMotionStep, setPreviewMotionStep] = useState<string | null>(null);
   const cardRefs = useRef<Array<HTMLLIElement | null>>([]);
+  const activeIndexRef = useRef(0);
   const stepCount = steps.length;
   const safeActiveIndex = stepCount === 0 ? 0 : Math.min(activeIndex, stepCount - 1);
   const activeStep = steps[safeActiveIndex];
@@ -150,8 +160,10 @@ export function LandingFlow({ steps }: LandingFlowProps) {
         });
         const nextIndex = Number((currentEntry.target as HTMLElement).dataset.flowStepIndex);
 
-        if (Number.isInteger(nextIndex) && nextIndex >= 0 && nextIndex < stepCount) {
+        if (Number.isInteger(nextIndex) && nextIndex >= 0 && nextIndex < stepCount && nextIndex !== activeIndexRef.current) {
+          activeIndexRef.current = nextIndex;
           setActiveIndex(nextIndex);
+          setPreviewMotionStep(steps[nextIndex].number);
         }
       },
       {
@@ -193,7 +205,12 @@ export function LandingFlow({ steps }: LandingFlowProps) {
       <aside className={landingStyles.flowVisual} data-product-flow-preview-placement="desktop" aria-hidden="true">
         <div className={landingStyles.flowVisualSticky}>
           <div className={landingStyles.flowVisualShell}>
-            <ProductFlowPreview step={activeStep} />
+            <ProductFlowPreview
+              key={activeStep.number}
+              step={activeStep}
+              className={previewMotionStep === activeStep.number ? motionStyles.desktopPreviewPrimary : undefined}
+              screenClassName={previewMotionStep === activeStep.number ? motionStyles.desktopPreviewSecondary : undefined}
+            />
           </div>
         </div>
       </aside>

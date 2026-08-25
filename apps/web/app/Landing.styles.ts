@@ -1,6 +1,10 @@
+import motionStyles from "./Landing.motion.module.css";
+
 export const landingStyles = {
   page: "min-h-dvh overflow-x-clip bg-[var(--canvas)] text-[var(--text-primary)]",
   header: "mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-5 sm:px-8 sm:py-7 lg:px-12",
+  headerBrand: "flex min-w-0 flex-col items-start",
+  headerDescription: "mt-1 text-xs font-medium tracking-[-0.01em] text-[var(--text-secondary)] sm:text-sm",
   wordmarkLink: "inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-4",
   wordmarkMark: "h-auto w-[5.75rem] shrink-0 sm:w-[6.5rem]",
   tieatWordmark: "block overflow-visible",
@@ -25,8 +29,8 @@ export const landingStyles = {
   heroTitle: "mt-5 max-w-[32rem] text-[clamp(2.5rem,6.5vw,4.5rem)] font-light leading-[1.1] tracking-[0.002em] text-[var(--text-primary)]",
   heroDescription: "mt-7 max-w-xl text-base leading-7 text-[var(--text-secondary)] sm:text-lg sm:leading-8",
   heroActions: "mt-8 flex flex-col gap-3 sm:flex-row sm:items-center",
-  primaryAction: "inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-lg bg-[var(--accent)] px-5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(49,94,251,0.18)] transition-colors hover:bg-[#244cda] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 sm:w-auto",
-  secondaryAction: "inline-flex min-h-12 w-full items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-5 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 sm:w-auto",
+  primaryAction: `inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-lg bg-[var(--accent)] px-5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(49,94,251,0.18)] hover:bg-[#244cda] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 sm:w-auto ${motionStyles.ctaPress}`,
+  secondaryAction: `inline-flex min-h-12 w-full items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-5 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 sm:w-auto ${motionStyles.ctaPress}`,
   heroNote: "mt-5 text-xs leading-5 text-[var(--text-muted)]",
   heroPreview: "relative mx-auto w-full max-w-md rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_18px_50px_rgba(17,24,39,0.06)] sm:p-7",
   previewTopline: "flex items-center gap-2 text-xs font-semibold tracking-[0.04em] text-[var(--text-secondary)]",
@@ -45,7 +49,7 @@ export const landingStyles = {
   flowGrid: "mt-12 grid gap-4 sm:grid-cols-3 sm:gap-5 lg:mt-16",
   flowLayout: "mt-12 grid gap-10 lg:mt-16 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.72fr)] lg:items-start lg:gap-16",
   flowSteps: "grid gap-4 sm:gap-5",
-  flowCard: "relative min-h-52 rounded-2xl border bg-[var(--surface)] p-5 transition-[border-color,background-color,box-shadow,transform] duration-300 ease-out sm:p-6",
+  flowCard: "relative min-h-52 rounded-2xl border bg-[var(--surface)] p-5 sm:p-6",
   flowCardIdle: "border-[var(--border)]",
   flowCardActive: "border-[var(--accent)] bg-white shadow-[0_14px_36px_rgba(49,94,251,0.12)] lg:-translate-y-0.5",
   flowNumber: "text-xs font-semibold tabular-nums tracking-[0.08em] text-[var(--accent)]",

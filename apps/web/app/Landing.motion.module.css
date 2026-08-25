@@ -1,42 +1,41 @@
 /* The preflight mode on html is the only source of truth for static mark visibility. */
-:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="header"],
-:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="hero"] [data-wordmark-segment="ti"],
-:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="hero"] [data-wordmark-segment="at"] {
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="header"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="hero"] [data-wordmark-segment="ti"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="hero"] [data-wordmark-segment="at"] {
   opacity: 0;
   visibility: hidden;
 }
 
-:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="hero"] [data-wordmark-segment="e"] {
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="hero"] [data-wordmark-segment="e"] {
   opacity: 1;
   visibility: visible;
 }
 
-:global([data-tieat-landing-root][data-tieat-landing-mode="active"]) [data-tieat-wordmark="header"],
-:global([data-tieat-landing-root][data-tieat-landing-mode="active"]) [data-tieat-wordmark="hero"] {
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="active"]) [data-tieat-wordmark="header"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="active"]) [data-tieat-wordmark="hero"] {
   opacity: 0;
   visibility: hidden;
 }
 
-:global([data-tieat-landing-root][data-tieat-landing-mode="settle"]) [data-tieat-wordmark="header"],
-:global([data-tieat-landing-root][data-tieat-landing-mode="done"]) [data-tieat-wordmark="header"],
-:global([data-tieat-landing-root][data-tieat-landing-mode="skip"]) [data-tieat-wordmark="header"] {
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="settle"]) [data-tieat-wordmark="header"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="done"]) [data-tieat-wordmark="header"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="skip"]) [data-tieat-wordmark="header"] {
   opacity: 1;
   visibility: visible;
 }
 
-:global([data-tieat-landing-root][data-tieat-landing-mode="settle"]) [data-tieat-wordmark="hero"],
-:global([data-tieat-landing-root][data-tieat-landing-mode="done"]) [data-tieat-wordmark="hero"],
-:global([data-tieat-landing-root][data-tieat-landing-mode="skip"]) [data-tieat-wordmark="hero"] {
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="settle"]) [data-tieat-wordmark="hero"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="done"]) [data-tieat-wordmark="hero"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="skip"]) [data-tieat-wordmark="hero"] {
   opacity: 0;
   visibility: hidden;
 }
 
-:global([data-tieat-landing-root][data-tieat-landing-mode="settle"]) [data-hero-brand],
-:global([data-tieat-landing-root][data-tieat-landing-mode="done"]) [data-hero-brand],
-:global([data-tieat-landing-root][data-tieat-landing-mode="skip"]) [data-hero-brand] {
-  height: 0 !important;
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="active"]) [data-hero-brand][aria-hidden="true"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="settle"]) [data-hero-brand],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="done"]) [data-hero-brand],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="skip"]) [data-hero-brand] {
   max-height: 0 !important;
-  min-height: 0 !important;
   margin-bottom: 0 !important;
   opacity: 0 !important;
   overflow: hidden !important;
@@ -44,8 +43,39 @@
   visibility: hidden !important;
 }
 
+.motionRoot :global([data-hero-brand]) {
+  max-height: clamp(6.125rem, 20.16vw, 10.5rem);
+  overflow: hidden;
+  transition: max-height 320ms cubic-bezier(0.2, 0, 0, 1), margin-bottom 320ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 320ms cubic-bezier(0.2, 0, 0, 1), visibility 0s linear 320ms;
+}
+
 .sectionReveal {
   animation: sectionReveal 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ctaPress {
+  transition-property: transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.ctaPress:active {
+  transform: translateY(1px);
+}
+
+.flowCard {
+  transition-property: border-color, background-color, box-shadow, transform;
+  transition-duration: 240ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.desktopPreviewPrimary {
+  animation: desktopPreviewPrimary 280ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.desktopPreviewSecondary {
+  animation: desktopPreviewSecondary 220ms 56ms cubic-bezier(0.2, 0, 0, 1) both;
 }
 
 .brandIntroMark {
@@ -102,6 +132,30 @@
   }
 }
 
+@keyframes desktopPreviewPrimary {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes desktopPreviewSecondary {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 4px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 @keyframes brandIntroSegmentAtReveal {
   from {
     opacity: 0;
@@ -127,7 +181,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .motionRoot :global([data-hero-brand]) {
+    transition: none !important;
+  }
+
   .sectionReveal,
+  .ctaPress,
+  .flowCard,
+  .desktopPreviewPrimary,
+  .desktopPreviewSecondary,
   .brandIntroMark,
   .brandIntroReady,
   .brandIntroMove,
@@ -140,5 +202,10 @@
     opacity: 1 !important;
     transform: none !important;
     transition: none !important;
+  }
+
+  .ctaPress:active,
+  .flowCard {
+    transform: none !important;
   }
 }

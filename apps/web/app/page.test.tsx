@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Home, { metadata } from "./page";
 import { LANDING_BRAND_INTRO_SEEN_KEY } from "./LandingBrandIntro";
+import { LANDING_BRAND_INTRO_PREFLIGHT_SCRIPT } from "./Landing.intro.config";
 import motionStyles from "./Landing.motion.module.css";
 
 const redirect = vi.fn();
@@ -24,7 +25,7 @@ function rect(left: number, top: number, width: number, height: number) {
 }
 
 function mockBrandGeometry() {
-  return vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function () {
+  return vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     if (this.getAttribute("data-tieat-wordmark") === "header") {
       return rect(8, 20, 96, 34);
     }
@@ -106,20 +107,16 @@ describe("public landing page", () => {
     act(() => {});
 
     const root = document.querySelector("[data-tieat-landing-root]");
-    const preflight = root?.firstElementChild;
     const intro = document.querySelector("[data-brand-intro]");
     const introMark = document.querySelector("[data-brand-intro-mark]");
     const headerMark = document.querySelector("[data-tieat-wordmark='header']");
     const heroMark = document.querySelector("[data-tieat-wordmark='hero']");
     const heroBrand = document.querySelector("[data-hero-brand]");
 
-    expect(preflight?.tagName).toBe("SCRIPT");
-    expect(preflight).toHaveAttribute("data-tieat-preflight");
-    expect(preflight?.textContent).toContain(LANDING_BRAND_INTRO_SEEN_KEY);
-    expect(preflight?.textContent).toContain("document.currentScript?.parentElement");
-    expect(preflight?.textContent).not.toContain("document.documentElement");
+    expect(LANDING_BRAND_INTRO_PREFLIGHT_SCRIPT).toContain(LANDING_BRAND_INTRO_SEEN_KEY);
+    expect(LANDING_BRAND_INTRO_PREFLIGHT_SCRIPT).toContain("data-tieat-landing-root");
+    expect(LANDING_BRAND_INTRO_PREFLIGHT_SCRIPT).not.toContain("document.documentElement");
     expect(root?.querySelector("header")).toBeTruthy();
-    expect(root?.firstElementChild).toBe(preflight);
     expect(root).toHaveAttribute("data-tieat-landing-mode", "active");
     expect(sessionStorage.getItem(LANDING_BRAND_INTRO_SEEN_KEY)).toBeNull();
     expect(intro).toHaveAttribute("aria-hidden", "true");
@@ -157,6 +154,8 @@ describe("public landing page", () => {
       vi.advanceTimersByTime(750);
     });
     expect(document.querySelector("[data-brand-intro]")).toHaveAttribute("data-brand-intro-phase", "move");
+    expect(root).toHaveAttribute("data-tieat-landing-mode", "active");
+    expect(heroBrand).toHaveAttribute("aria-hidden", "true");
     expect(intro?.querySelector("[data-wordmark-segment='ti']")).toHaveClass(motionStyles.brandIntroSegmentVisible);
     expect(intro?.querySelector("[data-wordmark-segment='at']")).toHaveClass(motionStyles.brandIntroSegmentVisible);
 
@@ -231,12 +230,15 @@ describe("public landing page", () => {
 
     const [wordmarkLink] = screen.getAllByRole("link", { name: "TIEAT 홈" });
     const headerMark = wordmarkLink.querySelector("[data-tieat-wordmark='header']");
+    const headerDescription = screen.getByText("자동으로 기록이 쌓이는 장부");
 
     expect(wordmarkLink).toBeVisible();
     expect(wordmarkLink).toHaveAccessibleName("TIEAT 홈");
     expect(headerMark).toBeVisible();
     expectWordmarkGeometry(headerMark!);
     expect(wordmarkLink.querySelector("img")).toBeNull();
+    expect(headerDescription.parentElement).toHaveClass("flex", "flex-col", "items-start");
+    expect(headerDescription).toHaveClass("mt-1");
 
     const heroBrand = document.querySelector("[data-hero-brand]");
     const heroWordmark = heroBrand?.querySelector("[data-tieat-wordmark='hero']");
@@ -252,7 +254,7 @@ describe("public landing page", () => {
     expect(heroTitle.className).toContain("text-[clamp(2.5rem,6.5vw,4.5rem)]");
     expect(heroTitle.className).toContain("leading-[1.1]");
     expect(heroTitle.className).toContain("tracking-[0.002em]");
-    expect(screen.getByText("자동으로 기록이 쌓이는 장부")).toBeVisible();
+    expect(headerDescription).toBeVisible();
     expect(screen.getByText("QR 입력부터 매장 확인, 결제할 금액 확인까지 한 큐에.")).toBeVisible();
     expect(screen.queryByText("TIE, 하나로 묶다.")).toBeNull();
     expect(document.querySelector("[data-tie-graphic-section]")).toBeNull();
@@ -261,8 +263,12 @@ describe("public landing page", () => {
     const flowSection = document.getElementById("flow");
 
     expect(heroSection?.nextElementSibling).toBe(flowSection);
-    expect(screen.getAllByRole("link", { name: "서비스 시작하기" })[0]).toHaveAttribute("href", "/store/signup");
-    expect(screen.getAllByRole("link", { name: "문의하기" })[0]).toHaveAttribute("href", "#contact");
+    const primaryAction = screen.getAllByRole("link", { name: "서비스 시작하기" })[0];
+    const secondaryAction = screen.getAllByRole("link", { name: "문의하기" })[0];
+    expect(primaryAction).toHaveAttribute("href", "/store/signup");
+    expect(secondaryAction).toHaveAttribute("href", "#contact");
+    expect(primaryAction).toHaveClass(motionStyles.ctaPress);
+    expect(secondaryAction).toHaveClass(motionStyles.ctaPress);
     expect(screen.getByText("QR로 입력")).toBeVisible();
     expect(screen.getByText("매장에서 확인")).toBeVisible();
     expect(screen.getByText("장부에서 결제 확인")).toBeVisible();

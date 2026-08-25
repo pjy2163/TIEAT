@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { BrandWordmark, SectionHeading, Wordmark, type LandingFlowStep } from "./Landing.components";
 import { LandingBrandIntro } from "./LandingBrandIntro";
 import { LANDING_BRAND_INTRO_PREFLIGHT_SCRIPT } from "./Landing.intro.config";
@@ -56,10 +57,19 @@ const trustPoints = [
 
 export default function Home() {
   return (
-    <div className={landingStyles.page} data-tieat-landing-root suppressHydrationWarning>
-      <script data-tieat-preflight dangerouslySetInnerHTML={{ __html: LANDING_BRAND_INTRO_PREFLIGHT_SCRIPT }} />
+    <div className={`${landingStyles.page} ${motionStyles.motionRoot}`} data-tieat-landing-root suppressHydrationWarning>
+      <Script
+        data-tieat-preflight
+        id="tieat-landing-preflight"
+        strategy="beforeInteractive"
+      >
+        {LANDING_BRAND_INTRO_PREFLIGHT_SCRIPT}
+      </Script>
       <header className={landingStyles.header}>
-        <Wordmark />
+        <div className={landingStyles.headerBrand}>
+          <Wordmark />
+          <p className={landingStyles.headerDescription}>자동으로 기록이 쌓이는 장부</p>
+        </div>
         <a className={landingStyles.headerLink} href="#flow">
           어떻게 쓰나요?
         </a>
@@ -77,7 +87,6 @@ export default function Home() {
             <div className={landingStyles.heroBrand} data-hero-brand role="img" aria-label="TIEAT">
               <BrandWordmark variant="hero" />
             </div>
-            <p className={landingStyles.eyebrow}>자동으로 기록이 쌓이는 장부</p>
             <h1 id="hero-title" className={landingStyles.heroTitle}>
               기록은 가볍게,
               <br />
