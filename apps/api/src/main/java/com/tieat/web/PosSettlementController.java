@@ -230,6 +230,7 @@ class PosSettlementController {
     }
 
     record PosSettlementResponse(
+        UUID posSettlementId,
         LocalDate posBusinessDate,
         long submittedTotalMinor,
         Instant recordedAt,
@@ -243,6 +244,7 @@ class PosSettlementController {
             Map<UUID, PosSettlementRepository.AllocationDisplay> displaysByUsageId = allocationDisplays.stream()
                 .collect(Collectors.toMap(PosSettlementRepository.AllocationDisplay::mealUsageId, Function.identity()));
             return new PosSettlementResponse(
+                settlement.id(),
                 settlement.posBusinessDate(),
                 settlement.submittedTotalMinor(),
                 settlement.recordedAt(),

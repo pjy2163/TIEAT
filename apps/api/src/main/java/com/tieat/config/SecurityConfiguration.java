@@ -65,6 +65,8 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.GET, "/api/v1/pos-settlements").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.GET, "/api/v1/pos-settlements/receivables").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.POST, "/api/v1/pos-settlements").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/v1/pos-settlements/*/receipt").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.POST, "/api/v1/pos-settlements/*/receipt").hasRole("STORE_STAFF")
                 .anyRequest().authenticated()
             )
             .formLogin(login -> login

@@ -6,8 +6,10 @@ import { ApiError } from "@/lib/store-api";
 import {
   getOutstandingReceivables,
   getRecentPosSettlements,
+  downloadPosSettlementReceipt,
   recordPosSettlement,
   takePosSettlementSelectionSeed,
+  uploadPosSettlementReceipt,
   type OutstandingReceivable,
   type PartnerReceivableSummary,
   type PosSettlement,
@@ -56,6 +58,92 @@ function isPositiveInteger(value: string): boolean {
 
 function seededSelectionError(): string {
   return "월별에서 선택한 금액이 현재 미수금 목록과 달라 기록할 수 없습니다. 목록을 새로고침한 뒤 다시 선택해 주세요.";
+}
+
+function receiptErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.errorCode === "POS_SETTLEMENT_RECEIPT_ALREADY_ATTACHED") {
+    return "이 결제 기록에는 이미 영수증이 첨부되어 있습니다.";
+  }
+  if (error instanceof ApiError && error.errorCode === "POS_SETTLEMENT_RECEIPT_UNSAFE") {
+    return "안전 확인을 통과하지 못한 파일은 첨부할 수 없습니다.";
+  }
+  if (error instanceof ApiError && error.status === 404) {
+    return "영수증을 찾지 못했거나 보관 기간이 지났습니다.";
+  }
+  return "영수증 처리 결과를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+}
+
+function ReceiptAttachment({ posSettlementId }: { posSettlementId: string }) {
+  const [busy, setBusy] = useState<"upload" | "download" | null>(null);
+  const [attached, setAttached] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function upload(file: File | undefined) {
+    if (!file) return;
+    if (!(["image/jpeg", "image/png", "application/pdf"] as string[]).includes(file.type)) {
+      setMessage("JPG, PNG, PDF 파일만 첨부할 수 있습니다.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setMessage("영수증 파일은 10MiB 이하만 첨부할 수 있습니다.");
+      return;
+    }
+    setBusy("upload");
+    setMessage(null);
+    try {
+      await uploadPosSettlementReceipt(posSettlementId, file);
+      setAttached(true);
+      setMessage("영수증을 안전하게 첨부했습니다.");
+    } catch (error) {
+      setMessage(receiptErrorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function download() {
+    setBusy("download");
+    setMessage(null);
+    try {
+      const response = await downloadPosSettlementReceipt(posSettlementId);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "receipt";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setAttached(true);
+    } catch (error) {
+      setMessage(receiptErrorMessage(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className={posSettlementFormStyles.receiptActions}>
+      <label className={posSettlementFormStyles.stateAction}>
+        {busy === "upload" ? "영수증 첨부 중…" : "영수증 첨부"}
+        <input
+          accept="image/jpeg,image/png,application/pdf"
+          capture="environment"
+          disabled={busy !== null || attached}
+          onChange={(event) => void upload(event.target.files?.[0])}
+          type="file"
+        />
+      </label>
+      <button
+        className={posSettlementFormStyles.stateAction}
+        disabled={busy !== null}
+        onClick={() => void download()}
+        type="button"
+      >
+        {busy === "download" ? "영수증 불러오는 중…" : "영수증 다운로드"}
+      </button>
+      {message ? <p className={posSettlementFormStyles.secondary} role="status">{message}</p> : null}
+    </div>
+  );
 }
 
 function reconstructSeedSelection(
@@ -397,6 +485,7 @@ export function PosSettlementForm() {
                   </li>
                 ))}
               </ul>
+              {settlement.posSettlementId ? <ReceiptAttachment posSettlementId={settlement.posSettlementId} /> : null}
               <button className={posSettlementFormStyles.newSettlement} onClick={startAnotherSettlement} type="button">다른 결제 기록</button>
             </div>
           ) : receivableViewState === "loading" ? (
@@ -450,9 +539,7 @@ export function PosSettlementForm() {
                           </div>
                         </dl>
                       </header>
-                      <p className={posSettlementFormStyles.partnerNote}>
-                        결제할 금액은 모든 달에서 아직 남아 있는 금액입니다. 일부 결제 뒤에도 남은 금액은 계속 보입니다. 결제 완료(선불): 선불로 처리된 금액은 결제할 금액에 포함되지 않습니다. <span className="sr-only">선불 잔액으로 처리되어 추가 결제할 금액 없음</span>
-                      </p>
+                      <span className="sr-only">선불 잔액으로 처리되어 추가 결제할 금액 없음</span>
                       {partnerReceivables.length === 0 ? (
                         <p className={posSettlementFormStyles.noPartnerReceivables}>결제할 금액 없음</p>
                       ) : (
@@ -660,6 +747,7 @@ export function PosSettlementForm() {
                               </li>
                             ))}
                           </ul>
+                          {record.posSettlementId ? <ReceiptAttachment posSettlementId={record.posSettlementId} /> : null}
                         </div>
                       ) : null}
                     </article>

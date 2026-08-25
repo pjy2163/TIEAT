@@ -186,8 +186,8 @@ describe("PosSettlementForm", () => {
     expect(screen.getAllByText("선불로 처리된 금액").length).toBeGreaterThan(0);
     expect(screen.getAllByText("결제할 금액").length).toBeGreaterThan(1);
     expect(screen.getAllByText("남은 금액").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/모든 달에서 아직 남아 있는 금액/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/결제 완료\(선불\):/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/모든 달에서 아직 남아 있는 금액/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/결제 완료\(선불\):/)).not.toBeInTheDocument();
     expect(screen.getAllByText("선불 잔액으로 처리되어 추가 결제할 금액 없음").length).toBeGreaterThan(0);
     const secondCheckbox = screen.getByRole("checkbox", { name: selectionLabel(secondReceivable) });
     await user.click(secondCheckbox);

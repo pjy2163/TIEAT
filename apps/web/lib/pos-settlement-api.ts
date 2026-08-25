@@ -24,6 +24,8 @@ export type PartnerReceivableSummary = {
 };
 
 export type PosSettlement = {
+  /** Opaque request-only ID; never render this value to staff. */
+  posSettlementId?: string;
   posBusinessDate: string;
   submittedTotalMinor: number;
   recordedAt: string;
@@ -310,17 +312,51 @@ function parsePosSettlement(value: unknown): PosSettlement {
     || value.allocations.length === 0) {
     throw new InvalidApiResponseError();
   }
+  const posSettlementId = value.posSettlementId === undefined
+    ? undefined
+    : isUuid(value.posSettlementId) ? value.posSettlementId : (() => { throw new InvalidApiResponseError(); })();
   const allocations = value.allocations.map(parsePosSettlementAllocation);
   const allocationTotal = allocations.reduce((total, allocation) => total + allocation.receivableAmountMinor, 0);
   if (!Number.isSafeInteger(allocationTotal)
     || allocationTotal !== value.submittedTotalMinor) {
     throw new InvalidApiResponseError();
   }
-  return {
+  const parsed: PosSettlement = {
     posBusinessDate: value.posBusinessDate,
     submittedTotalMinor: value.submittedTotalMinor,
     recordedAt: value.recordedAt,
     allocations,
+  };
+  if (posSettlementId !== undefined) parsed.posSettlementId = posSettlementId;
+  return parsed;
+}
+
+export type PosSettlementReceipt = {
+  posSettlementId: string;
+  fileName: string;
+  contentType: "image/jpeg" | "image/png" | "application/pdf";
+  sizeBytes: number;
+  uploadedAt: string;
+  expiresAt: string;
+};
+
+function parsePosSettlementReceipt(value: unknown): PosSettlementReceipt {
+  if (!isRecord(value)
+    || !isUuid(value.posSettlementId)
+    || !isNonEmptyString(value.fileName)
+    || (value.contentType !== "image/jpeg" && value.contentType !== "image/png" && value.contentType !== "application/pdf")
+    || !isPositiveSafeInteger(value.sizeBytes)
+    || !isIsoInstant(value.uploadedAt)
+    || !isIsoInstant(value.expiresAt)) {
+    throw new InvalidApiResponseError();
+  }
+  return {
+    posSettlementId: value.posSettlementId,
+    fileName: value.fileName,
+    contentType: value.contentType,
+    sizeBytes: value.sizeBytes,
+    uploadedAt: value.uploadedAt,
+    expiresAt: value.expiresAt,
   };
 }
 
@@ -404,4 +440,37 @@ export async function recordPosSettlement(
     throw await apiError(response);
   }
   return parsePosSettlement(await response.json() as unknown);
+}
+
+export async function uploadPosSettlementReceipt(
+  posSettlementId: string,
+  file: File,
+): Promise<PosSettlementReceipt> {
+  if (!isUuid(posSettlementId)) throw new InvalidApiResponseError();
+  const csrf = await csrfToken();
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${SETTLEMENTS_PATH}/${posSettlementId}/receipt`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { [csrf.headerName]: csrf.token },
+    body: formData,
+  });
+  if (response.status !== 201) {
+    throw await apiError(response);
+  }
+  return parsePosSettlementReceipt(await response.json() as unknown);
+}
+
+export async function downloadPosSettlementReceipt(posSettlementId: string): Promise<Response> {
+  if (!isUuid(posSettlementId)) throw new InvalidApiResponseError();
+  const response = await fetch(`${SETTLEMENTS_PATH}/${posSettlementId}/receipt`, {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return response;
 }
