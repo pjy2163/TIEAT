@@ -115,6 +115,7 @@ describe("PosSettlementForm history view", () => {
     expect(screen.queryByText("결제할 금액")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /기록하기/ })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("영수증 첨부")).not.toBeInTheDocument();
+    expect(screen.queryByText("결제 확인자")).not.toBeInTheDocument();
     expect(getRecentPosSettlementsMock).toHaveBeenCalledWith(0, {});
 
     await userEvent.click(screen.getByRole("button", { name: "협력사 A · 결제일 2026-08-11 상세 보기" }));
@@ -236,8 +237,9 @@ describe("PosSettlementForm history view", () => {
 
     render(<PosSettlementForm />);
 
-    expect(await screen.findByText("협력사 · 협력사 A")).toBeVisible();
-    expect(screen.getByText("협력사 · 협력사 클라우드반")).toBeVisible();
+    expect(await screen.findByRole("button", { name: "협력사 A · 결제일 2026-08-11 상세 보기" })).toHaveTextContent("협력사 A");
+    expect(screen.getByRole("button", { name: "협력사 클라우드반 · 결제일 2026-08-10 상세 보기" })).toHaveTextContent("협력사 클라우드반");
+    expect(screen.queryByText("결제 확인자")).not.toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText("협력사별 보기"), "협력사 클라우드반");
     await user.type(screen.getByLabelText("협력사 검색"), "클라우드");
     await user.click(screen.getByRole("button", { name: "조회" }));
@@ -246,8 +248,8 @@ describe("PosSettlementForm history view", () => {
       partnerDisplayName: "협력사 클라우드반",
       search: "클라우드",
     }));
-    expect(await screen.findByText("협력사 · 협력사 클라우드반")).toBeVisible();
-    expect(screen.queryByText("협력사 · 협력사 A")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "협력사 클라우드반 · 결제일 2026-08-10 상세 보기" })).toHaveTextContent("협력사 클라우드반");
+    expect(screen.queryByRole("button", { name: "협력사 A · 결제일 2026-08-11 상세 보기" })).not.toBeInTheDocument();
     expect(screen.getByText("필터 적용됨")).toBeVisible();
   });
 

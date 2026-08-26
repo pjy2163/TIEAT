@@ -150,10 +150,10 @@ function HistoryItem({ record, index, expanded, onReceiptUploaded, onToggle }: {
           onClick={onToggle}
           type="button"
         >
-          <p className={posSettlementFormStyles.historyRecord}>협력사 · {partnerLabelOf(record)}</p>
+          <p className={posSettlementFormStyles.historyRecord}>{partnerLabelOf(record)}</p>
           <h2 className={posSettlementFormStyles.historyItemTitle}>결제일 {record.posBusinessDate}</h2>
           <p className={posSettlementFormStyles.historyItemMeta}>
-            결제 금액 {amountFormatter.format(record.submittedTotalMinor)} · 결제 확인자 {record.recordedByLoginId ?? "확인자 정보 없음"} · 상세 {expanded ? "닫기" : "보기"}
+            결제 금액 {amountFormatter.format(record.submittedTotalMinor)} · 상세 {expanded ? "닫기" : "보기"}
           </p>
         </button>
         {expanded ? (
