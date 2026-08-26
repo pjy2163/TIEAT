@@ -14,6 +14,13 @@ import com.tieat.settlement.application.InvalidPosSettlementHistoryQueryExceptio
 import com.tieat.ledger.domain.PublicMealUsageIdempotency.InvalidPublicRequestKeyException;
 import com.tieat.qr.application.PublicMealUsageQrNotFoundException;
 import com.tieat.settlement.application.PosSettlementConflictException;
+import com.tieat.partnership.application.StorePartnerConflictException;
+import com.tieat.partnership.application.StorePartnerArchiveConflictException;
+import com.tieat.partnership.application.StorePartnerArchivePinRequiredException;
+import com.tieat.partnership.application.StorePartnerNotFoundException;
+import com.tieat.partnership.application.StorePartnerPaymentTermConflictException;
+import com.tieat.partnership.application.StorePartnerValidationException;
+import com.tieat.partnership.application.StoreArchivePinException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.CacheControl;
@@ -92,6 +99,140 @@ public class ApiExceptionHandler {
         HttpServletRequest request
     ) {
         return problem(request, HttpStatus.NOT_FOUND, "MEAL_CONTRACT_NOT_FOUND", "Meal contract was not found");
+    }
+
+    @ExceptionHandler(StorePartnerNotFoundException.class)
+    ResponseEntity<ProblemDetail> handleStorePartnerNotFound(
+        StorePartnerNotFoundException exception,
+        HttpServletRequest request
+    ) {
+        return problem(request, HttpStatus.NOT_FOUND, "STORE_PARTNER_NOT_FOUND", "Store partner was not found");
+    }
+
+    @ExceptionHandler(StorePartnerConflictException.class)
+    ResponseEntity<ProblemDetail> handleStorePartnerConflict(
+        StorePartnerConflictException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.CONFLICT,
+            "IDEMPOTENCY_KEY_REUSED",
+            "Idempotency key was already used with a different request payload"
+        );
+    }
+
+    @ExceptionHandler(StorePartnerArchiveConflictException.class)
+    ResponseEntity<ProblemDetail> handleStorePartnerArchiveConflict(
+        StorePartnerArchiveConflictException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.CONFLICT,
+            "STORE_PARTNER_ARCHIVE_BLOCKED",
+            "Partner has pending usage, unsettled receivables, or remaining prepaid balance"
+        );
+    }
+
+    @ExceptionHandler(StorePartnerPaymentTermConflictException.class)
+    ResponseEntity<ProblemDetail> handleStorePartnerPaymentTermConflict(
+        StorePartnerPaymentTermConflictException exception,
+        HttpServletRequest request
+    ) {
+        return switch (exception.reason()) {
+            case EXPECTED_PAYMENT_TYPE_STALE -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "STORE_PARTNER_PAYMENT_TERM_STALE",
+                "The partner payment type changed before this request was applied"
+            );
+            case PENDING_USAGE -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "STORE_PARTNER_PAYMENT_TERM_BLOCKED",
+                "Payment type cannot change while pending usage remains"
+            );
+            case OUTSTANDING_RECEIVABLE -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "STORE_PARTNER_PAYMENT_TERM_BLOCKED",
+                "Payment type cannot change while unsettled receivables remain"
+            );
+            case PREPAID_BALANCE_REMAINING -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "STORE_PARTNER_PAYMENT_TERM_BLOCKED",
+                "Payment type cannot change while prepaid balance remains"
+            );
+        };
+    }
+
+    @ExceptionHandler(StoreArchivePinException.class)
+    ResponseEntity<ProblemDetail> handleStoreArchivePin(
+        StoreArchivePinException exception,
+        HttpServletRequest request
+    ) {
+        return switch (exception.reason()) {
+            case NOT_CONFIGURED -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "STORE_ARCHIVE_PIN_NOT_CONFIGURED",
+                "Configure the store archive PIN before archiving a partner"
+            );
+            case INVALID -> problem(
+                request,
+                HttpStatus.FORBIDDEN,
+                "STORE_ARCHIVE_PIN_INVALID",
+                "The archive PIN is incorrect"
+            );
+            case LOCKED -> problem(
+                request,
+                HttpStatus.TOO_MANY_REQUESTS,
+                "STORE_ARCHIVE_PIN_LOCKED",
+                "Archive PIN verification is temporarily locked"
+            );
+            case CURRENT_REQUIRED -> problem(
+                request,
+                HttpStatus.BAD_REQUEST,
+                "STORE_ARCHIVE_PIN_CURRENT_REQUIRED",
+                "The current archive PIN is required to change it"
+            );
+            case ACCOUNT_PASSWORD_INVALID -> problem(
+                request,
+                HttpStatus.FORBIDDEN,
+                "STORE_ARCHIVE_ACCOUNT_PASSWORD_INVALID",
+                "The account password could not be verified"
+            );
+            case ALREADY_CONFIGURED -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "STORE_ARCHIVE_PIN_ALREADY_CONFIGURED",
+                "The store archive PIN is already configured"
+            );
+        };
+    }
+
+
+    @ExceptionHandler(StorePartnerArchivePinRequiredException.class)
+    ResponseEntity<ProblemDetail> handleStorePartnerArchivePinRequired(
+        StorePartnerArchivePinRequiredException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.FORBIDDEN,
+            "STORE_PARTNER_ARCHIVE_PIN_REQUIRED",
+            "Use the PIN-verified archive operation"
+        );
+    }
+
+    @ExceptionHandler(StorePartnerValidationException.class)
+    ResponseEntity<ProblemDetail> handleStorePartnerValidation(
+        StorePartnerValidationException exception,
+        HttpServletRequest request
+    ) {
+        return problem(request, HttpStatus.BAD_REQUEST, "STORE_PARTNER_VALIDATION_FAILED", "Store partner input is invalid");
     }
 
     @ExceptionHandler({PublicMealUsageQrNotFoundException.class, PublicQrMealContractNotFoundException.class})
