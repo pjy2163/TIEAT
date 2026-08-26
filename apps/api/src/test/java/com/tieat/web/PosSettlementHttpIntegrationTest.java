@@ -59,6 +59,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -831,7 +832,7 @@ class PosSettlementHttpIntegrationTest {
         return new MockMultipartFile("file", fileName, MediaType.APPLICATION_PDF_VALUE, bytes);
     }
 
-    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder receiptUploadRequest(
+    private MockMultipartHttpServletRequestBuilder receiptUploadRequest(
         SessionHandle session,
         String csrfToken,
         UUID settlementId,
