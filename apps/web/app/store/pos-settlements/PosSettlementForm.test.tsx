@@ -86,6 +86,13 @@ const noReceipt = {
   expiresAt: null,
 };
 
+function mockReceiptPreviewUrl() {
+  vi.stubGlobal("URL", {
+    createObjectURL: vi.fn().mockReturnValue("blob:receipt-preview"),
+    revokeObjectURL: vi.fn(),
+  });
+}
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
@@ -96,6 +103,10 @@ describe("PosSettlementForm history view", () => {
   it("renders saved payment records without the receivable list or record form", async () => {
     const saved = settlement(availableSettlementId, "2026-08-11", availableReceipt);
     getRecentPosSettlementsMock.mockResolvedValue(historyPage([saved]));
+    mockReceiptPreviewUrl();
+    downloadPosSettlementReceiptMock.mockResolvedValue({
+      blob: vi.fn().mockResolvedValue(new Blob(["receipt"], { type: "application/pdf" })),
+    } as unknown as Response);
 
     render(<PosSettlementForm />);
 
@@ -109,6 +120,7 @@ describe("PosSettlementForm history view", () => {
     await userEvent.click(screen.getByRole("button", { name: "협력사 A · 결제일 2026-08-11 상세 보기" }));
     expect(screen.getByText("영수증 있음")).toBeVisible();
     expect(screen.getByText("settlement.pdf")).toBeVisible();
+    expect(await screen.findByLabelText("영수증 미리보기")).toBeVisible();
     expect(screen.getByRole("button", { name: "영수증 다운로드" })).toBeVisible();
     expect(screen.getByText("결제 확인자")).toBeVisible();
     expect(screen.getByText("store-hk")).toBeVisible();
@@ -143,13 +155,17 @@ describe("PosSettlementForm history view", () => {
     expect(await screen.findByRole("heading", { name: "결제일 2026-08-11", level: 2 })).toBeVisible();
   });
 
-  it("shows receipt presence safely and offers upload only when a receipt is missing", async () => {
+  it("shows receipt presence safely, previews available files, and offers upload only when a receipt is missing", async () => {
     const user = userEvent.setup();
     getRecentPosSettlementsMock.mockResolvedValue(historyPage([
       settlement(availableSettlementId, "2026-08-11", availableReceipt),
       settlement(expiredSettlementId, "2026-08-10", expiredReceipt),
       settlement(legacySettlementId, "2026-08-09", noReceipt),
     ]));
+    mockReceiptPreviewUrl();
+    downloadPosSettlementReceiptMock.mockResolvedValue({
+      blob: vi.fn().mockResolvedValue(new Blob(["receipt"], { type: "application/pdf" })),
+    } as unknown as Response);
 
     render(<PosSettlementForm />);
 
@@ -158,6 +174,7 @@ describe("PosSettlementForm history view", () => {
 
     await user.click(screen.getByRole("button", { name: "협력사 A · 결제일 2026-08-11 상세 보기" }));
     expect(screen.getByText("영수증 있음")).toBeVisible();
+    expect(await screen.findByLabelText("영수증 미리보기")).toBeVisible();
     expect(screen.getByRole("button", { name: "영수증 다운로드" })).toBeVisible();
     expect(screen.queryByLabelText("영수증 첨부")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "협력사 A · 결제일 2026-08-10 상세 보기" }));
@@ -170,7 +187,7 @@ describe("PosSettlementForm history view", () => {
     expect(screen.queryByRole("button", { name: "영수증 다운로드" })).not.toBeInTheDocument();
     expect(screen.queryByText(availableSettlementId)).not.toBeInTheDocument();
     expect(screen.queryByText(expiredSettlementId)).not.toBeInTheDocument();
-    expect(downloadPosSettlementReceiptMock).not.toHaveBeenCalled();
+    expect(downloadPosSettlementReceiptMock).toHaveBeenCalledWith(availableSettlementId);
   });
 
   it("uploads a receipt from an expanded history item and updates its receipt state", async () => {
@@ -185,6 +202,10 @@ describe("PosSettlementForm history view", () => {
       uploadedAt: "2026-08-12T03:00:00Z",
       expiresAt: "2027-08-12T03:00:00Z",
     });
+    mockReceiptPreviewUrl();
+    downloadPosSettlementReceiptMock.mockResolvedValue({
+      blob: vi.fn().mockResolvedValue(new Blob(["receipt"], { type: "application/pdf" })),
+    } as unknown as Response);
 
     render(<PosSettlementForm />);
 

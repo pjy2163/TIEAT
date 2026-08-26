@@ -8,6 +8,7 @@ import {
 } from "@/lib/pos-settlement-api";
 import { posSettlementFormStyles } from "./PosSettlementForm.styles";
 import { ReceiptDownload } from "./ReceiptDownload";
+import { ReceiptPreview } from "./ReceiptPreview";
 
 function receiptErrorMessage(error: unknown): string {
   if (error instanceof ApiError && error.errorCode === "POS_SETTLEMENT_RECEIPT_ALREADY_ATTACHED") {
@@ -111,6 +112,13 @@ export function ReceiptAttachment({
         </label>
         {receipt && posSettlementId ? <ReceiptDownload posSettlementId={posSettlementId} fileName={receipt.fileName} /> : null}
       </div>
+      {receipt && posSettlementId ? (
+        <ReceiptPreview
+          contentType={receipt.contentType}
+          fileName={receipt.fileName}
+          posSettlementId={posSettlementId}
+        />
+      ) : null}
       {pendingFile ? <p className={posSettlementFormStyles.receiptFileName}>선택한 파일: {pendingFile.name}</p> : null}
       {message ? <p className={posSettlementFormStyles.receiptMessage} role="status">{message}</p> : null}
     </section>

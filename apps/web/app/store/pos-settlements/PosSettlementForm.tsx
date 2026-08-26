@@ -16,6 +16,7 @@ import { useStorePartnerContext } from "../StorePartnerContext";
 import { posSettlementFormStyles } from "./PosSettlementForm.styles";
 import { ReceiptAttachment } from "./ReceiptAttachment";
 import { ReceiptDownload } from "./ReceiptDownload";
+import { ReceiptPreview } from "./ReceiptPreview";
 
 type HistoryViewState = "loading" | "ready" | "empty" | "error";
 type AccessState = "allowed" | "forbidden";
@@ -114,6 +115,13 @@ function ReceiptSummaryView({
       <p className={posSettlementFormStyles.historyReceiptStatus}>{receiptStatusLabel(receipt.status)}</p>
       {receipt.status !== "NONE" && receipt.fileName ? (
         <p className={posSettlementFormStyles.historyReceiptMeta}>{receipt.fileName}</p>
+      ) : null}
+      {receipt.status === "AVAILABLE" && receipt.contentType && record.posSettlementId ? (
+        <ReceiptPreview
+          contentType={receipt.contentType}
+          fileName={receipt.fileName}
+          posSettlementId={record.posSettlementId}
+        />
       ) : null}
       {canDownload ? (
         <ReceiptDownload posSettlementId={record.posSettlementId!} fileName={receipt.fileName} />
