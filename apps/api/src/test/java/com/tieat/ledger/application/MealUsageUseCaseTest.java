@@ -63,8 +63,8 @@ class MealUsageUseCaseTest {
         assertThat(created.createdAt()).isEqualTo(SERVER_TIME);
         assertThat(repository.findById(created.id())).containsSame(created);
         assertThat(repository.saveCount).isEqualTo(1);
-        assertThat(mealContractRepository.nonlockingId).isEqualTo(mealContractId());
-        assertThat(mealContractRepository.lockedId).isNull();
+        assertThat(mealContractRepository.nonlockingId).isNull();
+        assertThat(mealContractRepository.lockedId).isEqualTo(mealContractId());
         assertThat(mealContractRepository.findById(mealContractId()).orElseThrow().prepaidBalance()).isEqualTo(12_000);
     }
 
@@ -96,7 +96,7 @@ class MealUsageUseCaseTest {
         )))
             .isInstanceOf(MealContractNotFoundException.class);
         assertThat(repository.saveCount).isZero();
-        assertThat(mealContractRepository.lockedId).isNull();
+        assertThat(mealContractRepository.lockedId).isEqualTo(mealContractId());
     }
 
     @Test

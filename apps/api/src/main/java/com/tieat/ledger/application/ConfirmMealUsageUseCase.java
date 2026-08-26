@@ -45,6 +45,9 @@ public class ConfirmMealUsageUseCase {
         }
         MealContract mealContract = mealContractRepository.findByIdForUpdate(mealUsage.mealContractId())
             .orElseThrow(() -> new MealContractNotFoundException(mealUsage.mealContractId()));
+        if (mealContract.isArchived()) {
+            throw new MealContractNotFoundException(mealUsage.mealContractId());
+        }
         if (!mealUsage.storeId().equals(mealContract.storeId())) {
             throw new MealUsageContractScopeMismatchException(mealUsage, mealContract);
         }

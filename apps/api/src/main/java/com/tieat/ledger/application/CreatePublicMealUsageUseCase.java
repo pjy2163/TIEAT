@@ -73,7 +73,9 @@ public class CreatePublicMealUsageUseCase {
         }
 
         MealContract lockedContract = mealContractRepository.findByIdForUpdate(command.mealContractId())
-            .filter(contract -> contract.storeId().equals(context.storeId()) && contract.isQrSelectable())
+            .filter(contract -> contract.storeId().equals(context.storeId())
+                && contract.isQrSelectable()
+                && !contract.isArchived())
             .orElseThrow(PublicQrMealContractNotFoundException::new);
         QrSelectableMealContract selectedContract = mealContractRepository.findQrSelectableByStoreId(lockedContract.storeId()).stream()
             .filter(contract -> contract.mealContractId().equals(command.mealContractId()))
