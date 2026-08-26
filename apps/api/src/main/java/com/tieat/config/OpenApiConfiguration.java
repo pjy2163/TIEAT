@@ -13,7 +13,7 @@ public class OpenApiConfiguration {
     OpenAPI tieatOpenApi() {
         return new OpenAPI().components(new Components().addSecuritySchemes(
             "sessionCookie",
-            new SecurityScheme().type(SecurityScheme.Type.APIKEY).in(SecurityScheme.In.COOKIE).name("JSESSIONID")
+            new SecurityScheme().type(SecurityScheme.Type.APIKEY).in(SecurityScheme.In.COOKIE).name("TIEAT_SESSION")
         ));
     }
 }

@@ -23,11 +23,23 @@ class MealUsageQrContextJpaEntity {
     @Column(name = "token_hash", nullable = false, length = 64)
     private String tokenHash;
 
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
+
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
     @Column(name = "revoked_at")
     private Instant revokedAt;
+
+    @Column(name = "token_ciphertext", columnDefinition = "BYTEA")
+    private byte[] tokenCiphertext;
+
+    @Column(name = "token_nonce", columnDefinition = "BYTEA")
+    private byte[] tokenNonce;
+
+    @Column(name = "token_key_version")
+    private Integer tokenKeyVersion;
 
     protected MealUsageQrContextJpaEntity() {
     }
@@ -48,11 +60,27 @@ class MealUsageQrContextJpaEntity {
         return tokenHash;
     }
 
+    Instant createdAt() {
+        return createdAt;
+    }
+
     Instant expiresAt() {
         return expiresAt;
     }
 
     Instant revokedAt() {
         return revokedAt;
+    }
+
+    byte[] tokenCiphertext() {
+        return tokenCiphertext == null ? null : tokenCiphertext.clone();
+    }
+
+    byte[] tokenNonce() {
+        return tokenNonce == null ? null : tokenNonce.clone();
+    }
+
+    Integer tokenKeyVersion() {
+        return tokenKeyVersion;
     }
 }

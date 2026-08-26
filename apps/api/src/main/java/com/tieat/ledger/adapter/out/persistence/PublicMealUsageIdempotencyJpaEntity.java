@@ -32,6 +32,9 @@ class PublicMealUsageIdempotencyJpaEntity {
     @Column(name = "meal_usage_id", nullable = false)
     private UUID mealUsageId;
 
+    @Column(name = "request_key_hash", length = 64)
+    private String requestKeyHash;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -44,6 +47,7 @@ class PublicMealUsageIdempotencyJpaEntity {
         UUID mealContractId,
         long amount,
         UUID mealUsageId,
+        String requestKeyHash,
         Instant createdAt
     ) {
         this.qrContextId = qrContextId;
@@ -51,6 +55,7 @@ class PublicMealUsageIdempotencyJpaEntity {
         this.mealContractId = mealContractId;
         this.amount = amount;
         this.mealUsageId = mealUsageId;
+        this.requestKeyHash = requestKeyHash;
         this.createdAt = createdAt;
     }
 
@@ -72,6 +77,14 @@ class PublicMealUsageIdempotencyJpaEntity {
 
     UUID mealUsageId() {
         return mealUsageId;
+    }
+
+    String requestKeyHash() {
+        return requestKeyHash;
+    }
+
+    Instant createdAt() {
+        return createdAt;
     }
 
     public static final class Key implements Serializable {

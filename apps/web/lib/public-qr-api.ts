@@ -9,11 +9,17 @@ export type PublicMealUsageQrContext = {
   qrExpiresAt: string;
 };
 
-export type PublicPendingMealUsage = {
+export type PublicMealUsageStatus = "PENDING" | "CONFIRMED" | "REJECTED" | "CANCELLED";
+
+export type PublicMealUsageRequest = {
   mealUsageId: string;
-  status: "PENDING";
+  status: PublicMealUsageStatus;
   amountMinor: number;
   createdAt: string;
+};
+
+export type PublicPendingMealUsage = PublicMealUsageRequest & {
+  status: "PENDING";
 };
 
 export class PublicQrApiError extends Error {
@@ -41,6 +47,10 @@ const API_PATH = "/api/v1/public/meal-usage-qr";
 
 function contextPath(token: string): string {
   return `${API_PATH}/${encodeURIComponent(token)}`;
+}
+
+function requestPath(token: string, mealUsageId: string): string {
+  return `${contextPath(token)}/meal-usages/${encodeURIComponent(mealUsageId)}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -95,10 +105,10 @@ function parseContext(value: unknown): PublicMealUsageQrContext {
   };
 }
 
-function parsePendingUsage(value: unknown): PublicPendingMealUsage {
+function parsePublicMealUsageRequest(value: unknown): PublicMealUsageRequest {
   if (!isRecord(value)
     || !isUuid(value.mealUsageId)
-    || value.status !== "PENDING"
+    || !["PENDING", "CONFIRMED", "REJECTED", "CANCELLED"].includes(String(value.status))
     || typeof value.amountMinor !== "number"
     || !Number.isSafeInteger(value.amountMinor)
     || value.amountMinor <= 0
@@ -107,10 +117,18 @@ function parsePendingUsage(value: unknown): PublicPendingMealUsage {
   }
   return {
     mealUsageId: value.mealUsageId,
-    status: value.status,
+    status: value.status as PublicMealUsageStatus,
     amountMinor: value.amountMinor,
     createdAt: value.createdAt,
   };
+}
+
+function parsePendingUsage(value: unknown): PublicPendingMealUsage {
+  const usage = parsePublicMealUsageRequest(value);
+  if (usage.status !== "PENDING") {
+    throw new UnexpectedPublicQrCreationResponseError();
+  }
+  return { ...usage, status: "PENDING" };
 }
 
 export async function getPublicMealUsageQrContext(token: string): Promise<PublicMealUsageQrContext> {
@@ -127,7 +145,9 @@ export async function getPublicMealUsageQrContext(token: string): Promise<Public
 export async function createPublicMealUsage(
   token: string,
   idempotencyKey: string,
+  publicRequestKey: string,
   mealContractId: string,
+  customerName: string,
   amountMinor: number,
 ): Promise<PublicPendingMealUsage> {
   const response = await fetch(`${contextPath(token)}/meal-usages`, {
@@ -137,8 +157,9 @@ export async function createPublicMealUsage(
     headers: {
       "Content-Type": "application/json",
       "Idempotency-Key": idempotencyKey,
+      "Public-Request-Key": publicRequestKey,
     },
-    body: JSON.stringify({ mealContractId, amountMinor }),
+    body: JSON.stringify({ mealContractId, customerName, amountMinor }),
   });
   if (response.status !== 201) {
     if (response.ok) {
@@ -147,4 +168,45 @@ export async function createPublicMealUsage(
     throw await apiError(response);
   }
   return parsePendingUsage(await response.json() as unknown);
+}
+
+export async function getPublicMealUsageRequest(
+  token: string,
+  mealUsageId: string,
+  idempotencyKey: string,
+  publicRequestKey: string,
+): Promise<PublicMealUsageRequest> {
+  const response = await fetch(requestPath(token, mealUsageId), {
+    cache: "no-store",
+    credentials: "omit",
+    headers: {
+      "Idempotency-Key": idempotencyKey,
+      "Public-Request-Key": publicRequestKey,
+    },
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return parsePublicMealUsageRequest(await response.json() as unknown);
+}
+
+export async function cancelPublicMealUsage(
+  token: string,
+  mealUsageId: string,
+  idempotencyKey: string,
+  publicRequestKey: string,
+): Promise<PublicMealUsageRequest> {
+  const response = await fetch(`${requestPath(token, mealUsageId)}/cancellations`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "omit",
+    headers: {
+      "Idempotency-Key": idempotencyKey,
+      "Public-Request-Key": publicRequestKey,
+    },
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return parsePublicMealUsageRequest(await response.json() as unknown);
 }

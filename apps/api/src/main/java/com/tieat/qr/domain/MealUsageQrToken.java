@@ -6,11 +6,13 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 public final class MealUsageQrToken {
 
     private static final int TOKEN_BYTES = 32;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final Pattern TOKEN_PATTERN = Pattern.compile("[A-Za-z0-9_-]{43}");
 
     private MealUsageQrToken() {
     }
@@ -28,5 +30,9 @@ public final class MealUsageQrToken {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
+    }
+
+    public static boolean isValid(String rawToken) {
+        return rawToken != null && TOKEN_PATTERN.matcher(rawToken).matches();
     }
 }

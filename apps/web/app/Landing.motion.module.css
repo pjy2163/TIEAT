@@ -1,0 +1,211 @@
+/* The preflight mode on html is the only source of truth for static mark visibility. */
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="header"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="hero"] [data-wordmark-segment="ti"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="hero"] [data-wordmark-segment="at"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="play"]) [data-tieat-wordmark="hero"] [data-wordmark-segment="e"] {
+  opacity: 1;
+  visibility: visible;
+}
+
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="active"]) [data-tieat-wordmark="header"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="active"]) [data-tieat-wordmark="hero"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="settle"]) [data-tieat-wordmark="header"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="done"]) [data-tieat-wordmark="header"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="skip"]) [data-tieat-wordmark="header"] {
+  opacity: 1;
+  visibility: visible;
+}
+
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="settle"]) [data-tieat-wordmark="hero"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="done"]) [data-tieat-wordmark="hero"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="skip"]) [data-tieat-wordmark="hero"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="active"]) [data-hero-brand][aria-hidden="true"],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="settle"]) [data-hero-brand],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="done"]) [data-hero-brand],
+.motionRoot:global([data-tieat-landing-root][data-tieat-landing-mode="skip"]) [data-hero-brand] {
+  max-height: 0 !important;
+  margin-bottom: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+.motionRoot :global([data-hero-brand]) {
+  max-height: clamp(6.125rem, 20.16vw, 10.5rem);
+  overflow: hidden;
+  transition: max-height 320ms cubic-bezier(0.2, 0, 0, 1), margin-bottom 320ms cubic-bezier(0.2, 0, 0, 1),
+    opacity 320ms cubic-bezier(0.2, 0, 0, 1), visibility 0s linear 320ms;
+}
+
+.sectionReveal {
+  animation: sectionReveal 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ctaPress {
+  transition-property: transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.ctaPress:active {
+  transform: translateY(1px);
+}
+
+.flowCard {
+  transition-property: border-color, background-color, box-shadow, transform;
+  transition-duration: 240ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.desktopPreviewPrimary {
+  animation: desktopPreviewPrimary 280ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.desktopPreviewSecondary {
+  animation: desktopPreviewSecondary 220ms 56ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.brandIntroMark {
+  position: absolute;
+  transform-origin: center;
+  opacity: 0;
+  transform: scale(0.94);
+  transition: opacity 520ms cubic-bezier(0.22, 1, 0.36, 1), transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.brandIntroReady {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.brandIntroMove {
+  opacity: 1;
+  transform: translate3d(var(--brand-target-x), var(--brand-target-y), 0) scale(var(--brand-target-scale));
+  transition: transform 1200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.brandIntroSettle {
+  opacity: 0;
+  transform: translate3d(var(--brand-target-x), var(--brand-target-y), 0) scale(var(--brand-target-scale));
+  transition: opacity 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.brandIntroSegmentHidden {
+  opacity: 0;
+}
+
+.brandIntroSegmentVisible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.brandIntroSegmentAtReveal {
+  animation: brandIntroSegmentAtReveal 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.brandIntroSegmentTiReveal {
+  animation: brandIntroSegmentTiReveal 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sectionReveal {
+  from {
+    opacity: 0.92;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes desktopPreviewPrimary {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes desktopPreviewSecondary {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 4px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes brandIntroSegmentAtReveal {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes brandIntroSegmentTiReveal {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motionRoot :global([data-hero-brand]) {
+    transition: none !important;
+  }
+
+  .sectionReveal,
+  .ctaPress,
+  .flowCard,
+  .desktopPreviewPrimary,
+  .desktopPreviewSecondary,
+  .brandIntroMark,
+  .brandIntroReady,
+  .brandIntroMove,
+  .brandIntroSettle,
+  .brandIntroSegmentHidden,
+  .brandIntroSegmentVisible,
+  .brandIntroSegmentAtReveal,
+  .brandIntroSegmentTiReveal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .ctaPress:active,
+  .flowCard {
+    transform: none !important;
+  }
+}

@@ -2,9 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ApiError,
   confirmMealUsage,
+  getStoreOnboardingStatus,
   getPendingMealUsages,
   login,
+  reauthenticateStoreSession,
+  registerFirstPartner,
   rejectMealUsage,
+  searchStorePlaces,
+  signUpStoreAccount,
   UnexpectedConfirmationResponseError,
   UnexpectedRejectionResponseError,
 } from "./store-api";
@@ -45,6 +50,161 @@ describe("store API", () => {
     }));
     const body = fetchMock.mock.calls[1][1].body as URLSearchParams;
     expect(body.toString()).toBe("loginId=store-hk&password=correct-password");
+  });
+
+  it("adds the remembered-login form field only when explicitly requested", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "csrf-value", headerName: "X-CSRF-TOKEN", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(204));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await login("store-hk", "correct-password", true);
+
+    const body = fetchMock.mock.calls[1][1].body as URLSearchParams;
+    expect(body.toString()).toBe("loginId=store-hk&password=correct-password&rememberLogin=true");
+  });
+
+  it("gets fresh CSRF and accepts only the 204 reauthentication response", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "reauth-csrf", headerName: "X-REAUTH-CSRF", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(204));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await reauthenticateStoreSession("correct-password");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/session-reauthentications", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-REAUTH-CSRF": "reauth-csrf",
+      },
+      body: JSON.stringify({ password: "correct-password" }),
+    });
+
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "reauth-csrf", headerName: "X-CSRF-TOKEN", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(200)));
+    await expect(reauthenticateStoreSession("correct-password")).rejects.toMatchObject({
+      status: 0,
+      errorCode: "INVALID_API_RESPONSE",
+    });
+  });
+
+  it("uses CSRF for signup and sends no client-controlled store scope", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "signup-csrf", headerName: "X-CSRF-TOKEN", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(201, { onboardingStatus: "PARTNER_REQUIRED" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(signUpStoreAccount({
+      inviteCode: "pilot-code",
+      loginId: "store-hk",
+      password: "correct-password",
+      manualStoreName: "TIEAT 강남점",
+    })).resolves.toEqual({ onboardingStatus: "PARTNER_REQUIRED", legacy: false });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/store-signups", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-TOKEN": "signup-csrf",
+      },
+      body: JSON.stringify({
+        inviteCode: "pilot-code",
+        loginId: "store-hk",
+        password: "correct-password",
+        manualStoreName: "TIEAT 강남점",
+      }),
+    });
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("storeId");
+  });
+
+  it("uses CSRF for a Kakao store-place projection and checks onboarding before partner recovery", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "place-csrf", headerName: "X-PLACE-CSRF", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(200, {
+        source: "KAKAO",
+        items: [{
+          placeId: "26338954",
+          storeDisplayName: "TIEAT 강남점",
+          address: "서울 강남구 테헤란로 123",
+          category: "음식점 > 한식",
+        }],
+      }))
+      .mockResolvedValueOnce(response(200, { onboardingStatus: "PARTNER_REQUIRED", legacy: false }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchStorePlaces({ inviteCode: "pilot-code", query: "TIEAT" })).resolves.toEqual([{
+      placeId: "26338954",
+      storeDisplayName: "TIEAT 강남점",
+      address: "서울 강남구 테헤란로 123",
+      category: "음식점 > 한식",
+    }]);
+    await expect(getStoreOnboardingStatus()).resolves.toEqual({ onboardingStatus: "PARTNER_REQUIRED", legacy: false });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/csrf", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/store-place-searches", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-PLACE-CSRF": "place-csrf",
+      },
+      body: JSON.stringify({ inviteCode: "pilot-code", query: "TIEAT" }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/v1/store-onboarding", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+  });
+
+  it("posts every explicit first-partner contract field with a fresh CSRF token", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "partner-csrf", headerName: "X-PARTNER-CSRF", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(201, {
+        onboardingStatus: "COMPLETE",
+        legacy: false,
+        created: true,
+        partnerDisplayName: "협력사 A",
+        partnerKind: "ORGANIZATION",
+        paymentType: "POSTPAID",
+        mealContractId: "33333333-3333-4333-8333-333333333333",
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(registerFirstPartner({
+      partnerName: "협력사 A",
+      partnerKind: "ORGANIZATION",
+      paymentType: "POSTPAID",
+      initialPrepaidBalanceMinor: 0,
+      qrSelectable: true,
+    })).resolves.toMatchObject({ onboardingStatus: "COMPLETE", created: true });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/store-onboarding/partners", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-PARTNER-CSRF": "partner-csrf",
+      },
+      body: JSON.stringify({
+        partnerName: "협력사 A",
+        partnerKind: "ORGANIZATION",
+        paymentType: "POSTPAID",
+        initialPrepaidBalanceMinor: 0,
+        qrSelectable: true,
+      }),
+    });
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("storeId");
   });
 
   it("always requests only the fixed server-scoped pending page", async () => {
@@ -145,6 +305,7 @@ describe("store API", () => {
           status: "PENDING",
         entrySource: "STORE_TABLET",
         partnerDisplayName: null,
+        customerName: null,
           amountMinor: 12_000.5,
           createdAt: "not-a-date",
         }],
@@ -171,6 +332,7 @@ describe("store API", () => {
         status: "PENDING",
         entrySource: "PARTNER_MOBILE",
         partnerDisplayName: "협력사 A",
+        customerName: "홍길동",
         amountMinor: 12_000,
         createdAt: "2026-08-05T01:00:00Z",
         additiveField: "ignored",
@@ -188,6 +350,7 @@ describe("store API", () => {
         status: "PENDING",
         entrySource: "PARTNER_MOBILE",
         partnerDisplayName: "협력사 A",
+        customerName: "홍길동",
         amountMinor: 12_000,
         createdAt: "2026-08-05T01:00:00Z",
       }],
@@ -225,6 +388,7 @@ function validPendingItem() {
     status: "PENDING",
     entrySource: "STORE_TABLET",
     partnerDisplayName: null,
+    customerName: null,
     amountMinor: 12_000,
     createdAt: "2026-08-05T01:00:00Z",
   };

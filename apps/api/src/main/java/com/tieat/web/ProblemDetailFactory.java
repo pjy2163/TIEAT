@@ -42,7 +42,12 @@ public class ProblemDetailFactory {
     ) throws IOException {
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
-        if (isPublicMealUsageQrRequest(request)) {
+        if (isPublicMealUsageQrRequest(request)
+            || isMonthlyMealUsageRequest(request)
+            || isPosSettlementRequest(request)
+            || isStoreOnboardingRequest(request)
+            || isStoreMealUsageQrRequest(request)
+            || isSessionReauthenticationRequest(request)) {
             response.setHeader(HttpHeaders.CACHE_CONTROL, CacheControl.noStore().getHeaderValue());
         }
         objectMapper.writeValue(response.getOutputStream(), create(request, status, errorCode, detail));
@@ -51,5 +56,30 @@ public class ProblemDetailFactory {
     boolean isPublicMealUsageQrRequest(HttpServletRequest request) {
         String publicQrPrefix = request.getContextPath() + "/api/v1/public/meal-usage-qr/";
         return request.getRequestURI().startsWith(publicQrPrefix);
+    }
+
+    boolean isPosSettlementRequest(HttpServletRequest request) {
+        String settlementPrefix = request.getContextPath() + "/api/v1/pos-settlements";
+        return request.getRequestURI().startsWith(settlementPrefix);
+    }
+
+    boolean isMonthlyMealUsageRequest(HttpServletRequest request) {
+        String monthlyLedgerPrefix = request.getContextPath() + "/api/v1/meal-usages/months/";
+        return request.getRequestURI().startsWith(monthlyLedgerPrefix);
+    }
+
+    boolean isStoreOnboardingRequest(HttpServletRequest request) {
+        String onboardingPrefix = request.getContextPath() + "/api/v1/store-";
+        return request.getRequestURI().startsWith(onboardingPrefix);
+    }
+
+    boolean isStoreMealUsageQrRequest(HttpServletRequest request) {
+        String qrPath = request.getContextPath() + "/api/v1/store-meal-usage-qr";
+        return request.getRequestURI().equals(qrPath);
+    }
+
+    boolean isSessionReauthenticationRequest(HttpServletRequest request) {
+        String reauthenticationPath = request.getContextPath() + "/api/v1/session-reauthentications";
+        return request.getRequestURI().equals(reauthenticationPath);
     }
 }

@@ -12,5 +12,16 @@ public interface MealContractRepository {
 
     List<QrSelectableMealContract> findQrSelectableByStoreId(StoreId storeId);
 
+    List<StorePartnerDirectoryEntry> findPartnerDirectoryByStoreId(StoreId storeId);
+
+    Optional<StorePartnerDirectoryEntry> findPartnerDirectoryEntryByIdAndStoreId(
+        MealContractId mealContractId,
+        StoreId storeId
+    );
+
+    boolean existsPendingUsage(MealContractId mealContractId, StoreId storeId);
+
+    boolean existsOutstandingReceivable(MealContractId mealContractId, StoreId storeId);
+
     MealContract save(MealContract mealContract);
 }

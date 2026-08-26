@@ -72,6 +72,7 @@ class MealUsagePendingListController {
         String status,
         String entrySource,
         String partnerDisplayName,
+        String customerName,
         long amountMinor,
         Instant createdAt
     ) {
@@ -81,6 +82,7 @@ class MealUsagePendingListController {
                 mealUsage.status().name(),
                 mealUsage.entrySource().name(),
                 mealUsage.partnerDisplayNameSnapshot().orElse(null),
+                mealUsage.customerNameSnapshot().orElse(null),
                 mealUsage.amount(),
                 mealUsage.createdAt()
             );

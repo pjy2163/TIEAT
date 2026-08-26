@@ -6,6 +6,7 @@ import com.tieat.ledger.domain.MealUsageRepository;
 import com.tieat.ledger.domain.PublicMealUsageIdempotency;
 import com.tieat.ledger.domain.PublicMealUsageIdempotencyRepository;
 import com.tieat.partnership.domain.QrSelectableMealContract;
+import com.tieat.partnership.domain.MealContract;
 import com.tieat.partnership.domain.MealContractRepository;
 import com.tieat.qr.application.PublicMealUsageQrNotFoundException;
 import com.tieat.qr.domain.MealUsageQrContext;
@@ -46,6 +47,7 @@ public class CreatePublicMealUsageUseCase {
     public MealUsage create(CreatePublicMealUsageCommand command) {
         Objects.requireNonNull(command, "Public create command must be supplied");
         Instant now = Instant.now(clock);
+        String requestKeyHash = command.requestKeyHash();
         MealUsageQrContext context = mealUsageQrContextRepository.findByTokenHashForUpdate(
             MealUsageQrToken.sha256Hash(command.rawQrToken())
         )
@@ -55,18 +57,27 @@ public class CreatePublicMealUsageUseCase {
         var priorRequest = idempotencyRepository.findByQrContextIdAndKey(context.id(), command.idempotencyKey());
         if (priorRequest.isPresent()) {
             PublicMealUsageIdempotency prior = priorRequest.orElseThrow();
-            if (!prior.mealContractId().equals(command.mealContractId()) || prior.amount() != command.amount()) {
+            if (!prior.matchesCreatePayload(command.mealContractId(), command.amount(), requestKeyHash)) {
                 throw new PublicMealUsageIdempotencyConflictException();
             }
-            return mealUsageRepository.findById(prior.mealUsageId())
+            MealUsage existing = mealUsageRepository.findById(prior.mealUsageId())
                 .orElseThrow(() -> new IllegalStateException("Idempotency record refers to a missing meal usage"));
+            if (existing.customerNameSnapshot().filter(command.customerName()::equals).isEmpty()) {
+                throw new PublicMealUsageIdempotencyConflictException();
+            }
+            return existing;
         }
 
         if (mealUsageRepository.countPublicQrCreatedSince(context.id(), now.minusSeconds(60)) >= MAX_SUCCESSES_PER_MINUTE) {
             throw new PublicMealUsageRateLimitExceededException();
         }
 
-        QrSelectableMealContract selectedContract = mealContractRepository.findQrSelectableByStoreId(context.storeId()).stream()
+        MealContract lockedContract = mealContractRepository.findByIdForUpdate(command.mealContractId())
+            .filter(contract -> contract.storeId().equals(context.storeId())
+                && contract.isQrSelectable()
+                && !contract.isArchived())
+            .orElseThrow(PublicQrMealContractNotFoundException::new);
+        QrSelectableMealContract selectedContract = mealContractRepository.findQrSelectableByStoreId(lockedContract.storeId()).stream()
             .filter(contract -> contract.mealContractId().equals(command.mealContractId()))
             .findFirst()
             .orElseThrow(PublicQrMealContractNotFoundException::new);
@@ -76,11 +87,12 @@ public class CreatePublicMealUsageUseCase {
             selectedContract.mealContractId(),
             context.id(),
             selectedContract.partnerDisplayName(),
+            command.customerName(),
             command.amount(),
             now
         ));
         idempotencyRepository.save(new PublicMealUsageIdempotency(
-            context.id(), command.idempotencyKey(), command.mealContractId(), command.amount(), created.id()
+            context.id(), command.idempotencyKey(), command.mealContractId(), command.amount(), created.id(), requestKeyHash, now
         ));
         return created;
     }

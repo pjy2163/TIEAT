@@ -21,10 +21,14 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.springframework.boot:spring-boot-starter-jackson")
     implementation("org.springframework.boot:spring-boot-starter-security")
+    implementation("org.springframework.boot:spring-boot-starter-session-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-api:3.0.3")
+    implementation("org.apache.poi:poi-ooxml:5.5.1")
+    implementation("com.azure:azure-storage-blob:12.35.0")
+    implementation("com.azure:azure-identity:1.18.4")
 
     runtimeOnly("org.postgresql:postgresql")
 

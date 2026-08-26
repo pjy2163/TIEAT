@@ -30,6 +30,7 @@ const pendingItem = {
   status: "PENDING" as const,
   entrySource: "STORE_TABLET" as const,
   partnerDisplayName: "협력사 A",
+  customerName: null,
   amountMinor: 12000,
   createdAt: "2026-08-05T01:00:00Z",
 };
@@ -39,7 +40,13 @@ const partnerMobilePendingItem = {
   mealUsageId: "00000000-0000-0000-0000-000000000002",
   entrySource: "PARTNER_MOBILE" as const,
   partnerDisplayName: "협력사 B",
+  customerName: "홍길동",
   amountMinor: 1234567,
+};
+
+const changedPendingItem = {
+  ...pendingItem,
+  amountMinor: 12_001,
 };
 
 function deferred<T>() {
@@ -75,12 +82,13 @@ describe("MealUsageList", () => {
 
     expect(await screen.findByText("매장 태블릿 입력")).toBeVisible();
     expect(screen.getByText("모바일 QR 입력")).toBeVisible();
-    expect(screen.getAllByText("확인 대기")).toHaveLength(2);
+    expect(screen.getAllByText("확인 대기", { selector: "span" })).toHaveLength(2);
     expect(screen.getByText("₩12,000")).toBeVisible();
     expect(screen.getByText("₩1,234,567")).toBeVisible();
     expect(screen.getAllByText(/2026\. 8\. 5\./)).toHaveLength(2);
-    expect(screen.getByText("협력사 · 협력사 A")).toBeVisible();
-    expect(screen.getByText("협력사 · 협력사 B")).toBeVisible();
+    expect(screen.getByText("협력사 A")).toBeVisible();
+    expect(screen.getByText("협력사 B")).toBeVisible();
+    expect(screen.queryByText("협력사 · 협력사 A")).not.toBeInTheDocument();
 
     const [tabletRow, partnerMobileRow] = screen.getAllByRole("listitem");
     const tabletButton = tabletRow.querySelector("button");
@@ -109,7 +117,35 @@ describe("MealUsageList", () => {
 
     render(<MealUsageList />);
 
-    expect(await screen.findByText("확인 대기 거래가 없습니다")).toBeVisible();
+    expect(await screen.findByText("확인 대기가 없습니다")).toBeVisible();
+    const pendingTitle = screen.getByRole("heading", { level: 1, name: "확인 대기" });
+    const ledgerLink = screen.getByRole("link", { name: "전체 장부" });
+    expect(pendingTitle).toBeVisible();
+    expect(ledgerLink).toHaveAttribute("href", "/store/meal-usages/months");
+    expect(pendingTitle.parentElement).toContainElement(ledgerLink);
+    expect(screen.queryByRole("link", { name: "월별 장부" })).not.toBeInTheDocument();
+    expect(screen.queryByText("오래된 거래부터 표시합니다.")).not.toBeInTheDocument();
+    expect(screen.queryByText("새 거래가 생기면 이 목록에서 확인할 수 있습니다.")).not.toBeInTheDocument();
+  });
+
+  it("places confirm and reject icon buttons beside the confirmer initials input", async () => {
+    const user = userEvent.setup();
+    getPendingMealUsagesMock.mockResolvedValue({ items: [pendingItem], page: 0, size: 50, hasNext: false });
+
+    render(<MealUsageList />);
+
+    await user.click(await screen.findByRole("button", { name: /매장 태블릿 입력/ }));
+    const initialsInput = screen.getByLabelText("확인자 이니셜");
+    const inputRow = initialsInput.parentElement;
+    const confirmButton = screen.getByRole("button", { name: "이니셜로 확정" });
+    const rejectButton = screen.getByRole("button", { name: "거절" });
+
+    expect(inputRow).toContainElement(confirmButton);
+    expect(inputRow).toContainElement(rejectButton);
+    expect(confirmButton.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(rejectButton.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByText("확정 기록에 입력한 그대로 남습니다.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/체크는 확정/)).not.toBeInTheDocument();
   });
 
   it("routes an unauthenticated direct entry to login recovery", async () => {
@@ -183,7 +219,7 @@ describe("MealUsageList", () => {
     await user.type(screen.getByLabelText("확인자 이니셜"), "HK");
     await user.click(screen.getByRole("button", { name: "이니셜로 확정" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("₩12,000 거래 확정 완료");
+    expect(await screen.findByRole("status")).toHaveTextContent("요청을 확정했습니다.");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -296,19 +332,20 @@ describe("MealUsageList", () => {
     expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(3);
   });
 
-  it("disables selection and confirmation while a slow automatic list GET is in flight", async () => {
+  it("keeps initials editable and defers a new request until the employee refreshes", async () => {
     vi.useFakeTimers();
-    const slowAutomaticGet = deferred<{ items: Array<typeof pendingItem>; page: number; size: number; hasNext: boolean }>();
+    const slowAutomaticGet = deferred<{ items: Array<typeof pendingItem | typeof partnerMobilePendingItem>; page: number; size: number; hasNext: boolean }>();
     getPendingMealUsagesMock
       .mockResolvedValueOnce({ items: [pendingItem], page: 0, size: 50, hasNext: false })
       .mockReturnValueOnce(slowAutomaticGet.promise)
-      .mockResolvedValueOnce({ items: [pendingItem], page: 0, size: 50, hasNext: false });
+      .mockResolvedValueOnce({ items: [pendingItem, partnerMobilePendingItem], page: 0, size: 50, hasNext: false });
 
     render(<MealUsageList />);
     await flushUpdates();
     const row = screen.getByRole("button", { name: /매장 태블릿 입력/ });
     fireEvent.click(row);
     const initialsInput = screen.getByLabelText("확인자 이니셜");
+    initialsInput.focus();
     fireEvent.change(initialsInput, { target: { value: "HK" } });
     const confirm = screen.getByRole("button", { name: "이니셜로 확정" });
     expect(confirm).toBeEnabled();
@@ -316,16 +353,44 @@ describe("MealUsageList", () => {
     await vi.advanceTimersByTimeAsync(2_000);
     await flushUpdates();
     expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole("button", { name: /매장 태블릿 입력/ })).toBeDisabled();
-    expect(screen.getByLabelText("확인자 이니셜")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "이니셜로 확정" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "이니셜로 확정" }));
-    expect(confirmMealUsageMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /매장 태블릿 입력/ })).toBeEnabled();
+    expect(initialsInput).toBeEnabled();
+    expect(initialsInput).toHaveFocus();
+    expect(confirm).toBeDisabled();
 
-    slowAutomaticGet.resolve({ items: [pendingItem], page: 0, size: 50, hasNext: false });
+    slowAutomaticGet.resolve({ items: [pendingItem, partnerMobilePendingItem], page: 0, size: 50, hasNext: false });
     await flushUpdates();
     expect(screen.getByLabelText("확인자 이니셜")).toHaveValue("HK");
-    expect(screen.getByRole("button", { name: "이니셜로 확정" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "새로운 요청이 있습니다." })).toBeVisible();
+    expect(screen.getByRole("button", { name: /^새로고침$/ })).toBeVisible();
+    expect(screen.queryByText("협력사 B")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "새로운 요청이 있습니다." }));
+    await flushUpdates();
+    expect(screen.getByText("협력사 B")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "새로운 요청이 있습니다." })).not.toBeInTheDocument();
+  });
+
+  it("defers a changed pending row until the employee refreshes", async () => {
+    vi.useFakeTimers();
+    getPendingMealUsagesMock
+      .mockResolvedValueOnce({ items: [pendingItem], page: 0, size: 50, hasNext: false })
+      .mockResolvedValueOnce({ items: [changedPendingItem], page: 0, size: 50, hasNext: false })
+      .mockResolvedValueOnce({ items: [changedPendingItem], page: 0, size: 50, hasNext: false });
+
+    render(<MealUsageList />);
+    await flushUpdates();
+    fireEvent.click(screen.getByRole("button", { name: /매장 태블릿 입력/ }));
+    fireEvent.change(screen.getByLabelText("확인자 이니셜"), { target: { value: "HK" } });
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    await flushUpdates();
+    expect(screen.getByRole("button", { name: "목록이 변경되었습니다 · 새로고침" })).toBeVisible();
+    expect(screen.getAllByText("₩12,000")).not.toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "목록이 변경되었습니다 · 새로고침" }));
+    await flushUpdates();
+    expect(screen.getAllByText("₩12,001")).not.toHaveLength(0);
   });
 
   it("uses one immediate reconciliation GET after exact 201 and waits for it before polling again", async () => {
@@ -434,12 +499,12 @@ describe("MealUsageList", () => {
 
     render(<MealUsageList />);
     await flushUpdates();
-    expect(screen.getByText("확인 대기 거래가 없습니다")).toBeVisible();
+    expect(screen.getByText("확인 대기가 없습니다")).toBeVisible();
 
     await vi.advanceTimersByTimeAsync(2_000);
     await flushUpdates();
     expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
-    expect(screen.getByText("확인 대기 거래가 없습니다")).toBeVisible();
+    expect(screen.getByText("확인 대기가 없습니다")).toBeVisible();
     expect(screen.queryByText("목록을 불러오지 못했습니다")).not.toBeInTheDocument();
 
     await vi.advanceTimersByTimeAsync(1_999);
@@ -473,7 +538,7 @@ describe("MealUsageList", () => {
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/store/login?next=/store/meal-usages"));
     expect(screen.queryByText("₩12,000")).not.toBeInTheDocument();
-    expect(screen.queryByRole("list", { name: "확인 대기 거래 목록" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "확인 대기 목록" })).not.toBeInTheDocument();
   });
 
   it("opens a selected transaction summary and sends original initials", async () => {
@@ -497,9 +562,31 @@ describe("MealUsageList", () => {
     expect(confirmMealUsageMock).toHaveBeenCalledWith(pendingItem.mealUsageId, " Hk ");
     await waitFor(() => expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole("heading", { name: "이 거래를 확정할까요?" })).not.toBeInTheDocument();
-    expect(screen.getByText("확인 대기 거래가 없습니다")).toBeVisible();
-    expect(screen.getByRole("status")).toHaveTextContent("₩12,000 거래 확정 완료");
-    expect(screen.getByRole("status")).toHaveTextContent("매장 태블릿 입력");
+    expect(screen.getByText("확인 대기가 없습니다")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("요청을 확정했습니다.");
+  });
+
+  it("removes a confirmed request notice after five seconds", async () => {
+    vi.useFakeTimers();
+    confirmMealUsageMock.mockResolvedValue();
+    getPendingMealUsagesMock
+      .mockResolvedValueOnce({ items: [pendingItem], page: 0, size: 50, hasNext: false })
+      .mockResolvedValueOnce({ items: [], page: 0, size: 50, hasNext: false })
+      .mockResolvedValue({ items: [], page: 0, size: 50, hasNext: false });
+
+    render(<MealUsageList />);
+    await flushUpdates();
+    fireEvent.click(screen.getByRole("button", { name: /매장 태블릿 입력/ }));
+    fireEvent.change(screen.getByLabelText("확인자 이니셜"), { target: { value: "HK" } });
+    fireEvent.click(screen.getByRole("button", { name: "이니셜로 확정" }));
+    await flushUpdates();
+
+    expect(screen.getByRole("status")).toHaveTextContent("요청을 확정했습니다.");
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(screen.getByRole("status")).toHaveTextContent("요청을 확정했습니다.");
+    await vi.advanceTimersByTimeAsync(1);
+    await flushUpdates();
+    expect(screen.queryByText("요청을 확정했습니다.")).not.toBeInTheDocument();
   });
 
   it("blocks a duplicate submit synchronously and reconciles after a successful confirmation", async () => {
@@ -564,7 +651,7 @@ describe("MealUsageList", () => {
 
     await waitFor(() => expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(3));
     expect(confirmMealUsageMock).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("status")).toHaveTextContent("₩12,000 거래 확정 완료");
+    expect(screen.getByRole("status")).toHaveTextContent("요청을 확정했습니다.");
   });
 
   it("clears a success callout when the employee selects the next row", async () => {
@@ -578,7 +665,7 @@ describe("MealUsageList", () => {
     await user.click(await screen.findByRole("button", { name: /매장 태블릿 입력/ }));
     await user.type(screen.getByLabelText("확인자 이니셜"), "HK");
     await user.click(screen.getByRole("button", { name: "이니셜로 확정" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("₩12,000 거래 확정 완료");
+    expect(await screen.findByRole("status")).toHaveTextContent("요청을 확정했습니다.");
 
     await user.click(screen.getByRole("button", { name: /모바일 QR 입력/ }));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
@@ -597,7 +684,7 @@ describe("MealUsageList", () => {
     await user.click(await screen.findByRole("button", { name: /매장 태블릿 입력/ }));
     await user.type(screen.getByLabelText("확인자 이니셜"), "HK");
     await user.click(screen.getByRole("button", { name: "이니셜로 확정" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("₩12,000 거래 확정 완료");
+    expect(await screen.findByRole("status")).toHaveTextContent("요청을 확정했습니다.");
 
     await user.click(screen.getByRole("button", { name: "새로고침" }));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
@@ -622,7 +709,7 @@ describe("MealUsageList", () => {
     await waitFor(() => expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2));
     expect(confirmMealUsageMock).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "이니셜로 확정" })).toBeEnabled();
-    expect(screen.queryByText(/거래 확정 완료/)).not.toBeInTheDocument();
+    expect(screen.queryByText("요청을 확정했습니다.")).not.toBeInTheDocument();
   });
 
   it("keeps an unexpected successful confirmation response GET-only when the row remains pending", async () => {
@@ -664,7 +751,7 @@ describe("MealUsageList", () => {
     await user.click(screen.getByRole("button", { name: "이니셜로 확정" }));
 
     await waitFor(() => expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2));
-    expect(screen.queryByText(/거래 확정 완료/)).not.toBeInTheDocument();
+    expect(screen.queryByText("요청을 확정했습니다.")).not.toBeInTheDocument();
   });
 
   it.each([
@@ -757,12 +844,34 @@ describe("MealUsageList", () => {
 
     render(<MealUsageList />);
     await user.click(await screen.findByRole("button", { name: /모바일 QR 입력/ }));
-    expect(screen.getByText("협력사 B")).toBeVisible();
+    expect(screen.getByRole("listitem")).toHaveTextContent("협력사 B");
     await user.click(screen.getByRole("button", { name: "거절" }));
 
     await waitFor(() => expect(rejectMealUsageMock).toHaveBeenCalledWith(partnerMobilePendingItem.mealUsageId));
-    expect(screen.getByText("확인 대기 거래가 없습니다")).toBeVisible();
-    expect(screen.getByRole("status")).toHaveTextContent("거절을 반영해 목록을 다시 불러왔습니다");
-    expect(screen.queryByText(/거래 확정 완료/)).not.toBeInTheDocument();
+    expect(screen.getByText("확인 대기가 없습니다")).toBeVisible();
+    expect(screen.getByRole("status")).toHaveTextContent("요청을 거절했습니다.");
+    expect(screen.queryByText("요청을 확정했습니다.")).not.toBeInTheDocument();
+  });
+
+  it("removes a rejected request notice after five seconds", async () => {
+    vi.useFakeTimers();
+    rejectMealUsageMock.mockResolvedValue();
+    getPendingMealUsagesMock
+      .mockResolvedValueOnce({ items: [partnerMobilePendingItem], page: 0, size: 50, hasNext: false })
+      .mockResolvedValueOnce({ items: [], page: 0, size: 50, hasNext: false })
+      .mockResolvedValue({ items: [], page: 0, size: 50, hasNext: false });
+
+    render(<MealUsageList />);
+    await flushUpdates();
+    fireEvent.click(screen.getByRole("button", { name: /모바일 QR 입력/ }));
+    fireEvent.click(screen.getByRole("button", { name: "거절" }));
+    await flushUpdates();
+
+    expect(screen.getByRole("status")).toHaveTextContent("요청을 거절했습니다.");
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(screen.getByRole("status")).toHaveTextContent("요청을 거절했습니다.");
+    await vi.advanceTimersByTimeAsync(1);
+    await flushUpdates();
+    expect(screen.queryByText("요청을 거절했습니다.")).not.toBeInTheDocument();
   });
 });

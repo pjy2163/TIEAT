@@ -30,13 +30,28 @@ public class MealUsageQrContextPersistenceAdapter implements MealUsageQrContextR
     }
 
     private MealUsageQrContext toDomain(MealUsageQrContextJpaEntity entity) {
+        MealUsageQrContext.ProtectedToken protectedToken = protectedToken(
+            entity.tokenCiphertext(), entity.tokenNonce(), entity.tokenKeyVersion()
+        );
         return new MealUsageQrContext(
             new MealUsageQrContextId(entity.id()),
             new StoreId(entity.storeId()),
             entity.storeDisplayName(),
             entity.tokenHash(),
+            entity.createdAt(),
             entity.expiresAt(),
-            entity.revokedAt()
+            entity.revokedAt(),
+            protectedToken
         );
+    }
+
+    private MealUsageQrContext.ProtectedToken protectedToken(byte[] ciphertext, byte[] nonce, Integer keyVersion) {
+        if (ciphertext == null && nonce == null && keyVersion == null) {
+            return null;
+        }
+        if (ciphertext == null || nonce == null || keyVersion == null) {
+            throw new IllegalStateException("QR token protection columns are incomplete");
+        }
+        return new MealUsageQrContext.ProtectedToken(ciphertext, nonce, keyVersion);
     }
 }

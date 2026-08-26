@@ -28,6 +28,7 @@ class MealUsageQrTokenTest {
         assertThat(token).matches("[A-Za-z0-9_-]{43}");
         assertThat(tokenHash).matches("[0-9a-f]{64}").isNotEqualTo(token);
         assertThat(context.tokenHash()).isEqualTo(tokenHash);
+        assertThat(context.issuedAt()).isEqualTo(issuedAt);
         assertThat(context.expiresAt()).isEqualTo(issuedAt.plus(MealUsageQrContext.DEFAULT_LIFETIME));
         assertThat(context.isActiveAt(issuedAt)).isTrue();
         assertThat(context.isActiveAt(context.expiresAt())).isFalse();

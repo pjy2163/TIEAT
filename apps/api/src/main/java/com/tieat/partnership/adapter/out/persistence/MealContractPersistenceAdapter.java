@@ -5,6 +5,7 @@ import com.tieat.partnership.domain.MealContractId;
 import com.tieat.partnership.domain.MealContractRepository;
 import com.tieat.partnership.domain.PartnerOrganizationId;
 import com.tieat.partnership.domain.QrSelectableMealContract;
+import com.tieat.partnership.domain.StorePartnerDirectoryEntry;
 import com.tieat.store.domain.StoreId;
 import java.util.List;
 import java.util.Objects;
@@ -36,11 +37,30 @@ public class MealContractPersistenceAdapter implements MealContractRepository {
     public List<QrSelectableMealContract> findQrSelectableByStoreId(StoreId storeId) {
         Objects.requireNonNull(storeId, "Store id must be supplied");
         return repository.findQrSelectableByStoreId(storeId.value()).stream()
-            .map(entity -> new QrSelectableMealContract(
-                new MealContractId(entity.id()),
-                entity.partnerDisplayName()
+            .map(projection -> new QrSelectableMealContract(
+                new MealContractId(projection.getMealContractId()),
+                projection.getPartnerDisplayName()
             ))
             .toList();
+    }
+
+    @Override
+    public List<StorePartnerDirectoryEntry> findPartnerDirectoryByStoreId(StoreId storeId) {
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        return repository.findPartnerDirectoryByStoreId(storeId.value()).stream()
+            .map(this::toDirectoryEntry)
+            .toList();
+    }
+
+    @Override
+    public Optional<StorePartnerDirectoryEntry> findPartnerDirectoryEntryByIdAndStoreId(
+        MealContractId mealContractId,
+        StoreId storeId
+    ) {
+        Objects.requireNonNull(mealContractId, "Meal contract id must be supplied");
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        return repository.findPartnerDirectoryEntryByIdAndStoreId(mealContractId.value(), storeId.value())
+            .map(this::toDirectoryEntry);
     }
 
     @Override
@@ -56,7 +76,9 @@ public class MealContractPersistenceAdapter implements MealContractRepository {
             mealContract.paymentType(),
             mealContract.prepaidBalance(),
             mealContract.partnerOrganizationId().map(PartnerOrganizationId::value).orElse(null),
-            mealContract.isQrSelectable()
+            mealContract.isQrSelectable(),
+            mealContract.archivedAt().orElse(null),
+            mealContract.archivedByLoginId().orElse(null)
         );
     }
 
@@ -67,7 +89,35 @@ public class MealContractPersistenceAdapter implements MealContractRepository {
             entity.paymentType(),
             entity.prepaidBalance(),
             entity.partnerOrganizationId() == null ? null : new PartnerOrganizationId(entity.partnerOrganizationId()),
-            entity.qrSelectable()
+            entity.qrSelectable(),
+            entity.archivedAt(),
+            entity.archivedByLoginId()
+        );
+    }
+
+    @Override
+    public boolean existsPendingUsage(MealContractId mealContractId, StoreId storeId) {
+        Objects.requireNonNull(mealContractId, "Meal contract id must be supplied");
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        return repository.existsPendingUsageByStoreIdAndMealContractId(storeId.value(), mealContractId.value());
+    }
+
+    @Override
+    public boolean existsOutstandingReceivable(MealContractId mealContractId, StoreId storeId) {
+        Objects.requireNonNull(mealContractId, "Meal contract id must be supplied");
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        return repository.existsOutstandingReceivableByStoreIdAndMealContractId(storeId.value(), mealContractId.value());
+    }
+
+    private StorePartnerDirectoryEntry toDirectoryEntry(StorePartnerDirectoryProjection projection) {
+        return new StorePartnerDirectoryEntry(
+            new MealContractId(projection.getMealContractId()),
+            projection.getPartnerDisplayName(),
+            projection.getPartnerKind(),
+            projection.getPaymentType(),
+            projection.getQrSelectable(),
+            projection.getRepresentativePhone(),
+            projection.getRepresentativeEmail()
         );
     }
 }

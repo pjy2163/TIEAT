@@ -1,6 +1,7 @@
 package com.tieat.ledger.adapter.out.persistence;
 
 import com.tieat.ledger.domain.EntrySource;
+import com.tieat.ledger.domain.CancellationReason;
 import com.tieat.ledger.domain.MealUsageStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -38,6 +39,9 @@ class MealUsageJpaEntity {
     @Column(name = "partner_display_name", columnDefinition = "TEXT")
     private String partnerDisplayName;
 
+    @Column(name = "customer_name", columnDefinition = "TEXT")
+    private String customerName;
+
     @Column(name = "public_qr_context_id")
     private UUID publicQrContextId;
 
@@ -70,6 +74,13 @@ class MealUsageJpaEntity {
     @Column(name = "rejected_at")
     private Instant rejectedAt;
 
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancellation_reason", length = 64)
+    private CancellationReason cancellationReason;
+
     protected MealUsageJpaEntity() {
     }
 
@@ -81,6 +92,7 @@ class MealUsageJpaEntity {
         long amount,
         Instant createdAt,
         String partnerDisplayName,
+        String customerName,
         UUID publicQrContextId,
         long version,
         MealUsageStatus status,
@@ -90,7 +102,9 @@ class MealUsageJpaEntity {
         Long receivableCreated,
         Long remainingPrepaid,
         String rejectedStaffLoginId,
-        Instant rejectedAt
+        Instant rejectedAt,
+        Instant cancelledAt,
+        CancellationReason cancellationReason
     ) {
         this.id = id;
         this.storeId = storeId;
@@ -99,6 +113,7 @@ class MealUsageJpaEntity {
         this.amount = amount;
         this.createdAt = createdAt;
         this.partnerDisplayName = partnerDisplayName;
+        this.customerName = customerName;
         this.publicQrContextId = publicQrContextId;
         this.version = version;
         this.status = status;
@@ -109,6 +124,8 @@ class MealUsageJpaEntity {
         this.remainingPrepaid = remainingPrepaid;
         this.rejectedStaffLoginId = rejectedStaffLoginId;
         this.rejectedAt = rejectedAt;
+        this.cancelledAt = cancelledAt;
+        this.cancellationReason = cancellationReason;
     }
 
     UUID id() {
@@ -137,6 +154,10 @@ class MealUsageJpaEntity {
 
     String partnerDisplayName() {
         return partnerDisplayName;
+    }
+
+    String customerName() {
+        return customerName;
     }
 
     UUID publicQrContextId() {
@@ -177,5 +198,13 @@ class MealUsageJpaEntity {
 
     Instant rejectedAt() {
         return rejectedAt;
+    }
+
+    Instant cancelledAt() {
+        return cancelledAt;
+    }
+
+    CancellationReason cancellationReason() {
+        return cancellationReason;
     }
 }

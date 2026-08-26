@@ -1,6 +1,12 @@
 spring:
   application:
     name: tieat-api
+  config:
+    import: optional:file:.env[.properties],optional:file:../../.env[.properties]
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/tieat}
     username: ${DB_USERNAME:tieat}
@@ -11,12 +17,37 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+  session:
+    jdbc:
+      initialize-schema: never
+      save-mode: on-set-attribute
+    timeout: 30m
   jackson:
     deserialization:
       fail-on-unknown-properties: true
 
 springdoc:
   paths-to-match: /api/**
+
+tieat:
+  session:
+    cookie:
+      secure: ${TIEAT_SESSION_COOKIE_SECURE:}
+  qr:
+    token-encryption-keys: ${TIEAT_QR_TOKEN_ENCRYPTION_KEYS:}
+    token-encryption-key: ${TIEAT_QR_TOKEN_ENCRYPTION_KEY:}
+    token-encryption-key-version: ${TIEAT_QR_TOKEN_ENCRYPTION_KEY_VERSION:1}
+  onboarding:
+    invite-code: ${TIEAT_ONBOARDING_INVITE_CODE:}
+  receipts:
+    provider: ${TIEAT_RECEIPTS_PROVIDER:local}
+    local-root: ${TIEAT_RECEIPTS_LOCAL_ROOT:${java.io.tmpdir}/tieat-receipts-private}
+    azure:
+      endpoint: ${TIEAT_RECEIPTS_AZURE_ENDPOINT:}
+      managed-identity-client-id: ${TIEAT_RECEIPTS_AZURE_MANAGED_IDENTITY_CLIENT_ID:}
+      container: ${TIEAT_RECEIPTS_AZURE_CONTAINER:tieat-receipts-private}
+      scan-timeout: ${TIEAT_RECEIPTS_AZURE_SCAN_TIMEOUT:PT30S}
+      scan-poll-interval: ${TIEAT_RECEIPTS_AZURE_SCAN_POLL_INTERVAL:PT1S}
 
 management:
   endpoints:

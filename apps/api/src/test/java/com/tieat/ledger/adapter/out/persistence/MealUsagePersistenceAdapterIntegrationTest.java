@@ -3,6 +3,8 @@ package com.tieat.ledger.adapter.out.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.tieat.ledger.domain.Cancellation;
+import com.tieat.ledger.domain.CancellationReason;
 import com.tieat.ledger.domain.EntrySource;
 import com.tieat.ledger.domain.Confirmation;
 import com.tieat.ledger.domain.MealUsage;
@@ -11,7 +13,9 @@ import com.tieat.ledger.domain.MealUsageRepository;
 import com.tieat.ledger.domain.MealUsageStatus;
 import com.tieat.ledger.domain.PrepaidAllocation;
 import com.tieat.partnership.domain.MealContractId;
+import com.tieat.qr.domain.MealUsageQrContextId;
 import com.tieat.store.domain.StoreId;
+import java.sql.Timestamp;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.UUID;
@@ -19,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +50,9 @@ class MealUsagePersistenceAdapterIntegrationTest {
 
     @Autowired
     private EntityManager entityManager;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -118,6 +126,50 @@ class MealUsagePersistenceAdapterIntegrationTest {
         assertThat(reloaded.createdAt()).isEqualTo(pending.createdAt());
         assertThat(reloaded.confirmation()).contains(confirmation);
         assertThat(reloaded.prepaidAllocation()).contains(allocation);
+        assertThat(reloaded.version()).isEqualTo(saved.version());
+    }
+
+    @Test
+    @Transactional
+    void savesAndReloadsCancelledPublicQrMealUsageWithItsCancellationAudit() {
+        MealUsageId id = new MealUsageId(UUID.fromString("97103f54-ce55-423d-94a3-4304af8fcc1b"));
+        StoreId storeId = new StoreId(UUID.fromString("9d5e37dd-dbe2-40dc-97fb-8e77c89aa4cb"));
+        MealContractId mealContractId = new MealContractId(
+            UUID.fromString("019c0f9c-6d58-7d37-b0e3-1af21f7124b9")
+        );
+        MealUsageQrContextId qrContextId = new MealUsageQrContextId(
+            UUID.fromString("8d39e2bb-0752-4a97-9f56-9297cbaa385a")
+        );
+        Instant createdAt = Instant.parse("2026-08-05T09:14:30Z");
+        Instant cancelledAt = Instant.parse("2026-08-05T09:15:30Z");
+        jdbcTemplate.update(
+            "insert into meal_usage_qr_contexts (id, store_id, store_display_name, token_hash, created_at, expires_at) values (?, ?, ?, ?, ?, ?)",
+            qrContextId.value(), storeId.value(), "테스트 매장", "a".repeat(64), Timestamp.from(createdAt), Timestamp.from(createdAt.plusSeconds(86_400))
+        );
+        MealUsage pending = MealUsage.pendingFromPublicQr(
+            id, storeId, mealContractId, qrContextId, "협력사 A", 12_000, createdAt
+        );
+
+        mealUsageRepository.save(pending);
+        entityManager.flush();
+        entityManager.clear();
+
+        MealUsage cancelled = mealUsageRepository.findById(id).orElseThrow();
+        cancelled.cancelFromPublicQr(cancelledAt);
+        MealUsage saved = mealUsageRepository.save(cancelled);
+        entityManager.clear();
+
+        MealUsage reloaded = mealUsageRepository.findById(id).orElseThrow();
+
+        assertThat(reloaded.status()).isEqualTo(MealUsageStatus.CANCELLED);
+        assertThat(reloaded.cancellation()).contains(
+            new Cancellation(CancellationReason.PUBLIC_SELF_CORRECTION, cancelledAt)
+        );
+        assertThat(reloaded.publicQrContextId()).contains(qrContextId);
+        assertThat(reloaded.partnerDisplayNameSnapshot()).contains("협력사 A");
+        assertThat(reloaded.confirmation()).isEmpty();
+        assertThat(reloaded.prepaidAllocation()).isEmpty();
+        assertThat(reloaded.rejection()).isEmpty();
         assertThat(reloaded.version()).isEqualTo(saved.version());
     }
 

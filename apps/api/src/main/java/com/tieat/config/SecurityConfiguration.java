@@ -1,10 +1,13 @@
 package com.tieat.config;
 
 import com.tieat.web.ProblemDetailFactory;
+import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -16,39 +19,71 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.authentication.logout.CookieClearingLogoutHandler;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.csrf.InvalidCsrfTokenException;
 import org.springframework.security.web.csrf.MissingCsrfTokenException;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 @Configuration
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class SecurityConfiguration {
 
     @Bean
     SecurityFilterChain securityFilterChain(
         HttpSecurity http,
         AuthenticationProvider storeAccountAuthenticationProvider,
+        SessionAuthenticationStrategy sessionAuthenticationStrategy,
+        SecurityContextRepository securityContextRepository,
+        Clock clock,
         ProblemDetailFactory problemDetailFactory
     ) throws Exception {
         return http
             .authenticationProvider(storeAccountAuthenticationProvider)
+            .securityContext(securityContext -> securityContext.securityContextRepository(securityContextRepository))
+            .addFilterBefore(new RememberedSessionExpiryFilter(clock), SecurityContextHolderFilter.class)
             .csrf(csrf -> csrf
                 .csrfTokenRepository(new HttpSessionCsrfTokenRepository())
                 .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(
                     HttpMethod.POST, "/api/v1/public/meal-usage-qr/{token}/meal-usages"
+                ), PathPatternRequestMatcher.pathPattern(
+                    HttpMethod.POST, "/api/v1/public/meal-usage-qr/{token}/meal-usages/{mealUsageId}/cancellations"
                 ))
             )
-            .sessionManagement(session -> session.sessionAuthenticationStrategy(
-                new ChangeSessionIdAuthenticationStrategy()
-            ))
+            .sessionManagement(session -> session.sessionAuthenticationStrategy(sessionAuthenticationStrategy))
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/actuator/health", "/actuator/info", "/api/v1/csrf", "/api/v1/sessions", "/v3/api-docs/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/store-place-searches").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/store-signups").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/session-reauthentications").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.GET, "/api/v1/public/meal-usage-qr/*").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/public/meal-usage-qr/*/meal-usages").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/public/meal-usage-qr/*/meal-usages/*").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/public/meal-usage-qr/*/meal-usages/*/cancellations").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/meal-usages").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.GET, "/api/v1/meal-usages").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/v1/meal-usages/months/*").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/v1/meal-usages/confirmed").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/v1/store-meal-usage-qr").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/v1/store-partners").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.POST, "/api/v1/store-partners").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.PATCH, "/api/v1/store-partners/*/payment-terms").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.POST, "/api/v1/store-partners/*/archive").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/store-partners/*").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/v1/store-archive-pin").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.PUT, "/api/v1/store-archive-pin").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/v1/store-profile").hasRole("STORE_STAFF")
                 .requestMatchers("/api/v1/meal-usages/*/confirmations").hasRole("STORE_STAFF")
                 .requestMatchers("/api/v1/meal-usages/*/rejections").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/v1/pos-settlements").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/v1/pos-settlements/receivables").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.POST, "/api/v1/pos-settlements").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.GET, "/api/v1/pos-settlements/*/receipt").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.POST, "/api/v1/pos-settlements/*/receipt").hasRole("STORE_STAFF")
                 .anyRequest().authenticated()
             )
             .formLogin(login -> login
@@ -63,6 +98,15 @@ public class SecurityConfiguration {
                     "AUTHENTICATION_FAILED",
                     "Authentication failed"
                 ))
+                .permitAll()
+            )
+            .logout(logout -> logout
+                .logoutUrl("/api/v1/sessions/logout")
+                .addLogoutHandler(new CookieClearingLogoutHandler("TIEAT_SESSION"))
+                .logoutSuccessHandler((request, response, authentication) -> {
+                    response.setStatus(HttpStatus.NO_CONTENT.value());
+                    response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+                })
                 .permitAll()
             )
             .exceptionHandling(exceptions -> exceptions
@@ -87,6 +131,16 @@ public class SecurityConfiguration {
         return provider;
     }
 
+    @Bean
+    SessionAuthenticationStrategy sessionAuthenticationStrategy(Clock clock) {
+        return new RememberedSessionAuthenticationStrategy(new ChangeSessionIdAuthenticationStrategy(), clock);
+    }
+
+    @Bean
+    SecurityContextRepository securityContextRepository() {
+        return new HttpSessionSecurityContextRepository();
+    }
+
     private AuthenticationEntryPoint authenticationEntryPoint(ProblemDetailFactory problemDetailFactory) {
         return (request, response, exception) -> problemDetailFactory.write(
             request,
@@ -101,6 +155,7 @@ public class SecurityConfiguration {
         return (request, response, exception) -> {
             if (hasCause(exception, InvalidCsrfTokenException.class) || hasCause(exception, MissingCsrfTokenException.class)) {
                 if (!"/api/v1/sessions".equals(request.getRequestURI())
+                    && !"/api/v1/store-signups".equals(request.getRequestURI())
                     && SecurityContextHolder.getContext().getAuthentication() == null) {
                     problemDetailFactory.write(
                         request,

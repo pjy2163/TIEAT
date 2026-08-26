@@ -8,7 +8,23 @@ import com.tieat.ledger.application.PublicMealUsageRateLimitExceededException;
 import com.tieat.ledger.application.PublicQrMealContractNotFoundException;
 import com.tieat.ledger.application.MealUsageNotFoundException;
 import com.tieat.ledger.application.InvalidPendingMealUsageQueryException;
+import com.tieat.ledger.application.InvalidMonthlyMealUsageQueryException;
+import com.tieat.ledger.application.InvalidConfirmedMealUsageQueryException;
+import com.tieat.onboarding.application.OnboardingException;
+import com.tieat.identity.application.SessionReauthenticationFailedException;
+import com.tieat.identity.application.SessionReauthenticationInvalidException;
+import com.tieat.identity.application.PasswordReauthenticationRequiredException;
+import com.tieat.settlement.application.InvalidPosSettlementHistoryQueryException;
+import com.tieat.ledger.domain.PublicMealUsageIdempotency.InvalidPublicRequestKeyException;
 import com.tieat.qr.application.PublicMealUsageQrNotFoundException;
+import com.tieat.settlement.application.PosSettlementConflictException;
+import com.tieat.partnership.application.StorePartnerConflictException;
+import com.tieat.partnership.application.StorePartnerArchiveConflictException;
+import com.tieat.partnership.application.StorePartnerArchivePinRequiredException;
+import com.tieat.partnership.application.StorePartnerNotFoundException;
+import com.tieat.partnership.application.StorePartnerPaymentTermConflictException;
+import com.tieat.partnership.application.StorePartnerValidationException;
+import com.tieat.partnership.application.StoreArchivePinException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.CacheControl;
@@ -34,6 +50,45 @@ public class ApiExceptionHandler {
         this.problemDetailFactory = problemDetailFactory;
     }
 
+    @ExceptionHandler(OnboardingException.class)
+    ResponseEntity<ProblemDetail> handleOnboarding(
+        OnboardingException exception,
+        HttpServletRequest request
+    ) {
+        return switch (exception.reason()) {
+            case INVITE_INVALID -> problem(
+                request,
+                HttpStatus.FORBIDDEN,
+                "ONBOARDING_INVITE_INVALID",
+                "Invitation code is invalid"
+            );
+            case VALIDATION_FAILED -> problem(
+                request,
+                HttpStatus.BAD_REQUEST,
+                "ONBOARDING_VALIDATION_FAILED",
+                "Onboarding input is invalid"
+            );
+            case LOGIN_ID_ALREADY_IN_USE -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "ONBOARDING_LOGIN_ID_IN_USE",
+                "An account may already exist. Sign in instead"
+            );
+            case PLACE_SEARCH_INVALID -> problem(
+                request,
+                HttpStatus.BAD_REQUEST,
+                "STORE_PLACE_SEARCH_INVALID",
+                "Store place search input is invalid"
+            );
+            case PLACE_SEARCH_UNAVAILABLE -> problem(
+                request,
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "STORE_PLACE_SEARCH_UNAVAILABLE",
+                "Store place search is temporarily unavailable"
+            );
+        };
+    }
+
     @ExceptionHandler(MealUsageNotFoundException.class)
     ResponseEntity<ProblemDetail> handleMealUsageNotFound(
         MealUsageNotFoundException exception,
@@ -48,6 +103,152 @@ public class ApiExceptionHandler {
         HttpServletRequest request
     ) {
         return problem(request, HttpStatus.NOT_FOUND, "MEAL_CONTRACT_NOT_FOUND", "Meal contract was not found");
+    }
+
+    @ExceptionHandler(StorePartnerNotFoundException.class)
+    ResponseEntity<ProblemDetail> handleStorePartnerNotFound(
+        StorePartnerNotFoundException exception,
+        HttpServletRequest request
+    ) {
+        return problem(request, HttpStatus.NOT_FOUND, "STORE_PARTNER_NOT_FOUND", "Store partner was not found");
+    }
+
+    @ExceptionHandler(StorePartnerConflictException.class)
+    ResponseEntity<ProblemDetail> handleStorePartnerConflict(
+        StorePartnerConflictException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.CONFLICT,
+            "IDEMPOTENCY_KEY_REUSED",
+            "Idempotency key was already used with a different request payload"
+        );
+    }
+
+    @ExceptionHandler(StorePartnerArchiveConflictException.class)
+    ResponseEntity<ProblemDetail> handleStorePartnerArchiveConflict(
+        StorePartnerArchiveConflictException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.CONFLICT,
+            "STORE_PARTNER_ARCHIVE_BLOCKED",
+            "Partner has pending usage, unsettled receivables, or remaining prepaid balance"
+        );
+    }
+
+    @ExceptionHandler(StorePartnerPaymentTermConflictException.class)
+    ResponseEntity<ProblemDetail> handleStorePartnerPaymentTermConflict(
+        StorePartnerPaymentTermConflictException exception,
+        HttpServletRequest request
+    ) {
+        return switch (exception.reason()) {
+            case EXPECTED_PAYMENT_TYPE_STALE -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "STORE_PARTNER_PAYMENT_TERM_STALE",
+                "The partner payment type changed before this request was applied"
+            );
+            case PENDING_USAGE -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "STORE_PARTNER_PAYMENT_TERM_BLOCKED",
+                "Payment type cannot change while pending usage remains"
+            );
+            case OUTSTANDING_RECEIVABLE -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "STORE_PARTNER_PAYMENT_TERM_BLOCKED",
+                "Payment type cannot change while unsettled receivables remain"
+            );
+            case PREPAID_BALANCE_REMAINING -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "STORE_PARTNER_PAYMENT_TERM_BLOCKED",
+                "Payment type cannot change while prepaid balance remains"
+            );
+        };
+    }
+
+    @ExceptionHandler(StoreArchivePinException.class)
+    ResponseEntity<ProblemDetail> handleStoreArchivePin(
+        StoreArchivePinException exception,
+        HttpServletRequest request
+    ) {
+        return switch (exception.reason()) {
+            case NOT_CONFIGURED -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "STORE_ARCHIVE_PIN_NOT_CONFIGURED",
+                "Configure the store archive PIN before archiving a partner"
+            );
+            case INVALID -> problem(
+                request,
+                HttpStatus.FORBIDDEN,
+                "STORE_ARCHIVE_PIN_INVALID",
+                "The archive PIN is incorrect"
+            );
+            case LOCKED -> problem(
+                request,
+                HttpStatus.TOO_MANY_REQUESTS,
+                "STORE_ARCHIVE_PIN_LOCKED",
+                "Archive PIN verification is temporarily locked"
+            );
+            case CURRENT_REQUIRED -> problem(
+                request,
+                HttpStatus.BAD_REQUEST,
+                "STORE_ARCHIVE_PIN_CURRENT_REQUIRED",
+                "The current archive PIN is required to change it"
+            );
+            case ACCOUNT_PASSWORD_INVALID -> problem(
+                request,
+                HttpStatus.FORBIDDEN,
+                "STORE_ARCHIVE_ACCOUNT_PASSWORD_INVALID",
+                "The account password could not be verified"
+            );
+            case ALREADY_CONFIGURED -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "STORE_ARCHIVE_PIN_ALREADY_CONFIGURED",
+                "The store archive PIN is already configured"
+            );
+        };
+    }
+
+    @ExceptionHandler(PasswordReauthenticationRequiredException.class)
+    ResponseEntity<ProblemDetail> handlePasswordReauthenticationRequired(
+        PasswordReauthenticationRequiredException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.FORBIDDEN,
+            "PASSWORD_REAUTHENTICATION_REQUIRED",
+            "Password reauthentication is required"
+        );
+    }
+
+    @ExceptionHandler(StorePartnerArchivePinRequiredException.class)
+    ResponseEntity<ProblemDetail> handleStorePartnerArchivePinRequired(
+        StorePartnerArchivePinRequiredException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.FORBIDDEN,
+            "STORE_PARTNER_ARCHIVE_PIN_REQUIRED",
+            "Use the PIN-verified archive operation"
+        );
+    }
+
+    @ExceptionHandler(StorePartnerValidationException.class)
+    ResponseEntity<ProblemDetail> handleStorePartnerValidation(
+        StorePartnerValidationException exception,
+        HttpServletRequest request
+    ) {
+        return problem(request, HttpStatus.BAD_REQUEST, "STORE_PARTNER_VALIDATION_FAILED", "Store partner input is invalid");
     }
 
     @ExceptionHandler({PublicMealUsageQrNotFoundException.class, PublicQrMealContractNotFoundException.class})
@@ -87,6 +288,45 @@ public class ApiExceptionHandler {
         return problem(request, HttpStatus.TOO_MANY_REQUESTS, "PUBLIC_QR_RATE_LIMITED", "Public QR request rate limit was exceeded");
     }
 
+    @ExceptionHandler(PosSettlementConflictException.class)
+    ResponseEntity<ProblemDetail> handlePosSettlementConflict(
+        PosSettlementConflictException exception,
+        HttpServletRequest request
+    ) {
+        return switch (exception.reason()) {
+            case IDEMPOTENCY_KEY_REUSED -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "IDEMPOTENCY_KEY_REUSED",
+                "Idempotency key was already used with a different request payload"
+            );
+            case USAGE_NOT_OUTSTANDING -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "POS_SETTLEMENT_USAGE_NOT_OUTSTANDING",
+                "Selected meal usage is not an outstanding receivable"
+            );
+            case USAGE_CONTRACT_MISMATCH -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "POS_SETTLEMENT_USAGE_CONTRACT_MISMATCH",
+                "Selected meal usages must belong to the requested meal contract"
+            );
+            case USAGE_ALREADY_ALLOCATED -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "POS_SETTLEMENT_USAGE_ALREADY_ALLOCATED",
+                "Selected meal usage was already allocated to a POS settlement"
+            );
+            case TOTAL_MISMATCH -> problem(
+                request,
+                HttpStatus.CONFLICT,
+                "POS_SETTLEMENT_TOTAL_MISMATCH",
+                "Submitted POS total must equal the selected receivables"
+            );
+        };
+    }
+
     @ExceptionHandler(OptimisticLockingFailureException.class)
     ResponseEntity<ProblemDetail> handleOptimisticConflict(
         OptimisticLockingFailureException exception,
@@ -100,6 +340,32 @@ public class ApiExceptionHandler {
         );
     }
 
+    @ExceptionHandler(SessionReauthenticationFailedException.class)
+    ResponseEntity<ProblemDetail> handleSessionReauthenticationFailed(
+        SessionReauthenticationFailedException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.UNAUTHORIZED,
+            "SESSION_REAUTHENTICATION_FAILED",
+            "Reauthentication failed"
+        );
+    }
+
+    @ExceptionHandler(SessionReauthenticationInvalidException.class)
+    ResponseEntity<ProblemDetail> handleSessionReauthenticationInvalid(
+        SessionReauthenticationInvalidException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.BAD_REQUEST,
+            "SESSION_REAUTHENTICATION_INVALID",
+            "Reauthentication input is invalid"
+        );
+    }
+
     @ExceptionHandler({
         BindException.class,
         HttpMessageNotReadableException.class,
@@ -107,9 +373,22 @@ public class ApiExceptionHandler {
         MethodArgumentTypeMismatchException.class,
         MissingServletRequestParameterException.class,
         MissingRequestHeaderException.class,
-        InvalidPendingMealUsageQueryException.class
+        InvalidPendingMealUsageQueryException.class,
+        InvalidMonthlyMealUsageQueryException.class,
+        InvalidConfirmedMealUsageQueryException.class,
+        InvalidPosSettlementHistoryQueryException.class,
+        InvalidPublicRequestKeyException.class
     })
     ResponseEntity<ProblemDetail> handleValidation(Exception exception, HttpServletRequest request) {
+        if (exception instanceof HttpMessageNotReadableException
+            && problemDetailFactory.isSessionReauthenticationRequest(request)) {
+            return problem(
+                request,
+                HttpStatus.BAD_REQUEST,
+                "SESSION_REAUTHENTICATION_INVALID",
+                "Reauthentication input is invalid"
+            );
+        }
         return problem(request, HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Request validation failed");
     }
 
@@ -130,7 +409,11 @@ public class ApiExceptionHandler {
         String detail
     ) {
         ResponseEntity.BodyBuilder response = ResponseEntity.status(status);
-        if (problemDetailFactory.isPublicMealUsageQrRequest(request)) {
+        if (problemDetailFactory.isPublicMealUsageQrRequest(request)
+            || problemDetailFactory.isMonthlyMealUsageRequest(request)
+            || problemDetailFactory.isPosSettlementRequest(request)
+            || problemDetailFactory.isStoreOnboardingRequest(request)
+            || problemDetailFactory.isSessionReauthenticationRequest(request)) {
             response.cacheControl(CacheControl.noStore());
         }
         return response.body(problemDetailFactory.create(request, status, errorCode, detail));

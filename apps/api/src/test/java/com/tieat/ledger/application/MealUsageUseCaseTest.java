@@ -10,6 +10,8 @@ import com.tieat.ledger.domain.MealUsageId;
 import com.tieat.ledger.domain.MealUsageRepository;
 import com.tieat.ledger.domain.MealUsageSlice;
 import com.tieat.ledger.domain.MealUsageStatus;
+import com.tieat.ledger.domain.MonthlyMealUsageRow;
+import com.tieat.ledger.domain.MonthlyMealUsageSlice;
 import com.tieat.ledger.domain.PublicMealUsageIdempotency;
 import com.tieat.ledger.domain.PublicMealUsageIdempotencyRepository;
 import com.tieat.partnership.domain.MealContract;
@@ -18,6 +20,7 @@ import com.tieat.partnership.domain.MealContractPaymentType;
 import com.tieat.partnership.domain.MealContractRepository;
 import com.tieat.partnership.domain.QrSelectableMealContract;
 import com.tieat.partnership.domain.PartnerOrganizationId;
+import com.tieat.partnership.domain.StorePartnerDirectoryEntry;
 import com.tieat.qr.domain.MealUsageQrContext;
 import com.tieat.qr.domain.MealUsageQrContextId;
 import com.tieat.qr.domain.MealUsageQrContextRepository;
@@ -60,8 +63,8 @@ class MealUsageUseCaseTest {
         assertThat(created.createdAt()).isEqualTo(SERVER_TIME);
         assertThat(repository.findById(created.id())).containsSame(created);
         assertThat(repository.saveCount).isEqualTo(1);
-        assertThat(mealContractRepository.nonlockingId).isEqualTo(mealContractId());
-        assertThat(mealContractRepository.lockedId).isNull();
+        assertThat(mealContractRepository.nonlockingId).isNull();
+        assertThat(mealContractRepository.lockedId).isEqualTo(mealContractId());
         assertThat(mealContractRepository.findById(mealContractId()).orElseThrow().prepaidBalance()).isEqualTo(12_000);
     }
 
@@ -93,7 +96,7 @@ class MealUsageUseCaseTest {
         )))
             .isInstanceOf(MealContractNotFoundException.class);
         assertThat(repository.saveCount).isZero();
-        assertThat(mealContractRepository.lockedId).isNull();
+        assertThat(mealContractRepository.lockedId).isEqualTo(mealContractId());
     }
 
     @Test
@@ -121,6 +124,7 @@ class MealUsageUseCaseTest {
             assertThat(allocation.receivableCreated()).isEqualTo(7_000);
         });
         assertThat(repository.saveCount).isEqualTo(2);
+        assertThat(repository.lockedId).isEqualTo(pending.id());
         assertThat(mealContractRepository.lockedId).isEqualTo(mealContractId());
         assertThat(mealContractRepository.findByIdForUpdate(mealContractId()).orElseThrow().prepaidBalance())
             .isZero();
@@ -234,6 +238,7 @@ class MealUsageUseCaseTest {
             storeId(),
             "강남점",
             MealUsageQrToken.sha256Hash(token),
+            SERVER_TIME,
             SERVER_TIME.plusSeconds(60),
             null
         ));
@@ -245,8 +250,9 @@ class MealUsageUseCaseTest {
             Clock.fixed(SERVER_TIME, ZoneOffset.UTC)
         );
         UUID idempotencyKey = UUID.fromString("3279f750-a0d5-4978-81d5-a5da1a8d7b5a");
+        String publicRequestKey = MealUsageQrToken.generate();
         CreatePublicMealUsageCommand command = new CreatePublicMealUsageCommand(
-            token, idempotencyKey, mealContractId(), 12_000
+            token, idempotencyKey, mealContractId(), 12_000, publicRequestKey, "홍길동"
         );
 
         MealUsage created = useCase.create(command);
@@ -259,12 +265,22 @@ class MealUsageUseCaseTest {
         assertThat(created.createdAt()).isEqualTo(SERVER_TIME);
         assertThat(created.publicQrContextId()).contains(qrContextId);
         assertThat(created.partnerDisplayNameSnapshot()).isPresent();
+        assertThat(created.customerNameSnapshot()).contains("홍길동");
         assertThat(usageRepository.saveCount).isEqualTo(1);
         assertThat(idempotencyRepository.saveCount).isEqualTo(1);
+        PublicMealUsageIdempotency storedRequest = idempotencyRepository.findByQrContextIdAndKey(qrContextId, idempotencyKey).orElseThrow();
+        assertThat(storedRequest.requestKeyHash()).isEqualTo(PublicMealUsageIdempotency.hashRequestKey(publicRequestKey));
+        assertThat(storedRequest.createdAt()).isEqualTo(SERVER_TIME);
         assertThat(contractRepository.findById(mealContractId()).orElseThrow().prepaidBalance()).isEqualTo(12_000);
 
         assertThatThrownBy(() -> useCase.create(new CreatePublicMealUsageCommand(
-            token, idempotencyKey, mealContractId(), 12_001
+            token, idempotencyKey, mealContractId(), 12_001, publicRequestKey, "홍길동"
+        ))).isInstanceOf(PublicMealUsageIdempotencyConflictException.class);
+        assertThatThrownBy(() -> useCase.create(new CreatePublicMealUsageCommand(
+            token, idempotencyKey, mealContractId(), 12_000, MealUsageQrToken.generate(), "홍길동"
+        ))).isInstanceOf(PublicMealUsageIdempotencyConflictException.class);
+        assertThatThrownBy(() -> useCase.create(new CreatePublicMealUsageCommand(
+            token, idempotencyKey, mealContractId(), 12_000, publicRequestKey, "김길동"
         ))).isInstanceOf(PublicMealUsageIdempotencyConflictException.class);
     }
 
@@ -286,6 +302,7 @@ class MealUsageUseCaseTest {
         assertThat(rejected.rejection()).contains(new com.tieat.ledger.domain.Rejection("store-hk", SERVER_TIME));
         assertThat(rejected.confirmation()).isEmpty();
         assertThat(rejected.prepaidAllocation()).isEmpty();
+        assertThat(usageRepository.lockedId).isEqualTo(pending.id());
         assertThat(contractRepository.findById(mealContractId()).orElseThrow().prepaidBalance()).isEqualTo(12_000);
         assertThatThrownBy(() -> useCase.reject(new RejectMealUsageCommand(pending.id(), storeId(), "store-hk")))
             .isInstanceOf(MealUsageNotPendingException.class);
@@ -319,6 +336,7 @@ class MealUsageUseCaseTest {
     private static final class InMemoryMealUsageRepository implements MealUsageRepository {
 
         private final Map<MealUsageId, MealUsage> mealUsages = new HashMap<>();
+        private MealUsageId lockedId;
         private int saveCount;
 
         @Override
@@ -330,6 +348,12 @@ class MealUsageUseCaseTest {
 
         @Override
         public Optional<MealUsage> findById(MealUsageId id) {
+            return Optional.ofNullable(mealUsages.get(id));
+        }
+
+        @Override
+        public Optional<MealUsage> findByIdForUpdate(MealUsageId id) {
+            lockedId = id;
             return Optional.ofNullable(mealUsages.get(id));
         }
 
@@ -346,6 +370,92 @@ class MealUsageUseCaseTest {
         }
 
         @Override
+        public MonthlyMealUsageSlice findConfirmedByStoreIdAndCreatedAtBetween(
+            StoreId storeId,
+            Instant startInclusive,
+            Instant endExclusive,
+            int page,
+            int size
+        ) {
+            List<MealUsage> monthly = mealUsages.values().stream()
+                .filter(usage -> usage.storeId().equals(storeId))
+                .filter(usage -> usage.status() == MealUsageStatus.CONFIRMED)
+                .filter(usage -> !usage.createdAt().isBefore(startInclusive))
+                .filter(usage -> usage.createdAt().isBefore(endExclusive))
+                .sorted(Comparator.<MealUsage, Instant>comparing(MealUsage::createdAt).reversed()
+                    .thenComparing(usage -> usage.id().value(), Comparator.reverseOrder()))
+                .toList();
+            int fromIndex = Math.min(page * size, monthly.size());
+            int toIndex = Math.min(fromIndex + size, monthly.size());
+            return new MonthlyMealUsageSlice(
+                monthly.subList(fromIndex, toIndex).stream()
+                    .map(usage -> new MonthlyMealUsageRow(usage, false))
+                    .toList(),
+                toIndex < monthly.size()
+            );
+        }
+
+        @Override
+        public MonthlyMealUsageSlice findConfirmedByStoreIdAndMealContractIdAndCreatedAtBetween(
+            StoreId storeId,
+            MealContractId mealContractId,
+            Instant startInclusive,
+            Instant endExclusive,
+            int page,
+            int size
+        ) {
+            List<MealUsage> filtered = mealUsages.values().stream()
+                .filter(usage -> usage.storeId().equals(storeId))
+                .filter(usage -> usage.mealContractId().equals(mealContractId))
+                .filter(usage -> usage.status() == MealUsageStatus.CONFIRMED)
+                .filter(usage -> !usage.createdAt().isBefore(startInclusive))
+                .filter(usage -> usage.createdAt().isBefore(endExclusive))
+                .sorted(Comparator.<MealUsage, Instant>comparing(MealUsage::createdAt).reversed()
+                    .thenComparing(usage -> usage.id().value(), Comparator.reverseOrder()))
+                .toList();
+            int fromIndex = Math.min(page * size, filtered.size());
+            int toIndex = Math.min(fromIndex + size, filtered.size());
+            return new MonthlyMealUsageSlice(
+                filtered.subList(fromIndex, toIndex).stream()
+                    .map(usage -> new MonthlyMealUsageRow(usage, false))
+                    .toList(),
+                toIndex < filtered.size()
+            );
+        }
+
+        @Override
+        public long sumConfirmedByStoreIdAndCreatedAtBetween(
+            StoreId storeId,
+            Instant startInclusive,
+            Instant endExclusive
+        ) {
+            return mealUsages.values().stream()
+                .filter(usage -> usage.storeId().equals(storeId))
+                .filter(usage -> usage.status() == MealUsageStatus.CONFIRMED)
+                .filter(usage -> !usage.createdAt().isBefore(startInclusive))
+                .filter(usage -> usage.createdAt().isBefore(endExclusive))
+                .mapToLong(MealUsage::amount)
+                .sum();
+        }
+
+        @Override
+        public long sumConfirmedByStoreIdAndMealContractIdAndCreatedAtBetween(
+            StoreId storeId,
+            MealContractId mealContractId,
+            Instant startInclusive,
+            Instant endExclusive
+        ) {
+            return mealUsages.values().stream()
+                .filter(usage -> usage.storeId().equals(storeId))
+                .filter(usage -> usage.mealContractId().equals(mealContractId))
+                .filter(usage -> usage.status() == MealUsageStatus.CONFIRMED)
+                .filter(usage -> !usage.createdAt().isBefore(startInclusive))
+                .filter(usage -> usage.createdAt().isBefore(endExclusive))
+                .mapToLong(MealUsage::amount)
+                .sum();
+        }
+
+        @Override
         public long countPublicQrCreatedSince(
             com.tieat.qr.domain.MealUsageQrContextId qrContextId,
             java.time.Instant since
@@ -354,6 +464,11 @@ class MealUsageUseCaseTest {
                 .filter(usage -> usage.publicQrContextId().filter(qrContextId::equals).isPresent())
                 .filter(usage -> !usage.createdAt().isBefore(since))
                 .count();
+        }
+
+        @Override
+        public int anonymizeCustomerNamesCreatedBefore(Instant cutoffExclusive, Instant executedAt) {
+            return 0;
         }
     }
 
@@ -385,6 +500,29 @@ class MealUsageUseCaseTest {
                     new QrSelectableMealContract(contract.id(), partnerId.value().toString())
                 ))
                 .toList();
+        }
+
+        @Override
+        public List<StorePartnerDirectoryEntry> findPartnerDirectoryByStoreId(StoreId storeId) {
+            return List.of();
+        }
+
+        @Override
+        public Optional<StorePartnerDirectoryEntry> findPartnerDirectoryEntryByIdAndStoreId(
+            MealContractId mealContractId,
+            StoreId storeId
+        ) {
+            return Optional.empty();
+        }
+
+        @Override
+        public boolean existsPendingUsage(MealContractId mealContractId, StoreId storeId) {
+            return false;
+        }
+
+        @Override
+        public boolean existsOutstandingReceivable(MealContractId mealContractId, StoreId storeId) {
+            return false;
         }
 
         @Override
