@@ -39,6 +39,24 @@ interface MealUsageJpaRepository extends JpaRepository<MealUsageJpaEntity, UUID>
         Pageable pageable
     );
 
+    @Query("""
+        select mealUsage
+        from MealUsageJpaEntity mealUsage
+        where mealUsage.storeId = :storeId
+          and mealUsage.mealContractId = :mealContractId
+          and mealUsage.status = :status
+          and mealUsage.createdAt >= :startInclusive
+          and mealUsage.createdAt < :endExclusive
+        """)
+    Slice<MealUsageJpaEntity> findByStoreIdAndMealContractIdAndStatusAndCreatedAtBetween(
+        @Param("storeId") UUID storeId,
+        @Param("mealContractId") UUID mealContractId,
+        @Param("status") MealUsageStatus status,
+        @Param("startInclusive") Instant startInclusive,
+        @Param("endExclusive") Instant endExclusive,
+        Pageable pageable
+    );
+
     @Query(value = """
         select allocation.meal_usage_id
         from pos_settlement_allocations allocation
@@ -61,6 +79,23 @@ interface MealUsageJpaRepository extends JpaRepository<MealUsageJpaEntity, UUID>
         """)
     long sumByStoreIdAndStatusAndCreatedAtBetween(
         @Param("storeId") UUID storeId,
+        @Param("status") MealUsageStatus status,
+        @Param("startInclusive") Instant startInclusive,
+        @Param("endExclusive") Instant endExclusive
+    );
+
+    @Query("""
+        select coalesce(sum(mealUsage.amount), 0)
+        from MealUsageJpaEntity mealUsage
+        where mealUsage.storeId = :storeId
+          and mealUsage.mealContractId = :mealContractId
+          and mealUsage.status = :status
+          and mealUsage.createdAt >= :startInclusive
+          and mealUsage.createdAt < :endExclusive
+        """)
+    long sumByStoreIdAndMealContractIdAndStatusAndCreatedAtBetween(
+        @Param("storeId") UUID storeId,
+        @Param("mealContractId") UUID mealContractId,
         @Param("status") MealUsageStatus status,
         @Param("startInclusive") Instant startInclusive,
         @Param("endExclusive") Instant endExclusive

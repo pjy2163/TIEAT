@@ -20,6 +20,7 @@ import com.tieat.partnership.domain.MealContractPaymentType;
 import com.tieat.partnership.domain.MealContractRepository;
 import com.tieat.partnership.domain.QrSelectableMealContract;
 import com.tieat.partnership.domain.PartnerOrganizationId;
+import com.tieat.partnership.domain.StorePartnerDirectoryEntry;
 import com.tieat.qr.domain.MealUsageQrContext;
 import com.tieat.qr.domain.MealUsageQrContextId;
 import com.tieat.qr.domain.MealUsageQrContextRepository;
@@ -395,6 +396,34 @@ class MealUsageUseCaseTest {
         }
 
         @Override
+        public MonthlyMealUsageSlice findConfirmedByStoreIdAndMealContractIdAndCreatedAtBetween(
+            StoreId storeId,
+            MealContractId mealContractId,
+            Instant startInclusive,
+            Instant endExclusive,
+            int page,
+            int size
+        ) {
+            List<MealUsage> filtered = mealUsages.values().stream()
+                .filter(usage -> usage.storeId().equals(storeId))
+                .filter(usage -> usage.mealContractId().equals(mealContractId))
+                .filter(usage -> usage.status() == MealUsageStatus.CONFIRMED)
+                .filter(usage -> !usage.createdAt().isBefore(startInclusive))
+                .filter(usage -> usage.createdAt().isBefore(endExclusive))
+                .sorted(Comparator.<MealUsage, Instant>comparing(MealUsage::createdAt).reversed()
+                    .thenComparing(usage -> usage.id().value(), Comparator.reverseOrder()))
+                .toList();
+            int fromIndex = Math.min(page * size, filtered.size());
+            int toIndex = Math.min(fromIndex + size, filtered.size());
+            return new MonthlyMealUsageSlice(
+                filtered.subList(fromIndex, toIndex).stream()
+                    .map(usage -> new MonthlyMealUsageRow(usage, false))
+                    .toList(),
+                toIndex < filtered.size()
+            );
+        }
+
+        @Override
         public long sumConfirmedByStoreIdAndCreatedAtBetween(
             StoreId storeId,
             Instant startInclusive,
@@ -402,6 +431,23 @@ class MealUsageUseCaseTest {
         ) {
             return mealUsages.values().stream()
                 .filter(usage -> usage.storeId().equals(storeId))
+                .filter(usage -> usage.status() == MealUsageStatus.CONFIRMED)
+                .filter(usage -> !usage.createdAt().isBefore(startInclusive))
+                .filter(usage -> usage.createdAt().isBefore(endExclusive))
+                .mapToLong(MealUsage::amount)
+                .sum();
+        }
+
+        @Override
+        public long sumConfirmedByStoreIdAndMealContractIdAndCreatedAtBetween(
+            StoreId storeId,
+            MealContractId mealContractId,
+            Instant startInclusive,
+            Instant endExclusive
+        ) {
+            return mealUsages.values().stream()
+                .filter(usage -> usage.storeId().equals(storeId))
+                .filter(usage -> usage.mealContractId().equals(mealContractId))
                 .filter(usage -> usage.status() == MealUsageStatus.CONFIRMED)
                 .filter(usage -> !usage.createdAt().isBefore(startInclusive))
                 .filter(usage -> usage.createdAt().isBefore(endExclusive))
@@ -454,6 +500,29 @@ class MealUsageUseCaseTest {
                     new QrSelectableMealContract(contract.id(), partnerId.value().toString())
                 ))
                 .toList();
+        }
+
+        @Override
+        public List<StorePartnerDirectoryEntry> findPartnerDirectoryByStoreId(StoreId storeId) {
+            return List.of();
+        }
+
+        @Override
+        public Optional<StorePartnerDirectoryEntry> findPartnerDirectoryEntryByIdAndStoreId(
+            MealContractId mealContractId,
+            StoreId storeId
+        ) {
+            return Optional.empty();
+        }
+
+        @Override
+        public boolean existsPendingUsage(MealContractId mealContractId, StoreId storeId) {
+            return false;
+        }
+
+        @Override
+        public boolean existsOutstandingReceivable(MealContractId mealContractId, StoreId storeId) {
+            return false;
         }
 
         @Override

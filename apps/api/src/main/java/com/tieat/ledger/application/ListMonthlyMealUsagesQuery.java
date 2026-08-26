@@ -1,6 +1,7 @@
 package com.tieat.ledger.application;
 
 import com.tieat.store.domain.StoreId;
+import com.tieat.partnership.domain.MealContractId;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -8,14 +9,25 @@ import java.time.format.ResolverStyle;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 
-public record ListMonthlyMealUsagesQuery(StoreId storeId, String fromMonth, String toMonth, int page, int size) {
+public record ListMonthlyMealUsagesQuery(
+    StoreId storeId,
+    String fromMonth,
+    String toMonth,
+    int page,
+    int size,
+    MealContractId mealContractId
+) {
 
     private static final DateTimeFormatter MONTH_FORMATTER = DateTimeFormatter
         .ofPattern("uuuu-MM", Locale.ROOT)
         .withResolverStyle(ResolverStyle.STRICT);
 
     public ListMonthlyMealUsagesQuery(StoreId storeId, String month, int page, int size) {
-        this(storeId, month, month, page, size);
+        this(storeId, month, month, page, size, null);
+    }
+
+    public ListMonthlyMealUsagesQuery(StoreId storeId, String fromMonth, String toMonth, int page, int size) {
+        this(storeId, fromMonth, toMonth, page, size, null);
     }
 
     public ListMonthlyMealUsagesQuery {

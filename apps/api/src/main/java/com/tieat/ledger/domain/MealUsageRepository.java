@@ -2,6 +2,7 @@ package com.tieat.ledger.domain;
 
 import java.util.Optional;
 import com.tieat.store.domain.StoreId;
+import com.tieat.partnership.domain.MealContractId;
 import com.tieat.qr.domain.MealUsageQrContextId;
 import java.time.Instant;
 
@@ -23,8 +24,24 @@ public interface MealUsageRepository {
         int size
     );
 
+    MonthlyMealUsageSlice findConfirmedByStoreIdAndMealContractIdAndCreatedAtBetween(
+        StoreId storeId,
+        MealContractId mealContractId,
+        Instant startInclusive,
+        Instant endExclusive,
+        int page,
+        int size
+    );
+
     long sumConfirmedByStoreIdAndCreatedAtBetween(
         StoreId storeId,
+        Instant startInclusive,
+        Instant endExclusive
+    );
+
+    long sumConfirmedByStoreIdAndMealContractIdAndCreatedAtBetween(
+        StoreId storeId,
+        MealContractId mealContractId,
         Instant startInclusive,
         Instant endExclusive
     );

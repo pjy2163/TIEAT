@@ -9,6 +9,7 @@ import com.tieat.ledger.application.PublicQrMealContractNotFoundException;
 import com.tieat.ledger.application.MealUsageNotFoundException;
 import com.tieat.ledger.application.InvalidPendingMealUsageQueryException;
 import com.tieat.ledger.application.InvalidMonthlyMealUsageQueryException;
+import com.tieat.ledger.application.InvalidConfirmedMealUsageQueryException;
 import com.tieat.onboarding.application.OnboardingException;
 import com.tieat.settlement.application.InvalidPosSettlementHistoryQueryException;
 import com.tieat.ledger.domain.PublicMealUsageIdempotency.InvalidPublicRequestKeyException;
@@ -333,6 +334,7 @@ public class ApiExceptionHandler {
         MissingRequestHeaderException.class,
         InvalidPendingMealUsageQueryException.class,
         InvalidMonthlyMealUsageQueryException.class,
+        InvalidConfirmedMealUsageQueryException.class,
         InvalidPosSettlementHistoryQueryException.class,
         InvalidPublicRequestKeyException.class
     })

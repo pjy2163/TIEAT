@@ -77,26 +77,34 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
         Objects.requireNonNull(storeId, "Store id must be supplied");
         Objects.requireNonNull(startInclusive, "Monthly ledger start time must be supplied");
         Objects.requireNonNull(endExclusive, "Monthly ledger end time must be supplied");
-        var pageable = PageRequest.of(
-            page,
-            size,
-            Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"))
-        );
         var result = repository.findByStoreIdAndStatusAndCreatedAtBetween(
-            storeId.value(), MealUsageStatus.CONFIRMED, startInclusive, endExclusive, pageable
+            storeId.value(), MealUsageStatus.CONFIRMED, startInclusive, endExclusive, monthlyPageRequest(page, size)
         );
-        var content = result.getContent();
-        Set<java.util.UUID> allocatedUsageIds = content.isEmpty()
-            ? Set.of()
-            : Set.copyOf(repository.findSettlementAllocationUsageIds(
-                storeId.value(), content.stream().map(MealUsageJpaEntity::id).toList()
-            ));
-        return new MonthlyMealUsageSlice(
-            content.stream()
-                .map(entity -> new MonthlyMealUsageRow(toDomain(entity), allocatedUsageIds.contains(entity.id())))
-                .toList(),
-            result.hasNext()
+        return toMonthlySlice(storeId, result);
+    }
+
+    @Override
+    public MonthlyMealUsageSlice findConfirmedByStoreIdAndMealContractIdAndCreatedAtBetween(
+        StoreId storeId,
+        MealContractId mealContractId,
+        Instant startInclusive,
+        Instant endExclusive,
+        int page,
+        int size
+    ) {
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        Objects.requireNonNull(mealContractId, "Meal contract id must be supplied");
+        Objects.requireNonNull(startInclusive, "Monthly ledger start time must be supplied");
+        Objects.requireNonNull(endExclusive, "Monthly ledger end time must be supplied");
+        var result = repository.findByStoreIdAndMealContractIdAndStatusAndCreatedAtBetween(
+            storeId.value(),
+            mealContractId.value(),
+            MealUsageStatus.CONFIRMED,
+            startInclusive,
+            endExclusive,
+            monthlyPageRequest(page, size)
         );
+        return toMonthlySlice(storeId, result);
     }
 
     @Override
@@ -110,6 +118,22 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
         Objects.requireNonNull(endExclusive, "Monthly ledger end time must be supplied");
         return repository.sumByStoreIdAndStatusAndCreatedAtBetween(
             storeId.value(), MealUsageStatus.CONFIRMED, startInclusive, endExclusive
+        );
+    }
+
+    @Override
+    public long sumConfirmedByStoreIdAndMealContractIdAndCreatedAtBetween(
+        StoreId storeId,
+        MealContractId mealContractId,
+        Instant startInclusive,
+        Instant endExclusive
+    ) {
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        Objects.requireNonNull(mealContractId, "Meal contract id must be supplied");
+        Objects.requireNonNull(startInclusive, "Monthly ledger start time must be supplied");
+        Objects.requireNonNull(endExclusive, "Monthly ledger end time must be supplied");
+        return repository.sumByStoreIdAndMealContractIdAndStatusAndCreatedAtBetween(
+            storeId.value(), mealContractId.value(), MealUsageStatus.CONFIRMED, startInclusive, endExclusive
         );
     }
 
@@ -157,6 +181,32 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
             rejection == null ? null : rejection.rejectedAt(),
             cancellation == null ? null : cancellation.cancelledAt(),
             cancellation == null ? null : cancellation.reason()
+        );
+    }
+
+    private org.springframework.data.domain.Pageable monthlyPageRequest(int page, int size) {
+        return PageRequest.of(
+            page,
+            size,
+            Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"))
+        );
+    }
+
+    private MonthlyMealUsageSlice toMonthlySlice(
+        StoreId storeId,
+        org.springframework.data.domain.Slice<MealUsageJpaEntity> result
+    ) {
+        var content = result.getContent();
+        Set<java.util.UUID> allocatedUsageIds = content.isEmpty()
+            ? Set.of()
+            : Set.copyOf(repository.findSettlementAllocationUsageIds(
+                storeId.value(), content.stream().map(MealUsageJpaEntity::id).toList()
+            ));
+        return new MonthlyMealUsageSlice(
+            content.stream()
+                .map(entity -> new MonthlyMealUsageRow(toDomain(entity), allocatedUsageIds.contains(entity.id())))
+                .toList(),
+            result.hasNext()
         );
     }
 

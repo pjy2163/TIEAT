@@ -7,6 +7,7 @@ import com.tieat.ledger.application.MonthlyMealUsagePage;
 import com.tieat.ledger.domain.MealUsage;
 import com.tieat.ledger.domain.MealUsageStatus;
 import com.tieat.ledger.domain.MonthlyMealUsageRow;
+import com.tieat.partnership.domain.MealContractId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -45,6 +46,7 @@ class MonthlyMealUsageListController {
         @ApiResponse(responseCode = "400", description = "Invalid month or page request", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "401", description = "Authentication required", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "403", description = "Access denied", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
+        @ApiResponse(responseCode = "404", description = "Partner contract was not found in the authenticated store", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "500", description = "Internal error", content = @Content(schema = @Schema(implementation = ProblemResponse.class)))
     })
     @GetMapping("/{month}")
@@ -57,10 +59,19 @@ class MonthlyMealUsageListController {
         @RequestParam int page,
         @Parameter(required = true, schema = @Schema(minimum = "1", maximum = "100"))
         @RequestParam int size,
+        @Parameter(required = false, description = "Optional authenticated-store partner contract filter")
+        @RequestParam(required = false) UUID mealContractId,
         @AuthenticationPrincipal StoreAccountPrincipal principal
     ) {
         MonthlyMealUsagePage result = listMonthlyMealUsagesUseCase.list(
-            new ListMonthlyMealUsagesQuery(principal.storeId(), month, to, page, size)
+            new ListMonthlyMealUsagesQuery(
+                principal.storeId(),
+                month,
+                to,
+                page,
+                size,
+                mealContractId == null ? null : new MealContractId(mealContractId)
+            )
         );
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
