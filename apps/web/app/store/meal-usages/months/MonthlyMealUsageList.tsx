@@ -287,7 +287,7 @@ export function MonthlyMealUsageList() {
     requestedToDate: string,
     requestedPage: number,
     requestedMealContractId: string | null,
-  ) => {
+  ): Promise<boolean> => {
     const requestEpoch = requestEpochRef.current + 1;
     requestEpochRef.current = requestEpoch;
     clearSelection();
@@ -302,33 +302,35 @@ export function MonthlyMealUsageList() {
       const next = requestedMealContractId === null
         ? await getConfirmedMealUsages(requestedFromDate, requestedToDate, requestedPage, PAGE_SIZE)
         : await getConfirmedMealUsages(requestedFromDate, requestedToDate, requestedPage, PAGE_SIZE, requestedMealContractId);
-      if (!mountedRef.current || requestEpochRef.current !== requestEpoch) return;
+      if (!mountedRef.current || requestEpochRef.current !== requestEpoch) return false;
       replaceResult(next);
       setResultScope(requestedMealContractId);
       setViewState(next.items.length === 0 ? "empty" : "ready");
+      return true;
     } catch (error) {
-      if (!mountedRef.current || requestEpochRef.current !== requestEpoch) return;
+      if (!mountedRef.current || requestEpochRef.current !== requestEpoch) return false;
       if (error instanceof ApiError && error.status === 401) {
         clearSensitiveRows();
         setViewState("loading");
         routerRef.current.replace("/store/login?next=/store/meal-usages/months");
-        return;
+        return false;
       }
       if (error instanceof ApiError && error.status === 403) {
         clearSensitiveRows();
         setViewState("forbidden");
-        return;
+        return false;
       }
       if (requestedMealContractId !== null && error instanceof ApiError && error.status === 404) {
         clearSensitiveRows();
         setViewState("scope-not-found");
-        return;
+        return false;
       }
       if (resultRef.current === null) {
         setViewState("error");
       } else {
         setLoadError(errorMessage(error));
       }
+      return false;
     } finally {
       if (mountedRef.current && requestEpochRef.current === requestEpoch) {
         setIsLoading(false);
@@ -336,9 +338,9 @@ export function MonthlyMealUsageList() {
     }
   }, [clearSensitiveRows, clearSelection, replaceResult]);
 
-  const handleSettlementRecorded = useCallback(() => {
+  const handleSettlementRecorded = useCallback((): Promise<boolean> => {
     clearSelection();
-    void load(fromDate, toDate, page, selectedMealContractId);
+    return load(fromDate, toDate, page, selectedMealContractId);
   }, [clearSelection, fromDate, load, page, selectedMealContractId, toDate]);
 
   useEffect(() => {

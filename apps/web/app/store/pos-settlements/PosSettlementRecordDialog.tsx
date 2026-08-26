@@ -21,7 +21,7 @@ type PosSettlementRecordDialogProps = {
   seed: PosSettlementRecordSeed;
   onAccessDenied: () => void;
   onClose: () => void;
-  onSettlementRecorded: () => void;
+  onSettlementRecorded: () => Promise<boolean>;
   onSessionExpired: () => void;
 };
 
@@ -99,6 +99,7 @@ export function PosSettlementRecordDialog({
   const [formError, setFormError] = useState<string | null>(null);
   const [settlement, setSettlement] = useState<PosSettlement | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [ledgerRefreshWarning, setLedgerRefreshWarning] = useState(false);
 
   const replaceSelectedUsageIds = useCallback((next: Set<string>) => {
     selectedUsageIdsRef.current = next;
@@ -152,6 +153,7 @@ export function PosSettlementRecordDialog({
     setViewState("loading");
     setFormError(null);
     setSettlement(null);
+    setLedgerRefreshWarning(false);
     if (seed.mealUsageIds.length === 0) {
       setViewState("error");
       setFormError("선택한 장부 항목의 계약 정보를 확인할 수 없습니다. 장부를 새로고침해 주세요.");
@@ -253,7 +255,13 @@ export function PosSettlementRecordDialog({
       if (!mountedRef.current) return;
       setSettlement(result);
       setViewState("success");
-      onSettlementRecorded();
+      setLedgerRefreshWarning(false);
+      try {
+        const ledgerReloaded = await onSettlementRecorded();
+        if (mountedRef.current) setLedgerRefreshWarning(!ledgerReloaded);
+      } catch {
+        if (mountedRef.current) setLedgerRefreshWarning(true);
+      }
     } catch (error) {
       if (!mountedRef.current) return;
       if (error instanceof ApiError && error.status === 401) {
@@ -335,6 +343,11 @@ export function PosSettlementRecordDialog({
               <p className={posSettlementFormStyles.successDescription}>
                 {seed.partnerDisplayName ?? "협력사 정보 미입력"} · 결제일 {settlement.posBusinessDate} · 결제 금액 {amountFormatter.format(settlement.submittedTotalMinor)}
               </p>
+              {ledgerRefreshWarning ? (
+                <p className={posSettlementFormStyles.recordDialogError} role="alert">
+                  결제 기록은 저장됐지만 장부를 새로 불러오지 못했습니다. 현재 행 상태가 이전 값일 수 있습니다.
+                </p>
+              ) : null}
               <ul className={posSettlementFormStyles.allocationList} aria-label="결제 기록에 포함된 금액">
                 {settlement.allocations.map((allocation, index) => (
                   <li key={index}>

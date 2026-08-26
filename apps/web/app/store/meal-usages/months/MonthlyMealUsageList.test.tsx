@@ -371,6 +371,56 @@ describe("MonthlyMealUsageList", () => {
     await waitFor(() => expect(uploadPosSettlementReceiptMock).toHaveBeenCalledWith(savedSettlement.posSettlementId, expect.any(File)));
   });
 
+  it("keeps settlement success and receipt upload when the ledger reload fails", async () => {
+    const user = userEvent.setup();
+    const receivable = {
+      mealUsageId: items[0].id,
+      mealContractId: items[0].mealContractId,
+      partnerDisplayName: "협력사 A",
+      confirmedAt: items[0].createdAt,
+      receivableCreatedMinor: 7_500,
+    };
+    const savedSettlement = {
+      posSettlementId: "00000000-0000-0000-0000-000000000099",
+      posBusinessDate: "2026-08-11",
+      submittedTotalMinor: 7_500,
+      recordedAt: "2026-08-12T02:00:00Z",
+      allocations: [{
+        partnerDisplayName: "협력사 A",
+        confirmedAt: items[0].createdAt,
+        receivableAmountMinor: 7_500,
+      }],
+    };
+    getConfirmedMealUsagesMock
+      .mockResolvedValueOnce(page({ hasNext: false }))
+      .mockRejectedValueOnce(new Error("ledger reload unavailable"));
+    getOutstandingReceivablesMock.mockResolvedValue({ items: [receivable], partners: [] });
+    recordPosSettlementMock.mockResolvedValue(savedSettlement);
+    uploadPosSettlementReceiptMock.mockResolvedValue({} as never);
+    vi.stubGlobal("crypto", { randomUUID: vi.fn().mockReturnValue("00000000-0000-0000-0000-000000000202") });
+    render(<MonthlyMealUsageList />);
+
+    await user.click(await screen.findByRole("checkbox", { name: /협력사 A .* 선택/ }));
+    const openButton = await screen.findByRole("button", { name: "선택한 결제할 금액 기록하기" });
+    await waitFor(() => expect(openButton).toBeEnabled());
+    await user.click(openButton);
+    const dialog = await screen.findByRole("dialog", { name: "결제 기록" });
+    fireEvent.change(within(dialog).getByLabelText("결제일"), { target: { value: "2026-08-11" } });
+    await user.click(within(dialog).getByRole("button", { name: "결제 기록 저장하기" }));
+
+    await waitFor(() => expect(recordPosSettlementMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getConfirmedMealUsagesMock).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("1건 선택", { exact: true })).not.toBeInTheDocument();
+    expect(within(dialog).getByText("결제 기록 저장 완료")).toBeVisible();
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("결제 기록은 저장됐지만 장부를 새로 불러오지 못했습니다. 현재 행 상태가 이전 값일 수 있습니다.");
+    expect(screen.getByRole("list", { name: "전체 장부 목록" })).toHaveTextContent("결제 전");
+    expect(screen.getByRole("list", { name: "전체 장부 목록" })).not.toHaveTextContent("결제 완료");
+    const fileInput = within(dialog).getByLabelText("영수증 첨부");
+    expect(fileInput).toHaveAttribute("accept", "image/jpeg,image/png,application/pdf");
+    fireEvent.change(fileInput, { target: { files: [new File(["receipt"], "receipt.jpg", { type: "image/jpeg" })] } });
+    await waitFor(() => expect(uploadPosSettlementReceiptMock).toHaveBeenCalledWith(savedSettlement.posSettlementId, expect.any(File)));
+  });
+
   it("keeps server validation failures in the modal and closes with the backdrop", async () => {
     const user = userEvent.setup();
     const receivable = { mealUsageId: items[0].id, mealContractId: items[0].mealContractId, partnerDisplayName: "협력사 A", confirmedAt: items[0].createdAt, receivableCreatedMinor: 7_500 };
