@@ -163,7 +163,7 @@ describe("MonthlyMealUsageList", () => {
     expect(scopedRow.queryByText("입력 시각", { exact: true })).not.toBeInTheDocument();
     expect(row).toHaveClass("flex", "items-stretch", "gap-x-4", "px-5", "py-5", "sm:px-6");
     expect(customerRow).toHaveClass("mt-2", "flex", "min-w-0", "items-center", "gap-3");
-    expect(paymentMeta).toHaveClass("flex", "min-w-0", "flex-1", "items-center", "justify-end", "gap-3");
+    expect(paymentMeta).toHaveClass("flex", "min-w-0", "flex-1", "items-center", "justify-end", "gap-4");
     expect(Array.from(customerRow.children)).toEqual([inputter, paymentMeta]);
     expect(Array.from(paymentMeta.children)).toEqual([amount, confirmer, settlementStatus]);
     expect(amount).toHaveClass("mr-2");

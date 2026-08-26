@@ -40,7 +40,7 @@ export const monthlyMealUsageListStyles = {
   partner: "text-sm font-semibold text-[var(--text-primary)]",
   personMeta: "text-sm font-medium leading-5 text-[var(--text-secondary)]",
   customerRow: "mt-2 flex min-w-0 items-center gap-3",
-  paymentMeta: "flex min-w-0 flex-1 items-center justify-end gap-3",
+  paymentMeta: "flex min-w-0 flex-1 items-center justify-end gap-4",
   amount: "mr-2 shrink-0 whitespace-nowrap text-base font-semibold leading-6 tabular-nums text-[var(--text-primary)]",
   confirmedInitials: "inline-flex shrink-0 items-center whitespace-nowrap text-sm font-medium leading-5 text-[var(--text-secondary)]",
   settlementStatus: "inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm font-semibold leading-5 text-[#244cda]",
