@@ -57,6 +57,11 @@ export type PosSettlementHistoryPage = {
   hasNext: boolean;
 };
 
+export type PosSettlementHistoryFilters = {
+  partnerDisplayName?: string;
+  search?: string;
+};
+
 export type PosSettlementAllocation = {
   partnerDisplayName: string | null;
   confirmedAt: string;
@@ -478,9 +483,20 @@ export async function getOutstandingReceivables(): Promise<OutstandingReceivable
   return parseOutstandingReceivableOverview(body);
 }
 
-export async function getRecentPosSettlements(page = 0): Promise<PosSettlementHistoryPage> {
+export async function getRecentPosSettlements(
+  page = 0,
+  filters: PosSettlementHistoryFilters = {},
+): Promise<PosSettlementHistoryPage> {
   if (!isNonNegativeSafeInteger(page)) throw new InvalidApiResponseError();
-  const response = await fetch(SETTLEMENTS_PATH + "?page=" + page + "&size=" + POS_SETTLEMENT_HISTORY_PAGE_SIZE, {
+  const query = new URLSearchParams({
+    page: String(page),
+    size: String(POS_SETTLEMENT_HISTORY_PAGE_SIZE),
+  });
+  const partnerDisplayName = filters.partnerDisplayName?.trim();
+  const search = filters.search?.trim();
+  if (partnerDisplayName) query.set("partner", partnerDisplayName);
+  if (search) query.set("search", search);
+  const response = await fetch(SETTLEMENTS_PATH + "?" + query.toString(), {
     cache: "no-store",
     credentials: "same-origin",
   });

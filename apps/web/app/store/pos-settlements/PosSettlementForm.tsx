@@ -1,15 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError } from "@/lib/store-api";
 import {
   getRecentPosSettlements,
   type PosSettlement,
+  type PosSettlementHistoryFilters,
   type PosSettlementHistoryPage,
   type PosSettlementReceipt,
   type PosSettlementReceiptSummary,
 } from "@/lib/pos-settlement-api";
+import { useStorePartnerContext } from "../StorePartnerContext";
 import { posSettlementFormStyles } from "./PosSettlementForm.styles";
 import { ReceiptAttachment } from "./ReceiptAttachment";
 import { ReceiptDownload } from "./ReceiptDownload";
@@ -57,6 +60,19 @@ function receiptSummaryFromUpload(receipt: PosSettlementReceipt): PosSettlementR
     uploadedAt: receipt.uploadedAt,
     expiresAt: receipt.expiresAt,
   };
+}
+
+function partnerNamesOf(record: PosSettlement): string[] {
+  return Array.from(new Set(
+    record.allocations
+      .map((allocation) => allocation.partnerDisplayName?.trim())
+      .filter((name): name is string => Boolean(name)),
+  )).sort((left, right) => left.localeCompare(right, "ko"));
+}
+
+function partnerLabelOf(record: PosSettlement): string {
+  const names = partnerNamesOf(record);
+  return names.length === 0 ? "정보 없음" : names.join(" · ");
 }
 
 function StatePanel({
@@ -121,19 +137,24 @@ function HistoryItem({ record, index, expanded, onReceiptUploaded, onToggle }: {
         <button
           aria-controls={detailId}
           aria-expanded={expanded}
-          aria-label={"결제일 " + record.posBusinessDate + (expanded ? " 상세 닫기" : " 상세 보기")}
+          aria-label={partnerLabelOf(record) + " · 결제일 " + record.posBusinessDate + (expanded ? " 상세 닫기" : " 상세 보기")}
           className={posSettlementFormStyles.historyToggle}
           onClick={onToggle}
           type="button"
         >
+          <p className={posSettlementFormStyles.historyRecord}>협력사 · {partnerLabelOf(record)}</p>
           <h2 className={posSettlementFormStyles.historyItemTitle}>결제일 {record.posBusinessDate}</h2>
           <p className={posSettlementFormStyles.historyItemMeta}>
-            결제 금액 {amountFormatter.format(record.submittedTotalMinor)} · 상세 {expanded ? "닫기" : "보기"}
+            결제 금액 {amountFormatter.format(record.submittedTotalMinor)} · 결제 확인자 {record.recordedByLoginId ?? "확인자 정보 없음"} · 상세 {expanded ? "닫기" : "보기"}
           </p>
         </button>
         {expanded ? (
           <div className={posSettlementFormStyles.historyDetail} id={detailId}>
             <dl className={posSettlementFormStyles.historyDetailGrid}>
+              <div>
+                <dt>협력사</dt>
+                <dd>{partnerLabelOf(record)}</dd>
+              </div>
               <div>
                 <dt>결제일</dt>
                 <dd>{record.posBusinessDate}</dd>
@@ -174,6 +195,7 @@ function HistoryItem({ record, index, expanded, onReceiptUploaded, onToggle }: {
 
 export function PosSettlementForm() {
   const router = useRouter();
+  const { partners } = useStorePartnerContext();
   const [accessState, setAccessState] = useState<AccessState>("allowed");
   const [historyViewState, setHistoryViewState] = useState<HistoryViewState>("loading");
   const [history, setHistory] = useState<PosSettlement[]>([]);
@@ -181,14 +203,27 @@ export function PosSettlementForm() {
   const [hasNext, setHasNext] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [selectedPartnerName, setSelectedPartnerName] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedFilters, setAppliedFilters] = useState<PosSettlementHistoryFilters>({});
   const requestEpochRef = useRef(0);
   const initialLoadStartedRef = useRef(false);
+
+  const partnerOptions = useMemo(() => {
+    const names = new Set(partners.map((partner) => partner.partnerDisplayName));
+    history.forEach((record) => partnerNamesOf(record).forEach((name) => names.add(name)));
+    return Array.from(names).sort((left, right) => left.localeCompare(right, "ko"));
+  }, [history, partners]);
+  const hasActiveFilter = Boolean(appliedFilters.partnerDisplayName || appliedFilters.search);
 
   const clearSensitiveState = useCallback(() => {
     setHistory([]);
     setPage(0);
     setHasNext(false);
     setExpandedIndex(null);
+    setSelectedPartnerName("");
+    setSearchInput("");
+    setAppliedFilters({});
   }, []);
 
   const redirectToLogin = useCallback(() => {
@@ -204,7 +239,11 @@ export function PosSettlementForm() {
     setAccessState("forbidden");
   }, [clearSensitiveState]);
 
-  const loadHistory = useCallback(async (targetPage: number, manual = false) => {
+  const loadHistory = useCallback(async (
+    targetPage: number,
+    manual = false,
+    filters: PosSettlementHistoryFilters = appliedFilters,
+  ) => {
     const requestEpoch = requestEpochRef.current + 1;
     requestEpochRef.current = requestEpoch;
     if (manual) {
@@ -213,7 +252,7 @@ export function PosSettlementForm() {
       setHistoryViewState("loading");
     }
     try {
-      const result: PosSettlementHistoryPage = await getRecentPosSettlements(targetPage);
+      const result: PosSettlementHistoryPage = await getRecentPosSettlements(targetPage, filters);
       if (requestEpoch !== requestEpochRef.current) return;
       setHistory(result.items);
       setPage(result.page);
@@ -237,7 +276,24 @@ export function PosSettlementForm() {
     } finally {
       if (requestEpoch === requestEpochRef.current) setIsRefreshing(false);
     }
-  }, [denyAccess, redirectToLogin]);
+  }, [appliedFilters, denyAccess, redirectToLogin]);
+
+  function submitFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextFilters: PosSettlementHistoryFilters = {
+      partnerDisplayName: selectedPartnerName || undefined,
+      search: searchInput.trim() || undefined,
+    };
+    setAppliedFilters(nextFilters);
+    void loadHistory(0, false, nextFilters);
+  }
+
+  function resetFilters() {
+    setSelectedPartnerName("");
+    setSearchInput("");
+    setAppliedFilters({});
+    void loadHistory(0, false, {});
+  }
 
   useEffect(() => {
     if (initialLoadStartedRef.current) return;
@@ -276,9 +332,44 @@ export function PosSettlementForm() {
               <h2 className={posSettlementFormStyles.historyTitle} id="pos-settlement-history-title">저장된 결제 기록</h2>
             </div>
             {historyViewState === "ready" || historyViewState === "empty" ? (
-              <span className={posSettlementFormStyles.historyPageLabel}>페이지 {page + 1}</span>
+              <div className="flex flex-wrap items-center gap-3">
+                {hasActiveFilter ? <span className={posSettlementFormStyles.historyPageLabel}>필터 적용됨</span> : null}
+                <span className={posSettlementFormStyles.historyPageLabel}>페이지 {page + 1}</span>
+              </div>
             ) : null}
           </header>
+
+          <form className={posSettlementFormStyles.historyFilters} onSubmit={submitFilters}>
+            <label className={posSettlementFormStyles.historyFilterField}>
+              <span>협력사별 보기</span>
+              <select
+                aria-label="협력사별 보기"
+                className={posSettlementFormStyles.historyFilterControl}
+                onChange={(event) => setSelectedPartnerName(event.target.value)}
+                value={selectedPartnerName}
+              >
+                <option value="">전체 협력사</option>
+                {partnerOptions.map((partnerName) => <option key={partnerName} value={partnerName}>{partnerName}</option>)}
+              </select>
+            </label>
+            <label className={posSettlementFormStyles.historyFilterField}>
+              <span>협력사 검색</span>
+              <input
+                aria-label="협력사 검색"
+                className={posSettlementFormStyles.historyFilterControl}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="협력사명 입력"
+                type="search"
+                value={searchInput}
+              />
+            </label>
+            <div className={posSettlementFormStyles.historyFilterActions}>
+              <button className={posSettlementFormStyles.historyFilterSubmit} type="submit">조회</button>
+              {(hasActiveFilter || selectedPartnerName || searchInput) ? (
+                <button className={posSettlementFormStyles.historyFilterReset} onClick={resetFilters} type="button">초기화</button>
+              ) : null}
+            </div>
+          </form>
 
           {historyViewState === "loading" ? (
             <div className={posSettlementFormStyles.state} aria-live="polite">
@@ -298,7 +389,12 @@ export function PosSettlementForm() {
             </div>
           ) : historyViewState === "empty" ? (
             <div className={posSettlementFormStyles.state}>
-              <p className={posSettlementFormStyles.stateDescription}>저장된 결제 기록이 없습니다.</p>
+              <p className={posSettlementFormStyles.stateDescription}>
+                {hasActiveFilter ? "조건에 맞는 결제 내역이 없습니다." : "저장된 결제 기록이 없습니다."}
+              </p>
+              {hasActiveFilter ? (
+                <button className={posSettlementFormStyles.stateAction} onClick={resetFilters} type="button">필터 초기화</button>
+              ) : null}
             </div>
           ) : (
             <ol className={posSettlementFormStyles.historyList} aria-label="결제 내역 목록">

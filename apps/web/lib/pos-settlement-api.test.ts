@@ -180,6 +180,24 @@ describe("POS settlement API", () => {
     expect(JSON.stringify(parsed)).not.toContain("storeId");
   });
 
+  it("sends partner and search filters to the server-scoped history endpoint", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(200, historyPage));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getRecentPosSettlements(1, {
+      partnerDisplayName: "협력사 A",
+      search: "기능",
+    })).resolves.toEqual(historyPage);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/pos-settlements?page=1&size=20&partner=%ED%98%91%EB%A0%A5%EC%82%AC+A&search=%EA%B8%B0%EB%8A%A5",
+      {
+        cache: "no-store",
+        credentials: "same-origin",
+      },
+    );
+  });
+
   it("normalizes legacy history items that do not contain a receipt summary", async () => {
     const { receipt: _receipt, ...legacySettlement } = settlement;
     const fetchMock = vi.fn().mockResolvedValue(response(200, {

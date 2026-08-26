@@ -104,9 +104,9 @@ describe("PosSettlementForm history view", () => {
     expect(screen.queryByText("결제할 금액")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /기록하기/ })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("영수증 첨부")).not.toBeInTheDocument();
-    expect(getRecentPosSettlementsMock).toHaveBeenCalledWith(0);
+    expect(getRecentPosSettlementsMock).toHaveBeenCalledWith(0, {});
 
-    await userEvent.click(screen.getByRole("button", { name: "결제일 2026-08-11 상세 보기" }));
+    await userEvent.click(screen.getByRole("button", { name: "협력사 A · 결제일 2026-08-11 상세 보기" }));
     expect(screen.getByText("영수증 있음")).toBeVisible();
     expect(screen.getByText("settlement.pdf")).toBeVisible();
     expect(screen.getByRole("button", { name: "영수증 다운로드" })).toBeVisible();
@@ -132,14 +132,14 @@ describe("PosSettlementForm history view", () => {
     expect(screen.getByRole("button", { name: "다음" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "다음" }));
-    await waitFor(() => expect(getRecentPosSettlementsMock).toHaveBeenLastCalledWith(1));
+    await waitFor(() => expect(getRecentPosSettlementsMock).toHaveBeenLastCalledWith(1, {}));
     expect(await screen.findByRole("heading", { name: "결제일 2026-08-10", level: 2 })).toBeVisible();
     expect(screen.getByText("페이지 2")).toBeVisible();
     expect(screen.getByRole("button", { name: "이전" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "다음" })).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "이전" }));
-    await waitFor(() => expect(getRecentPosSettlementsMock).toHaveBeenLastCalledWith(0));
+    await waitFor(() => expect(getRecentPosSettlementsMock).toHaveBeenLastCalledWith(0, {}));
     expect(await screen.findByRole("heading", { name: "결제일 2026-08-11", level: 2 })).toBeVisible();
   });
 
@@ -156,16 +156,16 @@ describe("PosSettlementForm history view", () => {
     await screen.findByRole("heading", { name: "결제일 2026-08-11", level: 2 });
     expect(screen.queryByLabelText("영수증 첨부")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "결제일 2026-08-11 상세 보기" }));
+    await user.click(screen.getByRole("button", { name: "협력사 A · 결제일 2026-08-11 상세 보기" }));
     expect(screen.getByText("영수증 있음")).toBeVisible();
     expect(screen.getByRole("button", { name: "영수증 다운로드" })).toBeVisible();
     expect(screen.queryByLabelText("영수증 첨부")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "결제일 2026-08-10 상세 보기" }));
+    await user.click(screen.getByRole("button", { name: "협력사 A · 결제일 2026-08-10 상세 보기" }));
     expect(screen.getByText("영수증 만료")).toBeVisible();
     expect(screen.getByText("expired-receipt.jpg")).toBeVisible();
     expect(screen.queryByLabelText("영수증 첨부")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "영수증 다운로드" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "결제일 2026-08-09 상세 보기" }));
+    await user.click(screen.getByRole("button", { name: "협력사 A · 결제일 2026-08-09 상세 보기" }));
     expect(screen.getByLabelText("영수증 첨부")).toBeVisible();
     expect(screen.queryByRole("button", { name: "영수증 다운로드" })).not.toBeInTheDocument();
     expect(screen.queryByText(availableSettlementId)).not.toBeInTheDocument();
@@ -188,7 +188,7 @@ describe("PosSettlementForm history view", () => {
 
     render(<PosSettlementForm />);
 
-    await user.click(await screen.findByRole("button", { name: "결제일 2026-08-09 상세 보기" }));
+    await user.click(await screen.findByRole("button", { name: "협력사 A · 결제일 2026-08-09 상세 보기" }));
     const receiptInput = screen.getByLabelText("영수증 첨부");
     await user.upload(receiptInput, new File(["%PDF-"], "history.pdf", { type: "application/pdf" }));
 
@@ -200,6 +200,34 @@ describe("PosSettlementForm history view", () => {
     expect(screen.getByText("history.pdf")).toBeVisible();
     expect(screen.getByRole("button", { name: "영수증 다운로드" })).toBeVisible();
     expect(screen.queryByLabelText("영수증 첨부")).not.toBeInTheDocument();
+  });
+
+  it("shows the partner in each record and applies partner filters and search together", async () => {
+    const user = userEvent.setup();
+    const functionPartnerSettlement = settlement(availableSettlementId, "2026-08-11", noReceipt);
+    const cloudPartnerSettlement = {
+      ...settlement(expiredSettlementId, "2026-08-10", noReceipt),
+      allocations: [{ ...allocation, partnerDisplayName: "협력사 클라우드반" }],
+    };
+    getRecentPosSettlementsMock
+      .mockResolvedValueOnce(historyPage([functionPartnerSettlement, cloudPartnerSettlement]))
+      .mockResolvedValueOnce(historyPage([cloudPartnerSettlement]));
+
+    render(<PosSettlementForm />);
+
+    expect(await screen.findByText("협력사 · 협력사 A")).toBeVisible();
+    expect(screen.getByText("협력사 · 협력사 클라우드반")).toBeVisible();
+    await user.selectOptions(screen.getByLabelText("협력사별 보기"), "협력사 클라우드반");
+    await user.type(screen.getByLabelText("협력사 검색"), "클라우드");
+    await user.click(screen.getByRole("button", { name: "조회" }));
+
+    await waitFor(() => expect(getRecentPosSettlementsMock).toHaveBeenLastCalledWith(0, {
+      partnerDisplayName: "협력사 클라우드반",
+      search: "클라우드",
+    }));
+    expect(await screen.findByText("협력사 · 협력사 클라우드반")).toBeVisible();
+    expect(screen.queryByText("협력사 · 협력사 A")).not.toBeInTheDocument();
+    expect(screen.getByText("필터 적용됨")).toBeVisible();
   });
 
   it("allows a failed history request to be retried without showing a false record success", async () => {
