@@ -138,7 +138,7 @@ describe("MonthlyMealUsageList", () => {
     expect(screen.getByText("2페이지")).toBeVisible();
   });
 
-  it("keeps amount, confirmer, and settlement status in separate side rows", async () => {
+  it("places amount on the name line and centers confirmer and settlement status", async () => {
     getConfirmedMealUsagesMock.mockResolvedValue(page({ hasNext: false }));
     render(<MonthlyMealUsageList />);
 
@@ -149,6 +149,8 @@ describe("MonthlyMealUsageList", () => {
     const confirmer = scopedRow.getByText("확인자 HK");
     const settlementStatus = scopedRow.getByText("결제 전");
     const inputter = scopedRow.getByText("이름 미입력");
+    const customerRow = inputter.parentElement as HTMLElement;
+    expect(within(customerRow).getByText("₩12,000")).toBeVisible();
     const inputTimeText = new Intl.DateTimeFormat("ko-KR", {
       timeZone: "Asia/Seoul",
       dateStyle: "medium",
@@ -159,16 +161,17 @@ describe("MonthlyMealUsageList", () => {
     expect(scopedRow.queryByText("입력자", { exact: true })).not.toBeInTheDocument();
     expect(scopedRow.queryByText("입력 시각", { exact: true })).not.toBeInTheDocument();
     expect(row).toHaveClass("grid-cols-[minmax(0,1fr)_auto]", "gap-x-4", "gap-y-4", "px-5", "py-5", "sm:px-6");
-    const side = amount.parentElement as HTMLElement;
-    expect(side).toHaveClass("flex", "min-w-0", "flex-col", "items-end", "gap-1", "text-right", "md:min-w-36");
-    expect(Array.from(side.children)).toEqual([amount, confirmer, settlementStatus]);
-    for (const entry of [amount, confirmer, settlementStatus]) {
+    const side = confirmer.parentElement as HTMLElement;
+    expect(customerRow).toHaveClass("mt-2", "flex", "min-w-0", "items-center", "justify-between", "gap-4");
+    expect(side).toHaveClass("flex", "min-w-0", "flex-col", "items-end", "justify-center", "gap-2", "text-right", "md:min-w-36");
+    expect(Array.from(side.children)).toEqual([confirmer, settlementStatus]);
+    for (const entry of [confirmer, settlementStatus]) {
       expect(entry.parentElement).toBe(side);
     }
-    expect(amount.compareDocumentPosition(confirmer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(confirmer.compareDocumentPosition(settlementStatus) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(amount.parentElement).toBe(customerRow);
+    expect(inputter.compareDocumentPosition(amount) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(inputter.compareDocumentPosition(inputTime) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(inputTime.compareDocumentPosition(amount) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(amount.compareDocumentPosition(inputTime) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(inputTime).toHaveClass("mt-2", "break-words");
     for (const className of ["text-sm", "font-medium", "leading-5", "text-[var(--text-secondary)]"]) {
       expect(inputter).toHaveClass(className);

@@ -612,16 +612,18 @@ export function MonthlyMealUsageList() {
                           type="checkbox"
                         />
                       ) : null}
-                      <div>
+                      <div className={monthlyMealUsageListStyles.rowDetails}>
                         <p className={monthlyMealUsageListStyles.partner}>{item.partnerDisplayName ?? "협력사 정보 미입력"}</p>
-                        <p className={`${monthlyMealUsageListStyles.personMeta} ${monthlyMealUsageListStyles.customer}`}>이름 미입력</p>
+                        <div className={monthlyMealUsageListStyles.customerRow}>
+                          <p className={monthlyMealUsageListStyles.personMeta}>이름 미입력</p>
+                          <p className={monthlyMealUsageListStyles.amount}>{amountFormatter.format(item.amountMinor)}</p>
+                        </div>
                         <p className={`${monthlyMealUsageListStyles.personMeta} ${monthlyMealUsageListStyles.metadata}`}>
                           {dateFormatter.format(new Date(item.createdAt))}
                         </p>
                       </div>
                     </div>
                     <div className={monthlyMealUsageListStyles.side}>
-                      <p className={monthlyMealUsageListStyles.amount}>{amountFormatter.format(item.amountMinor)}</p>
                       <p className={monthlyMealUsageListStyles.confirmedInitials}>확인자 {item.confirmedStaffInitials}</p>
                       {settlementStatusLabel(item.settlementStatus) ? (
                         <p className={monthlyMealUsageListStyles.settlementStatus}>
