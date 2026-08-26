@@ -106,6 +106,10 @@ describe("MonthlyMealUsageList", () => {
     expect(screen.getByText("조회 기간 합계")).toBeVisible();
     expect(screen.getByLabelText("조회 기간 합계")).toHaveTextContent("₩12,000");
     expect(screen.getByText("이름 미입력")).toBeVisible();
+    const pageSelectionControls = screen.getByLabelText("현재 페이지 선택 도구");
+    expect(pageSelectionControls).toHaveClass("justify-end", "gap-x-4", "py-2.5");
+    expect(within(pageSelectionControls).getByRole("button", { name: "전체 선택 (현재 페이지 1건)" })).toHaveTextContent("전체 선택 · 1건");
+    expect(within(pageSelectionControls).getByRole("button", { name: "미결제 모두 선택 (현재 페이지 1건)" })).toHaveTextContent("미결제 선택 · 1건");
     const reloadButton = screen.getByRole("button", { name: "새로고침" });
     expect(reloadButton).toBeVisible();
     expect(reloadButton).toHaveTextContent("새로고침");

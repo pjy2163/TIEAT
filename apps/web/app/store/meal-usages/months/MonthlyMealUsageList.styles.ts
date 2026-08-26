@@ -53,8 +53,8 @@ export const monthlyMealUsageListStyles = {
   selectionSummary: "flex min-w-0 flex-col gap-1 text-sm text-[var(--text-secondary)] sm:flex-row sm:items-baseline sm:gap-3",
   selectionError: "text-xs leading-5 text-[var(--danger)] sm:max-w-md",
   selectionActions: "flex w-full gap-2 sm:w-auto",
-  pageSelectionControls: "flex flex-col gap-2 border-b border-[var(--border)] bg-[var(--surface-subtle)] px-5 py-4 sm:flex-row sm:px-6",
-  pageSelectionButton: "inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-3 py-2 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:text-[var(--text-muted)]",
+  pageSelectionControls: "flex flex-wrap items-center justify-end gap-x-4 gap-y-1 border-b border-[var(--border)] bg-white px-5 py-2.5 sm:px-6",
+  pageSelectionButton: "inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded-md px-1 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:text-[var(--text-muted)]",
   clearSelection: "inline-flex min-h-11 flex-1 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-3 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 sm:flex-none",
   selectionSubmit: "inline-flex min-h-11 flex-[2] items-center justify-center rounded-lg bg-[var(--accent)] px-4 text-center text-sm font-semibold text-white transition-colors hover:bg-[#244cda] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[#98abef] sm:flex-none",
 };

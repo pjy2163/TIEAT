@@ -555,20 +555,22 @@ export function MonthlyMealUsageList() {
               {selectableItems.length > 0 ? (
                 <div className={monthlyMealUsageListStyles.pageSelectionControls} aria-label="현재 페이지 선택 도구">
                   <button
+                    aria-label={`전체 선택 (현재 페이지 ${visibleItems.length}건)`}
                     className={monthlyMealUsageListStyles.pageSelectionButton}
                     disabled={isLoading}
                     onClick={() => selectCurrentPage(false)}
                     type="button"
                   >
-                    전체 선택 (현재 페이지 {visibleItems.length}건)
+                    전체 선택 <span aria-hidden="true">· {visibleItems.length}건</span>
                   </button>
                   <button
+                    aria-label={`미결제 모두 선택 (현재 페이지 ${selectableItems.length}건)`}
                     className={monthlyMealUsageListStyles.pageSelectionButton}
                     disabled={isLoading}
                     onClick={() => selectCurrentPage(true)}
                     type="button"
                   >
-                    미결제 모두 선택 (현재 페이지 {selectableItems.length}건)
+                    미결제 선택 <span aria-hidden="true">· {selectableItems.length}건</span>
                   </button>
                 </div>
               ) : null}
