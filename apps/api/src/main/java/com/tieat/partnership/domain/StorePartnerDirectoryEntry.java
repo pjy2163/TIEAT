@@ -5,6 +5,7 @@ import java.util.Objects;
 /** A store-scoped partner contract projection for navigation and ledger filtering. */
 public record StorePartnerDirectoryEntry(
     MealContractId mealContractId,
+    PartnerOrganizationId partnerOrganizationId,
     String partnerDisplayName,
     PartnerKind partnerKind,
     MealContractPaymentType paymentType,
@@ -20,7 +21,19 @@ public record StorePartnerDirectoryEntry(
         MealContractPaymentType paymentType,
         boolean qrSelectable
     ) {
-        this(mealContractId, partnerDisplayName, partnerKind, paymentType, qrSelectable, null, null);
+        this(mealContractId, null, partnerDisplayName, partnerKind, paymentType, qrSelectable, null, null);
+    }
+
+    public StorePartnerDirectoryEntry(
+        MealContractId mealContractId,
+        String partnerDisplayName,
+        PartnerKind partnerKind,
+        MealContractPaymentType paymentType,
+        boolean qrSelectable,
+        String representativePhone,
+        String representativeEmail
+    ) {
+        this(mealContractId, null, partnerDisplayName, partnerKind, paymentType, qrSelectable, representativePhone, representativeEmail);
     }
 
     public StorePartnerDirectoryEntry {

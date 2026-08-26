@@ -142,6 +142,7 @@ class MonthlyMealUsageHttpIntegrationTest {
             .andExpect(jsonPath("$.items.length()").value(2))
             .andExpect(jsonPath("$.items[0].id").value(sameMomentHigherIdConfirmed.id().value().toString()))
             .andExpect(jsonPath("$.items[0].status").value("CONFIRMED"))
+            .andExpect(jsonPath("$.items[0].mealContractId").value(MonthlyMealUsageHttpIntegrationFixture.MEAL_CONTRACT_ID.value().toString()))
             .andExpect(jsonPath("$.items[0].settlementStatus").value("PAYMENT_DUE"))
             .andExpect(jsonPath("$.items[0].partnerDisplayName").value("협력사 확정"))
             .andExpect(jsonPath("$.items[0].confirmedStaffInitials").value("HK"))
@@ -161,7 +162,7 @@ class MonthlyMealUsageHttpIntegrationTest {
         );
         assertThat(fieldNames(firstPageJson.get("items").get(0)))
             .containsExactlyInAnyOrder(
-                "id", "status", "partnerDisplayName", "amountMinor", "createdAt", "confirmedStaffInitials", "settlementStatus"
+                "id", "mealContractId", "status", "partnerDisplayName", "amountMinor", "createdAt", "confirmedStaffInitials", "settlementStatus"
             );
 
         mockMvc.perform(monthlyRequest(session, "2026-08", 1, 2))

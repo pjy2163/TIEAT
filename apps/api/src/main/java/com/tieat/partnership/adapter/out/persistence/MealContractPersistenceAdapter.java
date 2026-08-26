@@ -112,6 +112,9 @@ public class MealContractPersistenceAdapter implements MealContractRepository {
     private StorePartnerDirectoryEntry toDirectoryEntry(StorePartnerDirectoryProjection projection) {
         return new StorePartnerDirectoryEntry(
             new MealContractId(projection.getMealContractId()),
+            projection.getPartnerOrganizationId() == null
+                ? null
+                : new com.tieat.partnership.domain.PartnerOrganizationId(projection.getPartnerOrganizationId()),
             projection.getPartnerDisplayName(),
             projection.getPartnerKind(),
             projection.getPaymentType(),

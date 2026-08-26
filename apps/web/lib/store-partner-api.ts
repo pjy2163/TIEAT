@@ -4,6 +4,7 @@ export type { PartnerKind } from "./partner-kind";
 
 export type StorePartner = {
   mealContractId: string;
+  partnerOrganizationId?: string | null;
   partnerDisplayName: string;
   partnerKind: PartnerKind;
   paymentType: "POSTPAID" | "PREPAID_WITH_RECEIVABLE_OVERFLOW";
@@ -92,25 +93,39 @@ function parseStorePartner(value: unknown): StorePartner {
     throw new InvalidApiResponseError();
   }
   const fieldCount = Object.keys(value).length;
-  if ((fieldCount !== 5 && fieldCount !== 7)
+  const hasOrganizationId = "partnerOrganizationId" in value;
+  const hasContacts = "representativePhone" in value || "representativeEmail" in value;
+  const expectedFieldCount = hasOrganizationId
+    ? hasContacts ? 8 : 6
+    : hasContacts ? 7 : 5;
+  if (fieldCount !== expectedFieldCount
     || !isUuid(value.mealContractId)
+    || (hasOrganizationId && value.partnerOrganizationId !== null && !isUuid(value.partnerOrganizationId))
     || !isNonEmptyString(value.partnerDisplayName)
     || (value.partnerKind !== "INDIVIDUAL" && value.partnerKind !== "ORGANIZATION")
     || (value.paymentType !== "POSTPAID" && value.paymentType !== "PREPAID_WITH_RECEIVABLE_OVERFLOW")
     || typeof value.qrSelectable !== "boolean"
-    || (fieldCount === 7 && !isNullableContact(value.representativePhone, 30))
-    || (fieldCount === 7 && !isNullableContact(value.representativeEmail, 254))) {
+    || (hasContacts && (!hasOwnProperty(value, "representativePhone") || !hasOwnProperty(value, "representativeEmail")))
+    || (hasContacts && !isNullableContact(value.representativePhone, 30))
+    || (hasContacts && !isNullableContact(value.representativeEmail, 254))) {
     throw new InvalidApiResponseError();
   }
   return {
     mealContractId: value.mealContractId,
+    partnerOrganizationId: hasOrganizationId && value.partnerOrganizationId !== null
+      ? value.partnerOrganizationId as string
+      : null,
     partnerDisplayName: value.partnerDisplayName,
     partnerKind: value.partnerKind,
     paymentType: value.paymentType,
     qrSelectable: value.qrSelectable,
-    representativePhone: fieldCount === 7 ? value.representativePhone as string | null : null,
-    representativeEmail: fieldCount === 7 ? value.representativeEmail as string | null : null,
+    representativePhone: hasContacts ? value.representativePhone as string | null : null,
+    representativeEmail: hasContacts ? value.representativeEmail as string | null : null,
   };
+}
+
+function hasOwnProperty(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
 }
 
 function parseStoreProfile(value: unknown): StoreProfile {

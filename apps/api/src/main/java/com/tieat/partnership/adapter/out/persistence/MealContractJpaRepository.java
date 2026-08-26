@@ -28,6 +28,7 @@ interface MealContractJpaRepository extends JpaRepository<MealContractJpaEntity,
 
     @Query("""
         select mealContract.id as mealContractId,
+               mealContract.partnerOrganizationId as partnerOrganizationId,
                partnerOrganization.displayName as partnerDisplayName,
                partnerOrganization.partnerKind as partnerKind,
                mealContract.paymentType as paymentType,
@@ -44,6 +45,7 @@ interface MealContractJpaRepository extends JpaRepository<MealContractJpaEntity,
 
     @Query("""
         select mealContract.id as mealContractId,
+               mealContract.partnerOrganizationId as partnerOrganizationId,
                partnerOrganization.displayName as partnerDisplayName,
                partnerOrganization.partnerKind as partnerKind,
                mealContract.paymentType as paymentType,
@@ -106,6 +108,8 @@ interface QrSelectableMealContractProjection {
 interface StorePartnerDirectoryProjection {
 
     UUID getMealContractId();
+
+    UUID getPartnerOrganizationId();
 
     String getPartnerDisplayName();
 

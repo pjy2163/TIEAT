@@ -45,6 +45,7 @@ vi.mock("@/lib/monthly-meal-usage-api", async (importOriginal) => {
 
 const partnerA: StorePartner = {
   mealContractId: "11111111-1111-4111-8111-111111111111",
+  partnerOrganizationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   partnerDisplayName: "가나다 협력사",
   partnerKind: "ORGANIZATION",
   paymentType: "POSTPAID",
@@ -52,8 +53,13 @@ const partnerA: StorePartner = {
   representativePhone: "010-1234-5678",
   representativeEmail: "owner@example.com",
 };
+const partnerASecondContract: StorePartner = {
+  ...partnerA,
+  mealContractId: "11111111-1111-4111-8111-111111111112",
+};
 const partnerB: StorePartner = {
   mealContractId: "22222222-2222-4222-8222-222222222222",
+  partnerOrganizationId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   partnerDisplayName: "마바사 협력사",
   partnerKind: "INDIVIDUAL",
   paymentType: "PREPAID_WITH_RECEIVABLE_OVERFLOW",
@@ -65,6 +71,7 @@ const partnerB: StorePartner = {
 function mealUsage(id: string, partnerDisplayName: string): MonthlyMealUsage {
   return {
     id,
+    mealContractId: partnerDisplayName === "가나다 협력사 장부" ? partnerA.mealContractId : null,
     status: "CONFIRMED",
     partnerDisplayName,
     amountMinor: 1000,
@@ -113,7 +120,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   setUrl("/store/meal-usages/months");
   navigation.replace.mockImplementation(() => undefined);
-  partnerMocks.getStorePartners.mockResolvedValue([partnerA, partnerB]);
+  partnerMocks.getStorePartners.mockResolvedValue([partnerA, partnerASecondContract, partnerB]);
   partnerMocks.getStoreProfile.mockResolvedValue({ loginId: "store-hk", storeDisplayName: null });
   partnerMocks.getConfirmedMealUsages.mockResolvedValue(mealPage([mealUsage("usage-1", "전체 장부 항목")]));
 });
@@ -138,11 +145,16 @@ describe("R-032 store partner workspace", () => {
 
     render(<Workspace><MonthlyMealUsageList /></Workspace>);
     await waitFor(() => expect(screen.getByText("전체 장부 항목")).toBeInTheDocument());
-    expect(Array.from((screen.getByLabelText("협력사 선택") as HTMLSelectElement).options).map((option) => option.textContent)).toEqual([
+    const partnerSelect = screen.getByLabelText("협력사 선택") as HTMLSelectElement;
+    expect(Array.from(partnerSelect.options).map((option) => option.textContent)).toEqual([
       "전체",
-      partnerA.partnerDisplayName,
+      "계약 1",
+      "계약 2",
       partnerB.partnerDisplayName,
     ]);
+    expect(partnerSelect.querySelectorAll("optgroup")).toHaveLength(2);
+    expect(partnerSelect.querySelector("optgroup")?.getAttribute("label")).toBe(partnerA.partnerDisplayName);
+    expect(partnerSelect.querySelectorAll("option")).toHaveLength(4);
     expect(partnerMocks.getConfirmedMealUsages).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])-01$/), expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/), 0, 20);
 
     await user.click(screen.getByRole("button", { name: "다음 페이지" }));
@@ -198,7 +210,7 @@ describe("R-032 store partner workspace", () => {
     const dialog = screen.getByRole("dialog", { name: "매장 작업 공간 메뉴" });
     expect(dialog).toHaveAttribute("open");
     expect(screen.queryByRole("link", { name: "전체 협력사" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: partnerA.partnerDisplayName })).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: partnerA.partnerDisplayName })).toHaveLength(4);
     const qrLinks = screen.getAllByRole("link", { name: "QR코드 보기" });
     expect(qrLinks).toHaveLength(2);
     expect(qrLinks.every((link) => link.getAttribute("href") === "/store/qr")).toBe(true);

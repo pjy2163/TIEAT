@@ -11,6 +11,7 @@ function response(status: number, body?: unknown): Response {
 
 const partner = {
   mealContractId: "11111111-1111-4111-8111-111111111111",
+  partnerOrganizationId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   partnerDisplayName: "가나다 협력사",
   partnerKind: "ORGANIZATION",
   paymentType: "POSTPAID",
@@ -38,10 +39,12 @@ describe("store partner API", () => {
 
   it("accepts a legacy five-field response and maps omitted contacts to null", async () => {
     const { representativeEmail: _email, representativePhone: _phone, ...legacyPartner } = partner;
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(200, [legacyPartner])));
+    const { partnerOrganizationId: _organizationId, ...legacyFiveFieldPartner } = legacyPartner;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(200, [legacyFiveFieldPartner])));
 
     await expect(getStorePartners()).resolves.toEqual([{
-      ...legacyPartner,
+      ...legacyFiveFieldPartner,
+      partnerOrganizationId: null,
       representativePhone: null,
       representativeEmail: null,
     }]);

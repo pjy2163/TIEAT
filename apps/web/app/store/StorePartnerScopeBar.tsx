@@ -2,6 +2,7 @@
 
 import { useState, type ChangeEvent } from "react";
 import { filterPartnersByKind, type PartnerKindFilter } from "@/lib/partner-kind";
+import type { StorePartner } from "@/lib/store-partner-api";
 import { useStorePartnerContext } from "./StorePartnerContext";
 import { StorePartnerKindFilter } from "./StorePartnerKindFilter";
 
@@ -16,6 +17,30 @@ const styles = {
   error: "text-xs leading-5 text-[var(--danger)] sm:shrink-0",
 } as const;
 
+type StorePartnerGroup = {
+  key: string;
+  partnerDisplayName: string;
+  partners: StorePartner[];
+};
+
+function groupStorePartners(partners: readonly StorePartner[]): StorePartnerGroup[] {
+  const groups = new Map<string, StorePartnerGroup>();
+  for (const partner of partners) {
+    const key = partner.partnerOrganizationId ?? `contract:${partner.mealContractId}`;
+    const group = groups.get(key);
+    if (group) {
+      group.partners.push(partner);
+      continue;
+    }
+    groups.set(key, {
+      key,
+      partnerDisplayName: partner.partnerDisplayName,
+      partners: [partner],
+    });
+  }
+  return Array.from(groups.values());
+}
+
 export function StorePartnerScopeBar() {
   const {
     isMonthlyLedgerRoute,
@@ -27,7 +52,14 @@ export function StorePartnerScopeBar() {
   } = useStorePartnerContext();
   const [partnerKindFilter, setPartnerKindFilter] = useState<PartnerKindFilter>("ALL");
   const visiblePartners = filterPartnersByKind(partners, partnerKindFilter);
+  const partnerGroups = groupStorePartners(visiblePartners);
   const selectedPartner = partners.find((partner) => partner.mealContractId === selectedMealContractId);
+  const selectedGroup = selectedPartner
+    ? partnerGroups.find((group) => group.partners.some((partner) => partner.mealContractId === selectedPartner.mealContractId))
+    : null;
+  const selectedContractIndex = selectedGroup
+    ? selectedGroup.partners.findIndex((partner) => partner.mealContractId === selectedPartner?.mealContractId)
+    : -1;
 
   if (!isMonthlyLedgerRoute) return null;
 
@@ -63,13 +95,26 @@ export function StorePartnerScopeBar() {
             value={scopeState === "selected" ? selectedMealContractId ?? "" : ""}
           >
             <option value="">전체</option>
-            {visiblePartners.map((partner) => (
-              <option key={partner.mealContractId} value={partner.mealContractId}>
-                {partner.partnerDisplayName}
-              </option>
+            {partnerGroups.map((group) => (
+              <optgroup key={group.key} label={group.partnerDisplayName}>
+                {group.partners.map((partner, index) => (
+                  <option
+                    aria-label={`${group.partnerDisplayName} · 계약 ${index + 1}`}
+                    key={partner.mealContractId}
+                    value={partner.mealContractId}
+                  >
+                    {group.partners.length === 1 ? group.partnerDisplayName : `계약 ${index + 1}`}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
+        {selectedPartner && selectedGroup && selectedContractIndex >= 0 ? (
+          <span className={styles.status} role="status">
+            선택: {selectedGroup.partnerDisplayName} · 계약 {selectedContractIndex + 1}
+          </span>
+        ) : null}
         {directoryState === "loading" ? <span className={styles.status} role="status">협력사 목록을 불러오는 중입니다.</span> : null}
         {directoryState === "error" ? <span className={styles.error} role="alert">협력사 목록을 불러오지 못했습니다. 전체 장부는 계속 볼 수 있습니다.</span> : null}
       </div>

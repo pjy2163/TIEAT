@@ -46,6 +46,7 @@ final class StorePartnerHttpModels {
 
     record StorePartnerResponse(
         UUID mealContractId,
+        UUID partnerOrganizationId,
         String partnerDisplayName,
         String partnerKind,
         String paymentType,
@@ -57,6 +58,7 @@ final class StorePartnerHttpModels {
         static StorePartnerResponse from(StorePartnerDirectoryEntry entry) {
             return new StorePartnerResponse(
                 entry.mealContractId().value(),
+                entry.partnerOrganizationId() == null ? null : entry.partnerOrganizationId().value(),
                 entry.partnerDisplayName(),
                 entry.partnerKind().name(),
                 entry.paymentType().name(),

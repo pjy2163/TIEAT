@@ -113,6 +113,7 @@ class StorePartnerRegistrationService {
         ));
         return new StorePartnerDirectoryEntry(
             mealContract.id(),
+            partnerOrganization.id(),
             partnerOrganization.displayName(),
             partnerOrganization.partnerKind(),
             mealContract.paymentType(),

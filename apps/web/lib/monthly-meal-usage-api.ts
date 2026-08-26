@@ -5,6 +5,7 @@ export type MonthlyMealUsageSettlementStatus = "PAYMENT_DUE" | "PAYMENT_RECORDED
 
 export type MonthlyMealUsage = {
   id: string;
+  mealContractId?: string | null;
   status: MonthlyMealUsageStatus;
   partnerDisplayName: string | null;
   amountMinor: number;
@@ -105,8 +106,10 @@ function hasExactlyFields(value: Record<string, unknown>, expectedFields: readon
 
 function parseMealUsage(value: unknown): MonthlyMealUsage {
   if (!isRecord(value)
-    || !hasExactlyFields(value, ["id", "status", "partnerDisplayName", "amountMinor", "createdAt", "confirmedStaffInitials", "settlementStatus"])
+    || (!hasExactlyFields(value, ["id", "mealContractId", "status", "partnerDisplayName", "amountMinor", "createdAt", "confirmedStaffInitials", "settlementStatus"])
+      && !hasExactlyFields(value, ["id", "status", "partnerDisplayName", "amountMinor", "createdAt", "confirmedStaffInitials", "settlementStatus"]))
     || !isUuid(value.id)
+    || (value.mealContractId !== undefined && value.mealContractId !== null && !isUuid(value.mealContractId))
     || value.status !== "CONFIRMED"
     || (value.partnerDisplayName !== null && !isNonEmptyString(value.partnerDisplayName))
     || typeof value.amountMinor !== "number"
@@ -120,7 +123,7 @@ function parseMealUsage(value: unknown): MonthlyMealUsage {
       && value.settlementStatus !== "PREPAID_SETTLED")) {
     throw new InvalidApiResponseError();
   }
-  return {
+  const parsed: MonthlyMealUsage = {
     id: value.id,
     status: "CONFIRMED",
     partnerDisplayName: value.partnerDisplayName,
@@ -129,6 +132,8 @@ function parseMealUsage(value: unknown): MonthlyMealUsage {
     confirmedStaffInitials: value.confirmedStaffInitials,
     settlementStatus: value.settlementStatus,
   };
+  if (value.mealContractId !== undefined) parsed.mealContractId = value.mealContractId;
+  return parsed;
 }
 
 function parseMonthlyMealUsagePage(

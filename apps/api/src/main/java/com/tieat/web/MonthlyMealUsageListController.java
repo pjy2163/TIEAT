@@ -107,6 +107,7 @@ class MonthlyMealUsageListController {
 
     record MonthlyMealUsageItemResponse(
         UUID id,
+        UUID mealContractId,
         String status,
         String partnerDisplayName,
         long amountMinor,
@@ -126,6 +127,7 @@ class MonthlyMealUsageListController {
                 .orElseThrow(() -> new IllegalStateException("Confirmed meal usage requires staff initials"));
             return new MonthlyMealUsageItemResponse(
                 mealUsage.id().value(),
+                mealUsage.mealContractId().value(),
                 "CONFIRMED",
                 mealUsage.partnerDisplayNameSnapshot().orElse(null),
                 mealUsage.amount(),
