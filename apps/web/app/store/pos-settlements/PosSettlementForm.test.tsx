@@ -5,6 +5,7 @@ import { ApiError } from "@/lib/store-api";
 import {
   downloadPosSettlementReceipt,
   getRecentPosSettlements,
+  uploadPosSettlementReceipt,
   type PosSettlement,
   type PosSettlementHistoryPage,
 } from "@/lib/pos-settlement-api";
@@ -22,11 +23,13 @@ vi.mock("@/lib/pos-settlement-api", async (importOriginal) => {
     ...original,
     downloadPosSettlementReceipt: vi.fn(),
     getRecentPosSettlements: vi.fn(),
+    uploadPosSettlementReceipt: vi.fn(),
   };
 });
 
 const getRecentPosSettlementsMock = vi.mocked(getRecentPosSettlements);
 const downloadPosSettlementReceiptMock = vi.mocked(downloadPosSettlementReceipt);
+const uploadPosSettlementReceiptMock = vi.mocked(uploadPosSettlementReceipt);
 
 const availableSettlementId = "00000000-0000-0000-0000-000000000101";
 const expiredSettlementId = "00000000-0000-0000-0000-000000000102";
@@ -48,6 +51,7 @@ function settlement(
     posBusinessDate,
     submittedTotalMinor: 12_000,
     recordedAt: "2026-08-12T02:00:00Z",
+    recordedByLoginId: "store-hk",
     allocations: [allocation],
     receipt,
   };
@@ -106,6 +110,8 @@ describe("PosSettlementForm history view", () => {
     expect(screen.getByText("영수증 있음")).toBeVisible();
     expect(screen.getByText("settlement.pdf")).toBeVisible();
     expect(screen.getByRole("button", { name: "영수증 다운로드" })).toBeVisible();
+    expect(screen.getByText("결제 확인자")).toBeVisible();
+    expect(screen.getByText("store-hk")).toBeVisible();
     expect(screen.queryByText(availableSettlementId)).not.toBeInTheDocument();
   });
 
@@ -137,7 +143,7 @@ describe("PosSettlementForm history view", () => {
     expect(await screen.findByRole("heading", { name: "결제일 2026-08-11", level: 2 })).toBeVisible();
   });
 
-  it("shows receipt presence safely and keeps upload controls out of history", async () => {
+  it("shows receipt presence safely and offers upload only when a receipt is missing", async () => {
     const user = userEvent.setup();
     getRecentPosSettlementsMock.mockResolvedValue(historyPage([
       settlement(availableSettlementId, "2026-08-11", availableReceipt),
@@ -153,16 +159,47 @@ describe("PosSettlementForm history view", () => {
     await user.click(screen.getByRole("button", { name: "결제일 2026-08-11 상세 보기" }));
     expect(screen.getByText("영수증 있음")).toBeVisible();
     expect(screen.getByRole("button", { name: "영수증 다운로드" })).toBeVisible();
+    expect(screen.queryByLabelText("영수증 첨부")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "결제일 2026-08-10 상세 보기" }));
     expect(screen.getByText("영수증 만료")).toBeVisible();
     expect(screen.getByText("expired-receipt.jpg")).toBeVisible();
+    expect(screen.queryByLabelText("영수증 첨부")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "영수증 다운로드" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "결제일 2026-08-09 상세 보기" }));
-    expect(screen.getByText("영수증 없음")).toBeVisible();
+    expect(screen.getByLabelText("영수증 첨부")).toBeVisible();
     expect(screen.queryByRole("button", { name: "영수증 다운로드" })).not.toBeInTheDocument();
     expect(screen.queryByText(availableSettlementId)).not.toBeInTheDocument();
     expect(screen.queryByText(expiredSettlementId)).not.toBeInTheDocument();
     expect(downloadPosSettlementReceiptMock).not.toHaveBeenCalled();
+  });
+
+  it("uploads a receipt from an expanded history item and updates its receipt state", async () => {
+    const user = userEvent.setup();
+    const saved = settlement(legacySettlementId, "2026-08-09", noReceipt);
+    getRecentPosSettlementsMock.mockResolvedValue(historyPage([saved]));
+    uploadPosSettlementReceiptMock.mockResolvedValue({
+      posSettlementId: legacySettlementId,
+      fileName: "history.pdf",
+      contentType: "application/pdf",
+      sizeBytes: 1_024,
+      uploadedAt: "2026-08-12T03:00:00Z",
+      expiresAt: "2027-08-12T03:00:00Z",
+    });
+
+    render(<PosSettlementForm />);
+
+    await user.click(await screen.findByRole("button", { name: "결제일 2026-08-09 상세 보기" }));
+    const receiptInput = screen.getByLabelText("영수증 첨부");
+    await user.upload(receiptInput, new File(["%PDF-"], "history.pdf", { type: "application/pdf" }));
+
+    await waitFor(() => expect(uploadPosSettlementReceiptMock).toHaveBeenCalledWith(
+      legacySettlementId,
+      expect.any(File),
+    ));
+    expect(screen.getByText("영수증 있음")).toBeVisible();
+    expect(screen.getByText("history.pdf")).toBeVisible();
+    expect(screen.getByRole("button", { name: "영수증 다운로드" })).toBeVisible();
+    expect(screen.queryByLabelText("영수증 첨부")).not.toBeInTheDocument();
   });
 
   it("allows a failed history request to be retried without showing a false record success", async () => {

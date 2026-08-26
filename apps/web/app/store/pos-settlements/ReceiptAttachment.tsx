@@ -33,12 +33,14 @@ function receiptValidationMessage(file: File): string | null {
 }
 
 type ReceiptAttachmentProps = {
+  onUploaded?: (receipt: PosSettlementReceipt) => void;
   onPendingFileChange?: (file: File | null) => void;
   pendingFile?: File | null;
   posSettlementId?: string;
 };
 
 export function ReceiptAttachment({
+  onUploaded,
   onPendingFileChange,
   pendingFile = null,
   posSettlementId,
@@ -56,12 +58,13 @@ export function ReceiptAttachment({
       const uploaded = await uploadPosSettlementReceipt(posSettlementId, file);
       setReceipt(uploaded);
       setMessage("영수증을 안전하게 첨부했습니다.");
+      onUploaded?.(uploaded);
     } catch (error) {
       setMessage(receiptErrorMessage(error));
     } finally {
       setBusy(null);
     }
-  }, [posSettlementId]);
+  }, [onUploaded, posSettlementId]);
 
   useEffect(() => {
     if (

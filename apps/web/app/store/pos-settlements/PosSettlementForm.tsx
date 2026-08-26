@@ -7,9 +7,11 @@ import {
   getRecentPosSettlements,
   type PosSettlement,
   type PosSettlementHistoryPage,
+  type PosSettlementReceipt,
   type PosSettlementReceiptSummary,
 } from "@/lib/pos-settlement-api";
 import { posSettlementFormStyles } from "./PosSettlementForm.styles";
+import { ReceiptAttachment } from "./ReceiptAttachment";
 import { ReceiptDownload } from "./ReceiptDownload";
 
 type HistoryViewState = "loading" | "ready" | "empty" | "error";
@@ -46,6 +48,17 @@ function receiptStatusLabel(status: PosSettlementReceiptSummary["status"]): stri
   return "영수증 없음";
 }
 
+function receiptSummaryFromUpload(receipt: PosSettlementReceipt): PosSettlementReceiptSummary {
+  return {
+    status: "AVAILABLE",
+    fileName: receipt.fileName,
+    contentType: receipt.contentType,
+    sizeBytes: receipt.sizeBytes,
+    uploadedAt: receipt.uploadedAt,
+    expiresAt: receipt.expiresAt,
+  };
+}
+
 function StatePanel({
   title,
   description,
@@ -66,9 +79,19 @@ function StatePanel({
   );
 }
 
-function ReceiptSummaryView({ record }: { record: PosSettlement }) {
+function ReceiptSummaryView({
+  record,
+  onUploaded,
+}: {
+  record: PosSettlement;
+  onUploaded: (receipt: PosSettlementReceipt) => void;
+}) {
   const receipt = receiptSummaryOf(record);
   const canDownload = receipt.status === "AVAILABLE" && Boolean(record.posSettlementId);
+
+  if (receipt.status === "NONE" && record.posSettlementId) {
+    return <ReceiptAttachment onUploaded={onUploaded} posSettlementId={record.posSettlementId} />;
+  }
 
   return (
     <div className={posSettlementFormStyles.historyReceipt} aria-label="영수증 상태">
@@ -83,10 +106,11 @@ function ReceiptSummaryView({ record }: { record: PosSettlement }) {
   );
 }
 
-function HistoryItem({ record, index, expanded, onToggle }: {
+function HistoryItem({ record, index, expanded, onReceiptUploaded, onToggle }: {
   record: PosSettlement;
   index: number;
   expanded: boolean;
+  onReceiptUploaded: (receipt: PosSettlementReceipt) => void;
   onToggle: () => void;
 }) {
   const detailId = "pos-settlement-detail-" + index;
@@ -122,6 +146,10 @@ function HistoryItem({ record, index, expanded, onToggle }: {
                 <dt>기록 시각</dt>
                 <dd>{dateFormatter.format(new Date(record.recordedAt))}</dd>
               </div>
+              <div>
+                <dt>결제 확인자</dt>
+                <dd>{record.recordedByLoginId ?? "확인자 정보 없음"}</dd>
+              </div>
             </dl>
             <ul className={posSettlementFormStyles.historyAllocationList} aria-label={"결제일 " + record.posBusinessDate + " 결제 기록에 포함된 금액"}>
               {record.allocations.map((allocation, allocationIndex) => (
@@ -136,7 +164,7 @@ function HistoryItem({ record, index, expanded, onToggle }: {
                 </li>
               ))}
             </ul>
-            <ReceiptSummaryView record={record} />
+            <ReceiptSummaryView onUploaded={onReceiptUploaded} record={record} />
           </div>
         ) : null}
       </article>
@@ -278,6 +306,14 @@ export function PosSettlementForm() {
                 <HistoryItem
                   index={index}
                   key={record.recordedAt + "-" + index}
+                  onReceiptUploaded={(uploadedReceipt) => {
+                    if (!record.posSettlementId) return;
+                    setHistory((current) => current.map((candidate) => (
+                      candidate.posSettlementId === record.posSettlementId
+                        ? { ...candidate, receipt: receiptSummaryFromUpload(uploadedReceipt) }
+                        : candidate
+                    )));
+                  }}
                   onToggle={() => setExpandedIndex((current) => (current === index ? null : index))}
                   record={record}
                   expanded={expandedIndex === index}
