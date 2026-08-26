@@ -41,6 +41,15 @@ function groupStorePartners(partners: readonly StorePartner[]): StorePartnerGrou
   return Array.from(groups.values());
 }
 
+function getPartnerOptionLabel(group: StorePartnerGroup, index: number): string {
+  return group.partners.length === 1 ? group.partnerDisplayName : `계약 ${index + 1}`;
+}
+
+function getPartnerOptionAriaLabel(group: StorePartnerGroup, index: number): string {
+  const optionLabel = getPartnerOptionLabel(group, index);
+  return group.partners.length === 1 ? optionLabel : `${group.partnerDisplayName} · ${optionLabel}`;
+}
+
 export function StorePartnerScopeBar() {
   const {
     isMonthlyLedgerRoute,
@@ -99,11 +108,11 @@ export function StorePartnerScopeBar() {
               <optgroup key={group.key} label={group.partnerDisplayName}>
                 {group.partners.map((partner, index) => (
                   <option
-                    aria-label={`${group.partnerDisplayName} · 계약 ${index + 1}`}
+                    aria-label={getPartnerOptionAriaLabel(group, index)}
                     key={partner.mealContractId}
                     value={partner.mealContractId}
                   >
-                    {group.partners.length === 1 ? group.partnerDisplayName : `계약 ${index + 1}`}
+                    {getPartnerOptionLabel(group, index)}
                   </option>
                 ))}
               </optgroup>
@@ -112,7 +121,7 @@ export function StorePartnerScopeBar() {
         </div>
         {selectedPartner && selectedGroup && selectedContractIndex >= 0 ? (
           <span className={styles.status} role="status">
-            선택: {selectedGroup.partnerDisplayName} · 계약 {selectedContractIndex + 1}
+            선택: {getPartnerOptionAriaLabel(selectedGroup, selectedContractIndex)}
           </span>
         ) : null}
         {directoryState === "loading" ? <span className={styles.status} role="status">협력사 목록을 불러오는 중입니다.</span> : null}

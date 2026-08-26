@@ -155,6 +155,8 @@ describe("R-032 store partner workspace", () => {
     expect(partnerSelect.querySelectorAll("optgroup")).toHaveLength(2);
     expect(partnerSelect.querySelector("optgroup")?.getAttribute("label")).toBe(partnerA.partnerDisplayName);
     expect(partnerSelect.querySelectorAll("option")).toHaveLength(4);
+    expect(partnerSelect.querySelector(`option[value="${partnerB.mealContractId}"]`)).toHaveAttribute("aria-label", partnerB.partnerDisplayName);
+    expect(screen.queryByRole("option", { name: `${partnerB.partnerDisplayName} · 계약 1` })).not.toBeInTheDocument();
     expect(partnerMocks.getConfirmedMealUsages).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])-01$/), expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/), 0, 20);
 
     await user.click(screen.getByRole("button", { name: "다음 페이지" }));
@@ -165,6 +167,10 @@ describe("R-032 store partner workspace", () => {
     await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith(`/store/meal-usages/months?mealContractId=${partnerA.mealContractId}`));
     await waitFor(() => expect(partnerMocks.getConfirmedMealUsages).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])-01$/), expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/), 0, 20, partnerA.mealContractId));
     expect(await screen.findByText("가나다 협력사 장부")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("협력사 선택"), partnerB.mealContractId);
+    expect(await screen.findByText(`선택: ${partnerB.partnerDisplayName}`)).toHaveAttribute("role", "status");
+    expect(screen.queryByText(`선택: ${partnerB.partnerDisplayName} · 계약 1`)).not.toBeInTheDocument();
 
     const resolveStale = releaseStale as ((value: ConfirmedMealUsagePage) => void) | null;
     resolveStale?.(mealPage([mealUsage("late-1", "늦게 도착한 이전 페이지")], 1));
