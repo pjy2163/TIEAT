@@ -59,6 +59,7 @@ public class SecurityConfiguration {
                 .requestMatchers("/actuator/health", "/actuator/info", "/api/v1/csrf", "/api/v1/sessions", "/v3/api-docs/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/store-place-searches").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/store-signups").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/session-reauthentications").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.GET, "/api/v1/public/meal-usage-qr/*").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/public/meal-usage-qr/*/meal-usages").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/public/meal-usage-qr/*/meal-usages/*").permitAll()

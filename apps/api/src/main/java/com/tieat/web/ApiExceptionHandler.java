@@ -11,6 +11,9 @@ import com.tieat.ledger.application.InvalidPendingMealUsageQueryException;
 import com.tieat.ledger.application.InvalidMonthlyMealUsageQueryException;
 import com.tieat.ledger.application.InvalidConfirmedMealUsageQueryException;
 import com.tieat.onboarding.application.OnboardingException;
+import com.tieat.identity.application.SessionReauthenticationFailedException;
+import com.tieat.identity.application.SessionReauthenticationInvalidException;
+import com.tieat.identity.application.PasswordReauthenticationRequiredException;
 import com.tieat.settlement.application.InvalidPosSettlementHistoryQueryException;
 import com.tieat.ledger.domain.PublicMealUsageIdempotency.InvalidPublicRequestKeyException;
 import com.tieat.qr.application.PublicMealUsageQrNotFoundException;
@@ -214,6 +217,18 @@ public class ApiExceptionHandler {
         };
     }
 
+    @ExceptionHandler(PasswordReauthenticationRequiredException.class)
+    ResponseEntity<ProblemDetail> handlePasswordReauthenticationRequired(
+        PasswordReauthenticationRequiredException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.FORBIDDEN,
+            "PASSWORD_REAUTHENTICATION_REQUIRED",
+            "Password reauthentication is required"
+        );
+    }
 
     @ExceptionHandler(StorePartnerArchivePinRequiredException.class)
     ResponseEntity<ProblemDetail> handleStorePartnerArchivePinRequired(
@@ -325,6 +340,32 @@ public class ApiExceptionHandler {
         );
     }
 
+    @ExceptionHandler(SessionReauthenticationFailedException.class)
+    ResponseEntity<ProblemDetail> handleSessionReauthenticationFailed(
+        SessionReauthenticationFailedException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.UNAUTHORIZED,
+            "SESSION_REAUTHENTICATION_FAILED",
+            "Reauthentication failed"
+        );
+    }
+
+    @ExceptionHandler(SessionReauthenticationInvalidException.class)
+    ResponseEntity<ProblemDetail> handleSessionReauthenticationInvalid(
+        SessionReauthenticationInvalidException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.BAD_REQUEST,
+            "SESSION_REAUTHENTICATION_INVALID",
+            "Reauthentication input is invalid"
+        );
+    }
+
     @ExceptionHandler({
         BindException.class,
         HttpMessageNotReadableException.class,
@@ -339,6 +380,15 @@ public class ApiExceptionHandler {
         InvalidPublicRequestKeyException.class
     })
     ResponseEntity<ProblemDetail> handleValidation(Exception exception, HttpServletRequest request) {
+        if (exception instanceof HttpMessageNotReadableException
+            && problemDetailFactory.isSessionReauthenticationRequest(request)) {
+            return problem(
+                request,
+                HttpStatus.BAD_REQUEST,
+                "SESSION_REAUTHENTICATION_INVALID",
+                "Reauthentication input is invalid"
+            );
+        }
         return problem(request, HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Request validation failed");
     }
 
@@ -362,7 +412,8 @@ public class ApiExceptionHandler {
         if (problemDetailFactory.isPublicMealUsageQrRequest(request)
             || problemDetailFactory.isMonthlyMealUsageRequest(request)
             || problemDetailFactory.isPosSettlementRequest(request)
-            || problemDetailFactory.isStoreOnboardingRequest(request)) {
+            || problemDetailFactory.isStoreOnboardingRequest(request)
+            || problemDetailFactory.isSessionReauthenticationRequest(request)) {
             response.cacheControl(CacheControl.noStore());
         }
         return response.body(problemDetailFactory.create(request, status, errorCode, detail));
