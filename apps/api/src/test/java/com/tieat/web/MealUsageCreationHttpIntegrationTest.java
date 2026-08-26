@@ -18,6 +18,7 @@ import com.tieat.partnership.domain.MealContractId;
 import com.tieat.partnership.domain.MealContractPaymentType;
 import com.tieat.partnership.domain.MealContractRepository;
 import com.tieat.store.domain.StoreId;
+import com.tieat.web.StoreOnboardingHttpIntegrationSupport.SessionHandle;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -92,7 +92,7 @@ class MealUsageCreationHttpIntegrationTest {
         seedAccount("store-hk", "correct-password", STORE_ID);
         MealContract contract = prepaidContract(STORE_ID, 10_000);
         mealContractRepository.save(contract);
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
         String csrfToken = csrfToken(session);
 
         MvcResult result = mockMvc.perform(createRequest(
@@ -126,7 +126,7 @@ class MealUsageCreationHttpIntegrationTest {
     @Test
     void rejectsMalformedAndClientControlledBodiesBeforeSaving() throws Exception {
         seedAccount("store-hk", "correct-password", STORE_ID);
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
         String csrfToken = csrfToken(session);
 
         for (String body : new String[] {
@@ -151,7 +151,7 @@ class MealUsageCreationHttpIntegrationTest {
         seedAccount("store-hk", "correct-password", STORE_ID);
         MealContract crossStoreContract = prepaidContract(OTHER_STORE_ID, 10_000);
         mealContractRepository.save(crossStoreContract);
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
         String csrfToken = csrfToken(session);
 
         mockMvc.perform(createRequest(session, csrfToken, "{\"mealContractId\":\"" + UUID.randomUUID() + "\",\"amountMinor\":12000}"))
@@ -198,40 +198,33 @@ class MealUsageCreationHttpIntegrationTest {
             .andExpect(jsonPath("$.components.schemas.ProblemResponse.properties.errorCode").exists());
     }
 
-    private MockHttpSession authenticatedSession(String loginId, String password) throws Exception {
-        MockHttpSession session = csrfSession();
+    private SessionHandle authenticatedSession(String loginId, String password) throws Exception {
+        SessionHandle session = csrfSession();
         MvcResult login = mockMvc.perform(post("/api/v1/sessions")
-                .session(session)
+                .cookie(session.cookie())
                 .header("X-CSRF-TOKEN", csrfToken(session))
                 .param("loginId", loginId)
                 .param("password", password))
             .andExpect(status().isNoContent())
             .andReturn();
-        return (MockHttpSession) login.getRequest().getSession(false);
+        return StoreOnboardingHttpIntegrationSupport.authenticatedSession(mockMvc, objectMapper, login);
     }
 
-    private MockHttpSession csrfSession() throws Exception {
-        return (MockHttpSession) mockMvc.perform(get("/api/v1/csrf"))
-            .andExpect(status().isOk())
-            .andReturn()
-            .getRequest()
-            .getSession(false);
+    private SessionHandle csrfSession() throws Exception {
+        return StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
     }
 
-    private String csrfToken(MockHttpSession session) throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/v1/csrf").session(session))
-            .andExpect(status().isOk())
-            .andReturn();
-        return objectMapper.readTree(result.getResponse().getContentAsString()).get("token").asText();
+    private String csrfToken(SessionHandle session) throws Exception {
+        return StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder createRequest(
-        MockHttpSession session,
+        SessionHandle session,
         String csrfToken,
         String body
     ) {
         return post("/api/v1/meal-usages")
-            .session(session)
+            .cookie(session.cookie())
             .header("X-CSRF-TOKEN", csrfToken)
             .contentType(MediaType.APPLICATION_JSON)
             .content(body);

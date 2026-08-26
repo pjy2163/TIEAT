@@ -29,6 +29,7 @@ import com.tieat.settlement.application.PosSettlementConflictException;
 import com.tieat.settlement.application.RecordPosSettlementCommand;
 import com.tieat.settlement.application.RecordPosSettlementUseCase;
 import com.tieat.store.domain.StoreId;
+import com.tieat.web.StoreOnboardingHttpIntegrationSupport.SessionHandle;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -49,7 +50,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -172,9 +172,9 @@ class PosSettlementHttpIntegrationTest {
             Instant.parse("2026-08-12T00:30:00Z"),
             new SettlementAllocationFixture(partiallyAllocated.id().value(), 1_000)
         );
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
 
-        MvcResult receivables = mockMvc.perform(get("/api/v1/pos-settlements/receivables").session(session))
+        MvcResult receivables = mockMvc.perform(get("/api/v1/pos-settlements/receivables").cookie(session.cookie()))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
             .andExpect(jsonPath("$.items.length()").value(2))
@@ -264,7 +264,7 @@ class PosSettlementHttpIntegrationTest {
             ))
             .andExpect(problem(HttpStatus.CONFLICT.value(), "IDEMPOTENCY_KEY_REUSED"));
 
-        MvcResult noCandidatesAfterAllocation = mockMvc.perform(get("/api/v1/pos-settlements/receivables").session(session))
+        MvcResult noCandidatesAfterAllocation = mockMvc.perform(get("/api/v1/pos-settlements/receivables").cookie(session.cookie()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.items").isEmpty())
             .andReturn();
@@ -283,7 +283,7 @@ class PosSettlementHttpIntegrationTest {
         MealUsage second = confirmedUsage(contract.id(), STORE_ID, 2_000, 0, 2_000, 0, "협력사 B");
         mealUsageRepository.save(first);
         mealUsageRepository.save(second);
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
 
         MvcResult recorded = mockMvc.perform(recordRequest(
                 session,
@@ -295,7 +295,7 @@ class PosSettlementHttpIntegrationTest {
             .andReturn();
         JsonNode recordedBody = objectMapper.readTree(recorded.getResponse().getContentAsString());
 
-        MvcResult history = mockMvc.perform(get("/api/v1/pos-settlements?page=0&size=20").session(session))
+        MvcResult history = mockMvc.perform(get("/api/v1/pos-settlements?page=0&size=20").cookie(session.cookie()))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
             .andExpect(jsonPath("$.page").value(0))
@@ -380,9 +380,9 @@ class PosSettlementHttpIntegrationTest {
             Instant.parse("2026-08-12T04:00:00Z"),
             new SettlementAllocationFixture(otherStoreUsage.id().value(), 5_000)
         );
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
 
-        mockMvc.perform(get("/api/v1/pos-settlements?page=0&size=2").session(session))
+        mockMvc.perform(get("/api/v1/pos-settlements?page=0&size=2").cookie(session.cookie()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.items.length()").value(2))
             .andExpect(jsonPath("$.items[0].recordedAt").value("2026-08-12T03:00:00Z"))
@@ -396,7 +396,7 @@ class PosSettlementHttpIntegrationTest {
             .andExpect(jsonPath("$.items[1].allocations.length()").value(1))
             .andExpect(jsonPath("$.items[1].allocations[0].receivableAmountMinor").value(3_000))
             .andExpect(jsonPath("$.hasNext").value(true));
-        mockMvc.perform(get("/api/v1/pos-settlements?page=1&size=2").session(session))
+        mockMvc.perform(get("/api/v1/pos-settlements?page=1&size=2").cookie(session.cookie()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.items.length()").value(1))
             .andExpect(jsonPath("$.items[0].recordedAt").value("2026-08-12T02:00:00Z"))
@@ -425,7 +425,7 @@ class PosSettlementHttpIntegrationTest {
         mealUsageRepository.save(crossStore);
         mealUsageRepository.save(pending);
         mealUsageRepository.save(fullyPrepaid);
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
 
         mockMvc.perform(recordRequest(session, csrfToken(session), UUID.randomUUID(),
                 settlementBody(otherStoreContract.id(), List.of(valid.id().value()), 1_000)))
@@ -486,7 +486,7 @@ class PosSettlementHttpIntegrationTest {
             .andExpect(problem(HttpStatus.FORBIDDEN.value(), "ACCESS_DENIED"));
 
         seedAccount("store-hk", "correct-password", STORE_ID);
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
         for (String query : new String[] {
             "page=-1&size=1",
             "page=0&size=0",
@@ -495,10 +495,10 @@ class PosSettlementHttpIntegrationTest {
             "size=1",
             "page=0"
         }) {
-            mockMvc.perform(get("/api/v1/pos-settlements?" + query).session(session))
+            mockMvc.perform(get("/api/v1/pos-settlements?" + query).cookie(session.cookie()))
                 .andExpect(problem(HttpStatus.BAD_REQUEST.value(), "VALIDATION_FAILED"));
         }
-        mockMvc.perform(get("/api/v1/pos-settlements?page=0&size=1").session(session))
+        mockMvc.perform(get("/api/v1/pos-settlements?page=0&size=1").cookie(session.cookie()))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
             .andExpect(jsonPath("$.items").isEmpty());
@@ -635,41 +635,34 @@ class PosSettlementHttpIntegrationTest {
         );
     }
 
-    private MockHttpSession authenticatedSession(String loginId, String password) throws Exception {
-        MockHttpSession session = csrfSession();
+    private SessionHandle authenticatedSession(String loginId, String password) throws Exception {
+        SessionHandle session = csrfSession();
         MvcResult login = mockMvc.perform(post("/api/v1/sessions")
-                .session(session)
+                .cookie(session.cookie())
                 .header("X-CSRF-TOKEN", csrfToken(session))
                 .param("loginId", loginId)
                 .param("password", password))
             .andExpect(status().isNoContent())
             .andReturn();
-        return (MockHttpSession) login.getRequest().getSession(false);
+        return StoreOnboardingHttpIntegrationSupport.authenticatedSession(mockMvc, objectMapper, login);
     }
 
-    private MockHttpSession csrfSession() throws Exception {
-        return (MockHttpSession) mockMvc.perform(get("/api/v1/csrf"))
-            .andExpect(status().isOk())
-            .andReturn()
-            .getRequest()
-            .getSession(false);
+    private SessionHandle csrfSession() throws Exception {
+        return StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
     }
 
-    private String csrfToken(MockHttpSession session) throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/v1/csrf").session(session))
-            .andExpect(status().isOk())
-            .andReturn();
-        return objectMapper.readTree(result.getResponse().getContentAsString()).get("token").asText();
+    private String csrfToken(SessionHandle session) throws Exception {
+        return StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder recordRequest(
-        MockHttpSession session,
+        SessionHandle session,
         String csrfToken,
         UUID idempotencyKey,
         String body
     ) {
         return post("/api/v1/pos-settlements")
-            .session(session)
+            .cookie(session.cookie())
             .header("X-CSRF-TOKEN", csrfToken)
             .header("Idempotency-Key", idempotencyKey.toString())
             .contentType(MediaType.APPLICATION_JSON)

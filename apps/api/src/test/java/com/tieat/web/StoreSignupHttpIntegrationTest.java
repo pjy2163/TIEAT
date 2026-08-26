@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.tieat.onboarding.application.OnboardingException;
 import com.tieat.onboarding.application.StorePlaceSearchGateway;
 import com.tieat.onboarding.application.StorePlaceSearchGateway.PlaceSearchResult;
+import com.tieat.web.StoreOnboardingHttpIntegrationSupport.SessionHandle;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -31,7 +32,6 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -82,7 +82,7 @@ class StoreSignupHttpIntegrationTest {
     @BeforeEach
     void clearDatabase() {
         jdbcTemplate.execute("""
-            truncate table stores, store_catalog_entries, store_accounts, partner_organizations, meal_contracts, meal_usages
+            truncate table store_partner_registrations, stores, store_catalog_entries, store_accounts, partner_organizations, meal_contracts, meal_usages
             restart identity cascade
             """);
         placeSearchGateway.reset();
@@ -90,8 +90,8 @@ class StoreSignupHttpIntegrationTest {
 
     @Test
     void signsUpManualStoreAtomicallyRotatesSessionAndUsesItImmediately() throws Exception {
-        MockHttpSession originalSession = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc);
-        String originalSessionId = originalSession.getId();
+        SessionHandle originalSession = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
+        String originalSessionId = originalSession.sessionId();
 
         MvcResult result = mockMvc.perform(StoreOnboardingHttpIntegrationSupport.signupRequest(
                 originalSession,
@@ -102,8 +102,8 @@ class StoreSignupHttpIntegrationTest {
             .andExpect(jsonPath("$.onboardingStatus").value("PARTNER_REQUIRED"))
             .andReturn();
 
-        MockHttpSession signedUpSession = (MockHttpSession) result.getRequest().getSession(false);
-        assertThat(signedUpSession.getId()).isNotEqualTo(originalSessionId);
+        SessionHandle signedUpSession = StoreOnboardingHttpIntegrationSupport.authenticatedSession(mockMvc, objectMapper, result);
+        assertThat(signedUpSession.sessionId()).isNotEqualTo(originalSessionId);
         assertThat(result.getResponse().getContentAsString())
             .doesNotContain(StoreOnboardingHttpIntegrationSupport.INVITE_CODE)
             .doesNotContain("correct-password");
@@ -121,7 +121,7 @@ class StoreSignupHttpIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("select password_hash from store_accounts where login_id = ?", String.class, "new-store"))
             .isNotEqualTo("correct-password");
 
-        mockMvc.perform(get("/api/v1/store-onboarding").session(signedUpSession))
+        mockMvc.perform(get("/api/v1/store-onboarding").cookie(signedUpSession.cookie()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.onboardingStatus").value("PARTNER_REQUIRED"))
             .andExpect(jsonPath("$.legacy").value(false));
@@ -134,7 +134,7 @@ class StoreSignupHttpIntegrationTest {
                 .content(signupBody("new-store", "correct-password", "새 가게")))
             .andExpect(StoreOnboardingHttpIntegrationSupport.problem(403, "CSRF_TOKEN_INVALID"));
 
-        MockHttpSession session = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc);
+        SessionHandle session = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
         String csrfToken = StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
         mockMvc.perform(StoreOnboardingHttpIntegrationSupport.signupRequest(
                 session,
@@ -157,7 +157,7 @@ class StoreSignupHttpIntegrationTest {
         StoreOnboardingHttpIntegrationSupport.signUpManualStore(
             mockMvc, objectMapper, "duplicate-store", "correct-password", "첫 가게"
         );
-        MockHttpSession duplicateSession = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc);
+        SessionHandle duplicateSession = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
         mockMvc.perform(StoreOnboardingHttpIntegrationSupport.signupRequest(
                 duplicateSession,
                 StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, duplicateSession),
@@ -166,8 +166,8 @@ class StoreSignupHttpIntegrationTest {
             .andExpect(StoreOnboardingHttpIntegrationSupport.problem(409, "ONBOARDING_LOGIN_ID_IN_USE"));
         assertThat(jdbcTemplate.queryForObject("select count(*) from stores", Long.class)).isEqualTo(1);
 
-        MockHttpSession firstSession = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc);
-        MockHttpSession secondSession = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc);
+        SessionHandle firstSession = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
+        SessionHandle secondSession = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
         String firstCsrf = StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, firstSession);
         String secondCsrf = StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, secondSession);
         CountDownLatch start = new CountDownLatch(1);
@@ -189,7 +189,7 @@ class StoreSignupHttpIntegrationTest {
 
     @Test
     void searchesOnlyForAValidInviteProjectsKakaoDisplayDataAndKeepsItOutOfStorePersistence() throws Exception {
-        MockHttpSession session = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc);
+        SessionHandle session = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
         String csrfToken = StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
 
         mockMvc.perform(placeSearchRequest(session, csrfToken, "wrong-code", "TIEAT"))
@@ -230,10 +230,10 @@ class StoreSignupHttpIntegrationTest {
             "legacy-store", passwordEncoder.encode("correct-password"), legacyStoreId
         );
 
-        MockHttpSession session = StoreOnboardingHttpIntegrationSupport.authenticatedSession(
+        SessionHandle session = StoreOnboardingHttpIntegrationSupport.authenticatedSession(
             mockMvc, objectMapper, "legacy-store", "correct-password"
         );
-        mockMvc.perform(get("/api/v1/store-onboarding").session(session))
+        mockMvc.perform(get("/api/v1/store-onboarding").cookie(session.cookie()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.onboardingStatus").value("COMPLETE"))
             .andExpect(jsonPath("$.legacy").value(true));
@@ -242,7 +242,7 @@ class StoreSignupHttpIntegrationTest {
 
     private Callable<Integer> signupAttempt(
         CountDownLatch start,
-        MockHttpSession session,
+        SessionHandle session,
         String csrfToken,
         String storeName
     ) {
@@ -260,13 +260,13 @@ class StoreSignupHttpIntegrationTest {
     }
 
     private MockHttpServletRequestBuilder placeSearchRequest(
-        MockHttpSession session,
+        SessionHandle session,
         String csrfToken,
         String inviteCode,
         String query
     ) {
         return post("/api/v1/store-place-searches")
-            .session(session)
+            .cookie(session.cookie())
             .header("X-CSRF-TOKEN", csrfToken)
             .contentType(MediaType.APPLICATION_JSON)
             .content("{\"inviteCode\":\"" + inviteCode + "\",\"query\":\"" + query + "\"}");

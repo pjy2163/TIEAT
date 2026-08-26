@@ -16,6 +16,7 @@ import com.tieat.ledger.domain.MealUsageRepository;
 import com.tieat.ledger.domain.PrepaidAllocation;
 import com.tieat.partnership.domain.MealContractId;
 import com.tieat.store.domain.StoreId;
+import com.tieat.web.StoreOnboardingHttpIntegrationSupport.SessionHandle;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
@@ -27,7 +28,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -93,7 +93,7 @@ class MealUsagePendingListHttpIntegrationTest {
         mealUsageRepository.save(sameTimeSecond);
         mealUsageRepository.save(pending(OTHER_STORE_ID, "00000000-0000-0000-0000-000000000004", "2026-08-04T01:00:00Z"));
         mealUsageRepository.save(confirmed(STORE_ID, "00000000-0000-0000-0000-000000000005", "2026-08-03T01:00:00Z"));
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
         long initialCount = jdbcTemplate.queryForObject("select count(*) from meal_usages", Long.class);
         long initialVersionSum = jdbcTemplate.queryForObject("select coalesce(sum(version), 0) from meal_usages", Long.class);
 
@@ -137,7 +137,7 @@ class MealUsagePendingListHttpIntegrationTest {
     @Test
     void rejectsInvalidOrMissingQueryParametersAndEnforcesAuthenticationAndRole() throws Exception {
         seedAccount("store-hk", "correct-password", STORE_ID);
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
 
         mockMvc.perform(get("/api/v1/meal-usages"))
             .andExpect(problem(HttpStatus.UNAUTHORIZED.value(), "AUTHENTICATION_REQUIRED"));
@@ -154,7 +154,7 @@ class MealUsagePendingListHttpIntegrationTest {
             "status=PENDING&size=50",
             "status=PENDING&page=0"
         }) {
-            mockMvc.perform(get("/api/v1/meal-usages?" + query).session(session))
+            mockMvc.perform(get("/api/v1/meal-usages?" + query).cookie(session.cookie()))
                 .andExpect(problem(HttpStatus.BAD_REQUEST.value(), "VALIDATION_FAILED"));
         }
         mockMvc.perform(listRequest(session, "PENDING", 0, 1))
@@ -205,7 +205,7 @@ class MealUsagePendingListHttpIntegrationTest {
             "홍길동"
         );
         mealUsageRepository.save(usage);
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
 
         mockMvc.perform(listRequest(session, "PENDING", 0, 50))
             .andExpect(status().isOk())
@@ -213,42 +213,34 @@ class MealUsagePendingListHttpIntegrationTest {
             .andExpect(jsonPath("$.items[0].customerName").value("홍길동"));
     }
 
-    private MockHttpSession authenticatedSession(String loginId, String password) throws Exception {
-        MockHttpSession session = csrfSession();
+    private SessionHandle authenticatedSession(String loginId, String password) throws Exception {
+        SessionHandle session = csrfSession();
         MvcResult login = mockMvc.perform(post("/api/v1/sessions")
-                .session(session)
+                .cookie(session.cookie())
                 .header("X-CSRF-TOKEN", csrfToken(session))
                 .param("loginId", loginId)
                 .param("password", password))
             .andExpect(status().isNoContent())
             .andReturn();
-        return (MockHttpSession) login.getRequest().getSession(false);
+        return StoreOnboardingHttpIntegrationSupport.authenticatedSession(mockMvc, objectMapper, login);
     }
 
-    private MockHttpSession csrfSession() throws Exception {
-        return (MockHttpSession) mockMvc.perform(get("/api/v1/csrf"))
-            .andExpect(status().isOk())
-            .andReturn()
-            .getRequest()
-            .getSession(false);
+    private SessionHandle csrfSession() throws Exception {
+        return StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
     }
 
-    private String csrfToken(MockHttpSession session) throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/v1/csrf").session(session))
-            .andExpect(status().isOk())
-            .andReturn();
-        JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
-        return response.get("token").asText();
+    private String csrfToken(SessionHandle session) throws Exception {
+        return StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder listRequest(
-        MockHttpSession session,
+        SessionHandle session,
         String status,
         int page,
         int size
     ) {
         return get("/api/v1/meal-usages")
-            .session(session)
+            .cookie(session.cookie())
             .param("status", status)
             .param("page", Integer.toString(page))
             .param("size", Integer.toString(size));

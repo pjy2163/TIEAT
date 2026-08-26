@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.tieat.web.StoreOnboardingHttpIntegrationSupport.SessionHandle;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -19,7 +20,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -64,14 +64,14 @@ class StorePartnerOnboardingHttpIntegrationTest {
     @BeforeEach
     void clearDatabase() {
         jdbcTemplate.execute("""
-            truncate table stores, store_catalog_entries, store_accounts, partner_organizations, meal_contracts, meal_usages
+            truncate table store_partner_registrations, stores, store_catalog_entries, store_accounts, partner_organizations, meal_contracts, meal_usages
             restart identity cascade
             """);
     }
 
     @Test
     void registersPostpaidFirstPartnerCompletesOnboardingAndReplaysWithoutADuplicate() throws Exception {
-        MockHttpSession session = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
+        SessionHandle session = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
             mockMvc, objectMapper, "postpaid-store", "correct-password", "후불 가게"
         );
         String csrfToken = StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
@@ -82,6 +82,8 @@ class StorePartnerOnboardingHttpIntegrationTest {
             .andExpect(jsonPath("$.onboardingStatus").value("COMPLETE"))
             .andExpect(jsonPath("$.created").value(true))
             .andExpect(jsonPath("$.partnerDisplayName").value("협력사 A"))
+            .andExpect(jsonPath("$.partnerKind").value("ORGANIZATION"))
+            .andExpect(jsonPath("$.mealContractId").isNotEmpty())
             .andExpect(jsonPath("$.paymentType").value("POSTPAID"));
         mockMvc.perform(StoreOnboardingHttpIntegrationSupport.partnerRequest(session, csrfToken, body))
             .andExpect(status().isOk())
@@ -98,17 +100,17 @@ class StorePartnerOnboardingHttpIntegrationTest {
             .isZero();
         assertThat(jdbcTemplate.queryForObject("select qr_selectable from meal_contracts where store_id = ?", Boolean.class, storeId))
             .isTrue();
-        mockMvc.perform(get("/api/v1/store-onboarding").session(session))
+        mockMvc.perform(get("/api/v1/store-onboarding").cookie(session.cookie()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.onboardingStatus").value("COMPLETE"));
     }
 
     @Test
     void usesAuthenticatedStoreScopeForPrepaidPartnerAndNeverMergesSameNames() throws Exception {
-        MockHttpSession firstSession = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
+        SessionHandle firstSession = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
             mockMvc, objectMapper, "prepaid-store", "correct-password", "선불 가게"
         );
-        MockHttpSession secondSession = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
+        SessionHandle secondSession = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
             mockMvc, objectMapper, "second-store", "correct-password", "두 번째 가게"
         );
 
@@ -141,7 +143,7 @@ class StorePartnerOnboardingHttpIntegrationTest {
 
     @Test
     void rejectsClientSuppliedStoreScopeBeforeCreatingTheFirstPartner() throws Exception {
-        MockHttpSession session = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
+        SessionHandle session = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
             mockMvc, objectMapper, "scoped-store", "correct-password", "범위 검증 가게"
         );
         String requestWithStoreId = partnerBody("협력사 A", "POSTPAID", 0, true)
@@ -164,7 +166,7 @@ class StorePartnerOnboardingHttpIntegrationTest {
 
     @Test
     void rejectsInvalidExplicitContractInputAtomicallyAndKeepsPartnerRequired() throws Exception {
-        MockHttpSession session = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
+        SessionHandle session = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
             mockMvc, objectMapper, "invalid-partner-store", "correct-password", "검증 가게"
         );
         String csrfToken = StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
@@ -192,10 +194,10 @@ class StorePartnerOnboardingHttpIntegrationTest {
 
     @Test
     void serializesConcurrentFirstPartnerRequestsAndLeavesExactlyOneContract() throws Exception {
-        MockHttpSession signUpSession = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
+        SessionHandle signUpSession = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
             mockMvc, objectMapper, "concurrent-partner-store", "correct-password", "경합 협력사 가게"
         );
-        MockHttpSession secondSession = StoreOnboardingHttpIntegrationSupport.authenticatedSession(
+        SessionHandle secondSession = StoreOnboardingHttpIntegrationSupport.authenticatedSession(
             mockMvc, objectMapper, "concurrent-partner-store", "correct-password"
         );
         String firstCsrf = StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, signUpSession);
@@ -229,7 +231,7 @@ class StorePartnerOnboardingHttpIntegrationTest {
             "insert into store_accounts (login_id, password_hash, store_id, enabled) values (?, ?, ?, true)",
             "legacy-store", passwordEncoder.encode("correct-password"), legacyStoreId
         );
-        MockHttpSession session = StoreOnboardingHttpIntegrationSupport.authenticatedSession(
+        SessionHandle session = StoreOnboardingHttpIntegrationSupport.authenticatedSession(
             mockMvc, objectMapper, "legacy-store", "correct-password"
         );
 
@@ -248,7 +250,7 @@ class StorePartnerOnboardingHttpIntegrationTest {
 
     private Callable<Integer> partnerAttempt(
         CountDownLatch start,
-        MockHttpSession session,
+        SessionHandle session,
         String csrfToken,
         String body
     ) {
@@ -267,7 +269,7 @@ class StorePartnerOnboardingHttpIntegrationTest {
 
     private String partnerBody(String partnerName, String paymentType, long initialPrepaidBalanceMinor, boolean qrSelectable) {
         return "{\"partnerName\":\"" + partnerName + "\",\"paymentType\":\"" + paymentType
-            + "\",\"initialPrepaidBalanceMinor\":" + initialPrepaidBalanceMinor
+            + "\",\"partnerKind\":\"ORGANIZATION\",\"initialPrepaidBalanceMinor\":" + initialPrepaidBalanceMinor
             + ",\"qrSelectable\":" + qrSelectable + "}";
     }
 }
