@@ -96,7 +96,6 @@ export function PosSettlementRecordDialog({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const mountedRef = useRef(false);
   const requestEpochRef = useRef(0);
-  const selectedUsageIdsRef = useRef<Set<string>>(new Set());
   const idempotencyKeyRef = useRef<string | null>(null);
   const submittingRef = useRef(false);
   const [viewState, setViewState] = useState<ViewState>("loading");
@@ -108,11 +107,6 @@ export function PosSettlementRecordDialog({
   const [settlement, setSettlement] = useState<PosSettlement | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [ledgerRefreshWarning, setLedgerRefreshWarning] = useState(false);
-
-  const replaceSelectedUsageIds = useCallback((next: Set<string>) => {
-    selectedUsageIdsRef.current = next;
-    setSelectedUsageIds(next);
-  }, []);
 
   const requestClose = useCallback(() => {
     if (submittingRef.current) return;
@@ -161,6 +155,7 @@ export function PosSettlementRecordDialog({
     setViewState("loading");
     setFormError(null);
     setSettlement(null);
+    setSelectedUsageIds(new Set());
     setLedgerRefreshWarning(false);
     if (seed.mealUsageIds.length === 0) {
       setViewState("error");
@@ -178,7 +173,7 @@ export function PosSettlementRecordDialog({
       }
       const initial = scoped.filter((item) => seed.mealUsageIds.includes(item.mealUsageId));
       setReceivables(scoped);
-      replaceSelectedUsageIds(new Set(initial.map((item) => item.mealUsageId)));
+      setSelectedUsageIds(new Set(initial.map((item) => item.mealUsageId)));
       setSubmittedTotalInput(String(initial.reduce((total, item) => total + item.receivableCreatedMinor, 0)));
       setViewState("ready");
     } catch (error) {
@@ -194,7 +189,7 @@ export function PosSettlementRecordDialog({
       setViewState("error");
       setFormError("결제할 금액을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     }
-  }, [onAccessDenied, onSessionExpired, replaceSelectedUsageIds, seed]);
+  }, [onAccessDenied, onSessionExpired, seed]);
 
   useEffect(() => {
     void loadReceivables();
@@ -208,21 +203,6 @@ export function PosSettlementRecordDialog({
     (total, receivable) => total + receivable.receivableCreatedMinor,
     0,
   );
-
-  function toggleReceivable(receivable: OutstandingReceivable) {
-    if (submittingRef.current) return;
-    const next = new Set(selectedUsageIdsRef.current);
-    if (next.has(receivable.mealUsageId)) next.delete(receivable.mealUsageId);
-    else next.add(receivable.mealUsageId);
-    replaceSelectedUsageIds(next);
-    setSubmittedTotalInput(next.size === 0
-      ? ""
-      : String(receivables
-        .filter((item) => next.has(item.mealUsageId))
-        .reduce((total, item) => total + item.receivableCreatedMinor, 0)));
-    idempotencyKeyRef.current = null;
-    setFormError(null);
-  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -289,7 +269,6 @@ export function PosSettlementRecordDialog({
 
   return (
     <dialog
-      aria-describedby="pos-settlement-record-dialog-description"
       aria-labelledby="pos-settlement-record-dialog-title"
       aria-modal="true"
       className={posSettlementFormStyles.recordDialog}
@@ -327,10 +306,6 @@ export function PosSettlementRecordDialog({
         </header>
 
         <div className={posSettlementFormStyles.recordDialogBody}>
-          <p className={posSettlementFormStyles.recordDialogDescription} id="pos-settlement-record-dialog-description">
-            선택한 장부 항목과 같은 계약의 최신 미수금만 표시합니다. 실제 결제는 POS에서 하고, 여기에는 결제 기록만 저장합니다.
-          </p>
-
           {viewState === "loading" ? (
             <div className={posSettlementFormStyles.state} aria-live="polite">
               <h3 className={posSettlementFormStyles.stateTitle}>결제할 금액을 확인하는 중</h3>
@@ -374,42 +349,6 @@ export function PosSettlementRecordDialog({
             </div>
           ) : (
             <>
-              <section className={posSettlementFormStyles.recordDialogScope} aria-labelledby="pos-settlement-record-scope-title">
-                <h3 className={posSettlementFormStyles.formTitle} id="pos-settlement-record-scope-title">협력사와 사용 내역</h3>
-                <p className={posSettlementFormStyles.formDescription}>다른 계약의 결제할 금액은 이 모달에서 선택할 수 없습니다.</p>
-                <div className={posSettlementFormStyles.recordDialogTableWrap}>
-                  <table className={posSettlementFormStyles.table}>
-                    <thead className={posSettlementFormStyles.tableHeader}>
-                      <tr>
-                        <th scope="col">선택</th>
-                        <th scope="col">사용일</th>
-                        <th className="text-right" scope="col">금액</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {receivables.map((receivable) => (
-                        <tr className={posSettlementFormStyles.row} key={receivable.mealUsageId}>
-                          <td>
-                            <input
-                              aria-label={`${receivable.partnerDisplayName ?? seed.partnerDisplayName ?? "협력사 정보 미입력"} ${dateFormatter.format(new Date(receivable.confirmedAt))} 선택`}
-                              checked={selectedUsageIds.has(receivable.mealUsageId)}
-                              className={posSettlementFormStyles.checkbox}
-                              disabled={isSubmitting}
-                              onChange={() => toggleReceivable(receivable)}
-                              type="checkbox"
-                            />
-                          </td>
-                          <td>
-                            <p className={posSettlementFormStyles.primary}>{dateFormatter.format(new Date(receivable.confirmedAt))}</p>
-                          </td>
-                          <td className={posSettlementFormStyles.amount}>{amountFormatter.format(receivable.receivableCreatedMinor)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-
               <form className={posSettlementFormStyles.recordDialogForm} onSubmit={(event) => void submit(event)}>
                 <dl className={posSettlementFormStyles.totals}>
                   <div>

@@ -318,8 +318,9 @@ describe("MonthlyMealUsageList", () => {
 
     expect(window.location.href).toBe(currentUrl);
     expect(getOutstandingReceivablesMock).toHaveBeenCalledTimes(2);
-    expect(within(dialog).getAllByRole("checkbox", { name: /협력사 A .* 선택/ })).toHaveLength(2);
-    expect(within(dialog).queryByRole("checkbox", { name: /협력사 C .* 선택/ })).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("협력사와 사용 내역")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("다른 계약의 결제할 금액은 이 모달에서 선택할 수 없습니다.")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("선택한 장부 항목과 같은 계약의 최신 미수금만 표시합니다.")).not.toBeInTheDocument();
     const amountInput = within(dialog).getByLabelText("결제 금액");
     expect(amountInput).toHaveValue("7,500");
     expect(amountInput).toHaveAttribute("type", "text");
@@ -340,7 +341,10 @@ describe("MonthlyMealUsageList", () => {
       { partnerDisplayName: second.partnerDisplayName, confirmedAt: second.confirmedAt, receivableAmountMinor: 2_500 },
     ] };
     getConfirmedMealUsagesMock
-      .mockResolvedValueOnce(page({ hasNext: false }))
+      .mockResolvedValueOnce(page({
+        hasNext: false,
+        items: [items[0], { ...items[0], id: second.mealUsageId, settlementStatus: "PAYMENT_DUE" }],
+      }))
       .mockResolvedValueOnce(page({
         hasNext: false,
         items: [{ ...items[0], settlementStatus: "PAYMENT_RECORDED" }],
@@ -351,12 +355,13 @@ describe("MonthlyMealUsageList", () => {
     vi.stubGlobal("crypto", { randomUUID: vi.fn().mockReturnValue("00000000-0000-0000-0000-000000000200") });
     render(<MonthlyMealUsageList />);
 
-    await user.click(await screen.findByRole("checkbox", { name: /협력사 A .* 선택/ }));
+    const ledgerSelections = await screen.findAllByRole("checkbox", { name: /협력사 A .* 선택/ });
+    await user.click(ledgerSelections[0]);
+    await user.click(ledgerSelections[1]);
     const openButton = await screen.findByRole("button", { name: "선택한 결제할 금액 기록하기" });
     await waitFor(() => expect(openButton).toBeEnabled());
     await user.click(openButton);
     const dialog = await screen.findByRole("dialog", { name: "결제 기록" });
-    await user.click(within(dialog).getAllByRole("checkbox", { name: /협력사 A .* 선택/ })[1]);
     fireEvent.change(within(dialog).getByLabelText("결제일"), { target: { value: "2026-08-11" } });
     const amountInput = within(dialog).getByLabelText("결제 금액");
     expect(amountInput).toHaveValue("10,000");
