@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.tieat.ledger.domain.MealUsage;
 import com.tieat.ledger.domain.MealUsageRepository;
+import com.tieat.web.StoreOnboardingHttpIntegrationSupport.SessionHandle;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Set;
@@ -31,7 +32,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -128,7 +128,7 @@ class MonthlyMealUsageHttpIntegrationTest {
         mealUsageRepository.save(confirmed(
             OTHER_STORE_ID, "00000000-0000-0000-0000-000000000009", "2026-08-31T14:59:59.999999Z", "다른 매장"
         ));
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
         long initialCount = jdbcTemplate.queryForObject("select count(*) from meal_usages", Long.class);
         long initialVersionSum = jdbcTemplate.queryForObject("select coalesce(sum(version), 0) from meal_usages", Long.class);
 
@@ -213,7 +213,7 @@ class MonthlyMealUsageHttpIntegrationTest {
         mealUsageRepository.save(mixed);
         recordSettlementAllocation(recorded);
 
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
         mockMvc.perform(monthlyRequest(session, "2026-08", 0, 20))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.items.length()").value(4))
@@ -225,6 +225,68 @@ class MonthlyMealUsageHttpIntegrationTest {
             .andExpect(jsonPath("$.items[2].settlementStatus").value("PAYMENT_RECORDED"))
             .andExpect(jsonPath("$.items[3].id").value(unpaid.id().value().toString()))
             .andExpect(jsonPath("$.items[3].settlementStatus").value("PAYMENT_DUE"));
+    }
+
+    @Test
+    void listsConfirmedDateRangeWithTheSameInclusiveKstBoundaryForRowsAndTotal() throws Exception {
+        seedAccount(jdbcTemplate, passwordEncoder, "store-hk", "correct-password", STORE_ID);
+        MealUsage firstDay = confirmed(
+            STORE_ID, "00000000-0000-0000-0000-000000000021", "2026-07-31T15:00:00Z", "첫날"
+        );
+        MealUsage lastMoment = confirmed(
+            STORE_ID, "00000000-0000-0000-0000-000000000022", "2026-08-31T14:59:59.999999Z", "마지막"
+        );
+        MealUsage nextDay = confirmed(
+            STORE_ID, "00000000-0000-0000-0000-000000000023", "2026-08-31T15:00:00Z", "다음날"
+        );
+        mealUsageRepository.save(firstDay);
+        mealUsageRepository.save(lastMoment);
+        mealUsageRepository.save(nextDay);
+        mealUsageRepository.save(confirmed(
+            OTHER_STORE_ID, "00000000-0000-0000-0000-000000000024", "2026-08-15T01:00:00Z", "다른 매장"
+        ));
+
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
+        MvcResult result = mockMvc.perform(confirmedRequest(session, "2026-08-01", "2026-08-31", 0, 20))
+            .andExpect(status().isOk())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
+            .andExpect(jsonPath("$.fromDate").value("2026-08-01"))
+            .andExpect(jsonPath("$.toDate").value("2026-08-31"))
+            .andExpect(jsonPath("$.timeZone").value("Asia/Seoul"))
+            .andExpect(jsonPath("$.items.length()").value(2))
+            .andExpect(jsonPath("$.items[0].id").value(lastMoment.id().value().toString()))
+            .andExpect(jsonPath("$.items[1].id").value(firstDay.id().value().toString()))
+            .andExpect(jsonPath("$.page").value(0))
+            .andExpect(jsonPath("$.size").value(20))
+            .andExpect(jsonPath("$.hasNext").value(false))
+            .andExpect(jsonPath("$.totalAmountMinor").value(24_000))
+            .andReturn();
+
+        JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertThat(fieldNames(response)).containsExactlyInAnyOrder(
+            "fromDate", "toDate", "timeZone", "items", "page", "size", "hasNext", "totalAmountMinor"
+        );
+    }
+
+    @Test
+    void rejectsUnauthenticatedAndInvalidConfirmedDateRangeQueries() throws Exception {
+        seedAccount(jdbcTemplate, passwordEncoder, "store-hk", "correct-password", STORE_ID);
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
+
+        mockMvc.perform(confirmedRequest(null, "2026-08-01", "2026-08-31", 0, 20))
+            .andExpect(problem(HttpStatus.UNAUTHORIZED.value(), "AUTHENTICATION_REQUIRED"));
+
+        for (String pathAndQuery : new String[] {
+            "/api/v1/meal-usages/confirmed?fromDate=2026-02-30&toDate=2026-03-01&page=0&size=20",
+            "/api/v1/meal-usages/confirmed?fromDate=2026-08-31&toDate=2026-08-01&page=0&size=20",
+            "/api/v1/meal-usages/confirmed?fromDate=2026-01-01&toDate=2027-01-02&page=0&size=20",
+            "/api/v1/meal-usages/confirmed?fromDate=2026-08-01&toDate=2026-08-31&page=-1&size=20",
+            "/api/v1/meal-usages/confirmed?fromDate=2026-08-01&toDate=2026-08-31&page=0&size=101"
+        }) {
+            mockMvc.perform(get(pathAndQuery).cookie(session.cookie()))
+                .andExpect(problem(HttpStatus.BAD_REQUEST.value(), "VALIDATION_FAILED"))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")));
+        }
     }
 
     private void recordSettlementAllocation(MealUsage mealUsage) {
@@ -256,7 +318,7 @@ class MonthlyMealUsageHttpIntegrationTest {
     @Test
     void rejectsInvalidQueriesAndEnforcesStaffAuthenticationWithNoStoreProblemResponses() throws Exception {
         seedAccount(jdbcTemplate, passwordEncoder, "store-hk", "correct-password", STORE_ID);
-        MockHttpSession session = authenticatedSession("store-hk", "correct-password");
+        SessionHandle session = authenticatedSession("store-hk", "correct-password");
 
         mockMvc.perform(get("/api/v1/meal-usages/months/2026-08").param("page", "0").param("size", "20"))
             .andExpect(problem(HttpStatus.UNAUTHORIZED.value(), "AUTHENTICATION_REQUIRED"))
@@ -280,42 +342,34 @@ class MonthlyMealUsageHttpIntegrationTest {
             "/api/v1/meal-usages/months/2026-08?to=2026-07&page=0&size=20",
             "/api/v1/meal-usages/months/2026-01?to=2027-01&page=0&size=20"
         }) {
-            mockMvc.perform(get(pathAndQuery).session(session))
+            mockMvc.perform(get(pathAndQuery).cookie(session.cookie()))
                 .andExpect(problem(HttpStatus.BAD_REQUEST.value(), "VALIDATION_FAILED"))
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")));
         }
     }
 
-    private MockHttpSession authenticatedSession(String loginId, String password) throws Exception {
-        MockHttpSession session = csrfSession();
+    private SessionHandle authenticatedSession(String loginId, String password) throws Exception {
+        SessionHandle session = csrfSession();
         MvcResult login = mockMvc.perform(post("/api/v1/sessions")
-                .session(session)
+                .cookie(session.cookie())
                 .header("X-CSRF-TOKEN", csrfToken(session))
                 .param("loginId", loginId)
                 .param("password", password))
             .andExpect(status().isNoContent())
             .andReturn();
-        return (MockHttpSession) login.getRequest().getSession(false);
+        return StoreOnboardingHttpIntegrationSupport.authenticatedSession(mockMvc, objectMapper, login);
     }
 
-    private MockHttpSession csrfSession() throws Exception {
-        return (MockHttpSession) mockMvc.perform(get("/api/v1/csrf"))
-            .andExpect(status().isOk())
-            .andReturn()
-            .getRequest()
-            .getSession(false);
+    private SessionHandle csrfSession() throws Exception {
+        return StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
     }
 
-    private String csrfToken(MockHttpSession session) throws Exception {
-        MvcResult result = mockMvc.perform(get("/api/v1/csrf").session(session))
-            .andExpect(status().isOk())
-            .andReturn();
-        JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
-        return response.get("token").asText();
+    private String csrfToken(SessionHandle session) throws Exception {
+        return StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder monthlyRequest(
-        MockHttpSession session,
+        SessionHandle session,
         String month,
         int page,
         int size
@@ -324,18 +378,36 @@ class MonthlyMealUsageHttpIntegrationTest {
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder monthlyRequest(
-        MockHttpSession session,
+        SessionHandle session,
         String month,
         String to,
         int page,
         int size
     ) {
         var request = get("/api/v1/meal-usages/months/{month}", month)
-            .session(session)
+            .cookie(session.cookie())
             .param("page", Integer.toString(page))
             .param("size", Integer.toString(size));
         if (to != null) {
             request.param("to", to);
+        }
+        return request;
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder confirmedRequest(
+        SessionHandle session,
+        String fromDate,
+        String toDate,
+        int page,
+        int size
+    ) {
+        var request = get("/api/v1/meal-usages/confirmed")
+            .param("fromDate", fromDate)
+            .param("toDate", toDate)
+            .param("page", Integer.toString(page))
+            .param("size", Integer.toString(size));
+        if (session != null) {
+            request.cookie(session.cookie());
         }
         return request;
     }
