@@ -45,8 +45,23 @@ describe("LoginForm", () => {
     await fillCredentials(user);
     await user.click(screen.getByRole("button", { name: "로그인" }));
 
-    expect(loginMock).toHaveBeenCalledWith("store-hk", "correct-password");
+    expect(loginMock).toHaveBeenCalledWith("store-hk", "correct-password", false);
+    expect(screen.getByRole("checkbox", { name: "이 브라우저에서 로그인 유지" })).not.toBeChecked();
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/store/meal-usages"));
+  });
+
+  it("opts into remembered login only when the native checkbox is checked", async () => {
+    const user = userEvent.setup();
+    nextValue = "/store/profile";
+    loginMock.mockResolvedValue(undefined);
+    render(<LoginForm />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole("checkbox", { name: "이 브라우저에서 로그인 유지" }));
+    await user.click(screen.getByRole("button", { name: "로그인" }));
+
+    expect(loginMock).toHaveBeenCalledWith("store-hk", "correct-password", true);
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/store/profile"));
   });
 
   it("rejects an unallowlisted next value", async () => {
@@ -61,6 +76,17 @@ describe("LoginForm", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/store/meal-usages"));
   });
 
+  it("allows the POS settlement route as an authenticated store destination", async () => {
+    const user = userEvent.setup();
+    nextValue = "/store/pos-settlements";
+    loginMock.mockResolvedValue(undefined);
+    render(<LoginForm />);
+
+    await fillCredentials(user);
+    await user.click(screen.getByRole("button", { name: "로그인" }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/store/pos-settlements"));
+  });
 
   it("allows the monthly ledger route as an authenticated store destination", async () => {
     const user = userEvent.setup();

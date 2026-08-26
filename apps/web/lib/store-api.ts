@@ -254,9 +254,10 @@ async function getCsrfToken(): Promise<CsrfToken> {
   return parseCsrfToken(await csrfResponse.json() as unknown);
 }
 
-export async function login(loginId: string, password: string): Promise<void> {
+export async function login(loginId: string, password: string, remember = false): Promise<void> {
   const csrf = await getCsrfToken();
   const body = new URLSearchParams({ loginId, password });
+  if (remember) body.set("rememberLogin", "true");
   const response = await fetch(`${API_PATH}/sessions`, {
     method: "POST",
     cache: "no-store",
@@ -269,6 +270,24 @@ export async function login(loginId: string, password: string): Promise<void> {
   });
 
   if (!response.ok) {
+    throw await apiError(response);
+  }
+}
+
+export async function reauthenticateStoreSession(password: string): Promise<void> {
+  const csrf = await getCsrfToken();
+  const response = await fetch(`${API_PATH}/session-reauthentications`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      [csrf.headerName]: csrf.token,
+    },
+    body: JSON.stringify({ password }),
+  });
+  if (response.status !== 204) {
+    if (response.ok) throw new InvalidApiResponseError();
     throw await apiError(response);
   }
 }

@@ -5,6 +5,7 @@ import {
   getStoreOnboardingStatus,
   getPendingMealUsages,
   login,
+  reauthenticateStoreSession,
   registerFirstPartner,
   rejectMealUsage,
   searchStorePlaces,
@@ -49,6 +50,46 @@ describe("store API", () => {
     }));
     const body = fetchMock.mock.calls[1][1].body as URLSearchParams;
     expect(body.toString()).toBe("loginId=store-hk&password=correct-password");
+  });
+
+  it("adds the remembered-login form field only when explicitly requested", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "csrf-value", headerName: "X-CSRF-TOKEN", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(204));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await login("store-hk", "correct-password", true);
+
+    const body = fetchMock.mock.calls[1][1].body as URLSearchParams;
+    expect(body.toString()).toBe("loginId=store-hk&password=correct-password&rememberLogin=true");
+  });
+
+  it("gets fresh CSRF and accepts only the 204 reauthentication response", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "reauth-csrf", headerName: "X-REAUTH-CSRF", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(204));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await reauthenticateStoreSession("correct-password");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/session-reauthentications", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-REAUTH-CSRF": "reauth-csrf",
+      },
+      body: JSON.stringify({ password: "correct-password" }),
+    });
+
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "reauth-csrf", headerName: "X-CSRF-TOKEN", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(200)));
+    await expect(reauthenticateStoreSession("correct-password")).rejects.toMatchObject({
+      status: 0,
+      errorCode: "INVALID_API_RESPONSE",
+    });
   });
 
   it("uses CSRF for signup and sends no client-controlled store scope", async () => {
