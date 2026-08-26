@@ -38,7 +38,13 @@ public class RecordPosSettlementUseCase {
     @Transactional(readOnly = true)
     public PosSettlementPage listSettlements(ListPosSettlementsQuery query) {
         Objects.requireNonNull(query, "POS settlement history query must be supplied");
-        var slice = repository.findByStoreId(query.storeId(), query.page(), query.size());
+        var slice = repository.findByStoreId(
+            query.storeId(),
+            query.page(),
+            query.size(),
+            query.partnerDisplayName(),
+            query.search()
+        );
         return new PosSettlementPage(slice.items(), query.page(), query.size(), slice.hasNext());
     }
 

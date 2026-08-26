@@ -340,16 +340,49 @@ public class PosSettlementPersistenceAdapter implements PosSettlementRepository 
     }
 
     @Override
-    public PosSettlementSlice findByStoreId(StoreId storeId, int page, int size) {
+    public PosSettlementSlice findByStoreId(
+        StoreId storeId,
+        int page,
+        int size,
+        String partnerDisplayName,
+        String search
+    ) {
         Objects.requireNonNull(storeId, "Store id must be supplied");
         long offset = Math.multiplyExact((long) page, size);
         List<SettlementHeader> headers = jdbcTemplate.query(
             """
                 select id, store_id, meal_contract_id, pos_business_date, submitted_total_minor,
                        recorded_by_login_id, recorded_at, idempotency_key
-                from pos_settlements
-                where store_id = ?
-                order by recorded_at desc, id desc
+                from pos_settlements settlement
+                where settlement.store_id = ?
+                  and exists (
+                      select 1
+                      from lateral (
+                          select coalesce(
+                                     meal_usage.partner_display_name,
+                                     usage_partner_organization.display_name,
+                                     settlement_partner_organization.display_name
+                                 ) as partner_display_name
+                          from pos_settlement_allocations allocation
+                          join meal_usages meal_usage
+                              on meal_usage.id = allocation.meal_usage_id
+                             and meal_usage.store_id = settlement.store_id
+                          left join meal_contracts usage_contract
+                              on usage_contract.id = meal_usage.meal_contract_id
+                             and usage_contract.store_id = settlement.store_id
+                          left join partner_organizations usage_partner_organization
+                              on usage_partner_organization.id = usage_contract.partner_organization_id
+                          left join meal_contracts settlement_contract
+                              on settlement_contract.id = settlement.meal_contract_id
+                             and settlement_contract.store_id = settlement.store_id
+                          left join partner_organizations settlement_partner_organization
+                              on settlement_partner_organization.id = settlement_contract.partner_organization_id
+                          where allocation.pos_settlement_id = settlement.id
+                      ) partner_name
+                      where (cast(? as text) is null or lower(partner_name.partner_display_name) = lower(cast(? as text)))
+                        and (cast(? as text) is null or lower(partner_name.partner_display_name) like lower('%' || cast(? as text) || '%'))
+                  )
+                order by settlement.recorded_at desc, settlement.id desc
                 limit ? offset ?
                 """,
             (resultSet, rowNum) -> new SettlementHeader(
@@ -363,6 +396,10 @@ public class PosSettlementPersistenceAdapter implements PosSettlementRepository 
                 resultSet.getObject("idempotency_key", UUID.class)
             ),
             storeId.value(),
+            partnerDisplayName,
+            partnerDisplayName,
+            search,
+            search,
             size + 1,
             offset
         );
@@ -383,7 +420,11 @@ public class PosSettlementPersistenceAdapter implements PosSettlementRepository 
         return jdbcTemplate.query(
             """
                 select allocation.meal_usage_id,
-                       coalesce(meal_usage.partner_display_name, partner_organization.display_name) as partner_display_name,
+                       coalesce(
+                           meal_usage.partner_display_name,
+                           usage_partner_organization.display_name,
+                           settlement_partner_organization.display_name
+                       ) as partner_display_name,
                        meal_usage.confirmed_at,
                        allocation.receivable_amount_minor
                 from pos_settlement_allocations allocation
@@ -393,11 +434,16 @@ public class PosSettlementPersistenceAdapter implements PosSettlementRepository 
                 join meal_usages meal_usage
                     on meal_usage.id = allocation.meal_usage_id
                    and meal_usage.store_id = settlement.store_id
-                left join meal_contracts meal_contract
-                    on meal_contract.id = meal_usage.meal_contract_id
-                   and meal_contract.store_id = settlement.store_id
-                left join partner_organizations partner_organization
-                    on partner_organization.id = meal_contract.partner_organization_id
+                left join meal_contracts usage_contract
+                    on usage_contract.id = meal_usage.meal_contract_id
+                   and usage_contract.store_id = settlement.store_id
+                left join partner_organizations usage_partner_organization
+                    on usage_partner_organization.id = usage_contract.partner_organization_id
+                left join meal_contracts settlement_contract
+                    on settlement_contract.id = settlement.meal_contract_id
+                   and settlement_contract.store_id = settlement.store_id
+                left join partner_organizations settlement_partner_organization
+                    on settlement_partner_organization.id = settlement_contract.partner_organization_id
                 where allocation.pos_settlement_id = ?
                 order by allocation.meal_usage_id asc
                 """,

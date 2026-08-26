@@ -219,7 +219,13 @@ class RecordPosSettlementUseCaseTest {
         }
 
         @Override
-        public PosSettlementSlice findByStoreId(StoreId storeId, int page, int size) {
+        public PosSettlementSlice findByStoreId(
+            StoreId storeId,
+            int page,
+            int size,
+            String partnerDisplayName,
+            String search
+        ) {
             return historySlice;
         }
 

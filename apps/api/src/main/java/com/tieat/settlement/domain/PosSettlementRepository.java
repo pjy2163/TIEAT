@@ -28,7 +28,13 @@ public interface PosSettlementRepository {
         Instant generatedAt
     );
 
-    PosSettlementSlice findByStoreId(StoreId storeId, int page, int size);
+    PosSettlementSlice findByStoreId(
+        StoreId storeId,
+        int page,
+        int size,
+        String partnerDisplayName,
+        String search
+    );
 
     List<AllocationDisplay> findAllocationDisplaysBySettlementIdAndStoreId(
         UUID posSettlementId,

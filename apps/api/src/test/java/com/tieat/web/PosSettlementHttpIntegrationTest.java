@@ -339,6 +339,20 @@ class PosSettlementHttpIntegrationTest {
             assertThat(allocation.get("receivableAmountMinor").asLong())
                 .isEqualTo("협력사 A".equals(partnerDisplayName) ? 1_000L : 2_000L);
         }
+
+        mockMvc.perform(get("/api/v1/pos-settlements?page=0&size=20")
+                .param("partner", "협력사 A")
+                .cookie(session.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items.length()").value(1))
+            .andExpect(jsonPath("$.items[0].allocations[*].partnerDisplayName").value(
+                org.hamcrest.Matchers.hasItem("협력사 A")
+            ));
+        mockMvc.perform(get("/api/v1/pos-settlements?page=0&size=20")
+                .param("search", "클라우드")
+                .cookie(session.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items").isEmpty());
     }
 
     @Test

@@ -76,10 +76,14 @@ class PosSettlementController {
         @RequestParam int page,
         @Parameter(required = true, schema = @Schema(minimum = "1", maximum = "100"))
         @RequestParam int size,
+        @Parameter(description = "Exact partner display name filter")
+        @RequestParam(required = false) String partner,
+        @Parameter(description = "Case-insensitive partner display name search")
+        @RequestParam(required = false) String search,
         @AuthenticationPrincipal StoreAccountPrincipal principal
     ) {
         PosSettlementPage settlements = recordPosSettlementUseCase.listSettlements(
-            new ListPosSettlementsQuery(principal.storeId(), page, size)
+            new ListPosSettlementsQuery(principal.storeId(), page, size, partner, search)
         );
         Map<UUID, PosSettlementReceiptService.ReceiptSummary> receiptSummaries = receiptService == null
             ? Map.of()
