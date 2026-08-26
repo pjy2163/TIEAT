@@ -191,6 +191,7 @@ class PosSettlementController {
             return new PosSettlementHistoryResponse(
                 page.items().stream().map(settlement -> PosSettlementHistoryItemResponse.from(
                     responseMapper.apply(settlement, storeId),
+                    settlement.recordedByLoginId(),
                     receiptSummaries.get(settlement.id())
                 )).toList(),
                 page.page(),
@@ -205,12 +206,14 @@ class PosSettlementController {
         LocalDate posBusinessDate,
         long submittedTotalMinor,
         Instant recordedAt,
+        String recordedByLoginId,
         List<PosSettlementAllocationResponse> allocations,
         PosSettlementReceiptSummaryResponse receipt
     ) {
 
         static PosSettlementHistoryItemResponse from(
             PosSettlementResponse response,
+            String recordedByLoginId,
             PosSettlementReceiptService.ReceiptSummary receiptSummary
         ) {
             return new PosSettlementHistoryItemResponse(
@@ -218,6 +221,7 @@ class PosSettlementController {
                 response.posBusinessDate(),
                 response.submittedTotalMinor(),
                 response.recordedAt(),
+                recordedByLoginId,
                 response.allocations(),
                 PosSettlementReceiptSummaryResponse.from(receiptSummary)
             );

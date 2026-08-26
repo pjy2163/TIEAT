@@ -46,6 +46,7 @@ const settlement = {
   posBusinessDate: "2026-08-11",
   submittedTotalMinor: 12_000,
   recordedAt: "2026-08-12T02:00:00Z",
+  recordedByLoginId: "store-hk",
   allocations: [{
     partnerDisplayName: receivable.partnerDisplayName,
     confirmedAt: receivable.confirmedAt,

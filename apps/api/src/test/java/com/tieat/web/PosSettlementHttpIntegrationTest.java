@@ -316,12 +316,13 @@ class PosSettlementHttpIntegrationTest {
             .andExpect(jsonPath("$.items[0].posBusinessDate").value("2026-08-11"))
             .andExpect(jsonPath("$.items[0].submittedTotalMinor").value(3_000))
             .andExpect(jsonPath("$.items[0].recordedAt").value(recordedBody.get("recordedAt").asText()))
+            .andExpect(jsonPath("$.items[0].recordedByLoginId").value("store-hk"))
             .andExpect(jsonPath("$.items[0].allocations.length()").value(2))
             .andReturn();
         JsonNode historyBody = objectMapper.readTree(history.getResponse().getContentAsString());
         assertThat(fieldNames(historyBody)).containsExactlyInAnyOrder("items", "page", "size", "hasNext");
         assertThat(fieldNames(historyBody.get("items").get(0))).containsExactlyInAnyOrder(
-            "posSettlementId", "posBusinessDate", "submittedTotalMinor", "recordedAt", "allocations", "receipt"
+            "posSettlementId", "posBusinessDate", "submittedTotalMinor", "recordedAt", "recordedByLoginId", "allocations", "receipt"
         );
         assertThat(historyBody.get("items").get(0).get("posSettlementId").asText())
             .isEqualTo(recordedBody.get("posSettlementId").asText());

@@ -30,6 +30,8 @@ export type PosSettlement = {
   posBusinessDate: string;
   submittedTotalMinor: number;
   recordedAt: string;
+  /** History-only display value; create responses may omit it. */
+  recordedByLoginId?: string;
   allocations: PosSettlementAllocation[];
   /** Additive history field; legacy responses may omit it. */
   receipt?: PosSettlementReceiptSummary;
@@ -345,6 +347,9 @@ function parsePosSettlement(value: unknown): PosSettlement {
   const posSettlementId = value.posSettlementId === undefined
     ? undefined
     : isUuid(value.posSettlementId) ? value.posSettlementId : (() => { throw new InvalidApiResponseError(); })();
+  const recordedByLoginId = value.recordedByLoginId === undefined
+    ? undefined
+    : isNonEmptyString(value.recordedByLoginId) ? value.recordedByLoginId : (() => { throw new InvalidApiResponseError(); })();
   const allocations = value.allocations.map(parsePosSettlementAllocation);
   const allocationTotal = allocations.reduce((total, allocation) => total + allocation.receivableAmountMinor, 0);
   if (!Number.isSafeInteger(allocationTotal)
@@ -361,6 +366,7 @@ function parsePosSettlement(value: unknown): PosSettlement {
       : parsePosSettlementReceiptSummary(value.receipt),
   };
   if (posSettlementId !== undefined) parsed.posSettlementId = posSettlementId;
+  if (recordedByLoginId !== undefined) parsed.recordedByLoginId = recordedByLoginId;
   return parsed;
 }
 
