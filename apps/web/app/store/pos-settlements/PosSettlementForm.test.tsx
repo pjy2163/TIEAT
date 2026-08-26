@@ -93,14 +93,14 @@ afterEach(() => {
 });
 
 describe("PosSettlementForm history view", () => {
-  it("renders saved payment history without the receivable list or record form", async () => {
+  it("renders saved payment records without the receivable list or record form", async () => {
     const saved = settlement(availableSettlementId, "2026-08-11", availableReceipt);
     getRecentPosSettlementsMock.mockResolvedValue(historyPage([saved]));
 
     render(<PosSettlementForm />);
 
-    expect(await screen.findByRole("heading", { name: "결제 히스토리", level: 1 })).toBeVisible();
-    expect(screen.getByRole("list", { name: "결제 히스토리 목록" })).toHaveTextContent("결제일 2026-08-11");
+    expect(await screen.findByRole("heading", { name: "결제 내역", level: 1 })).toBeVisible();
+    expect(screen.getByRole("list", { name: "결제 내역 목록" })).toHaveTextContent("결제일 2026-08-11");
     expect(screen.queryByText("결제할 금액")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /기록하기/ })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("영수증 첨부")).not.toBeInTheDocument();
@@ -210,9 +210,9 @@ describe("PosSettlementForm history view", () => {
 
     render(<PosSettlementForm />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("결제 히스토리를 불러오지 못했습니다.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("결제 내역을 불러오지 못했습니다.");
     expect(screen.queryByText("결제 기록 저장 완료")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "결제 히스토리 다시 불러오기" }));
+    await user.click(screen.getByRole("button", { name: "결제 내역 다시 불러오기" }));
     expect(await screen.findByRole("heading", { name: "결제일 2026-08-11", level: 2 })).toBeVisible();
   });
 });

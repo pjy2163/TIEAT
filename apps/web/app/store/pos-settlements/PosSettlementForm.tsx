@@ -246,7 +246,7 @@ export function PosSettlementForm() {
   }, [loadHistory]);
 
   if (accessState === "forbidden") {
-    return <StatePanel title="접근 권한이 없습니다" description="이 계정으로는 결제 히스토리를 조회할 수 없습니다." />;
+    return <StatePanel title="접근 권한이 없습니다" description="이 계정으로는 결제 내역을 조회할 수 없습니다." />;
   }
 
   return (
@@ -255,7 +255,7 @@ export function PosSettlementForm() {
         <header className={posSettlementFormStyles.header}>
           <div>
             <p className={posSettlementFormStyles.eyebrow}>TIEAT STORE</p>
-            <h1 className={posSettlementFormStyles.title} id="pos-settlement-title">결제 히스토리</h1>
+            <h1 className={posSettlementFormStyles.title} id="pos-settlement-title">결제 내역</h1>
             <p className={posSettlementFormStyles.description}>
               POS에서 실제 결제한 뒤 저장한 기록을 날짜와 금액으로 다시 확인합니다.
             </p>
@@ -282,18 +282,18 @@ export function PosSettlementForm() {
 
           {historyViewState === "loading" ? (
             <div className={posSettlementFormStyles.state} aria-live="polite">
-              <p className={posSettlementFormStyles.stateDescription}>결제 히스토리를 불러오는 중입니다.</p>
+              <p className={posSettlementFormStyles.stateDescription}>결제 내역을 불러오는 중입니다.</p>
             </div>
           ) : historyViewState === "error" ? (
             <div className={posSettlementFormStyles.state}>
-              <p className={posSettlementFormStyles.notice} role="alert">결제 히스토리를 불러오지 못했습니다.</p>
+              <p className={posSettlementFormStyles.notice} role="alert">결제 내역을 불러오지 못했습니다.</p>
               <button
                 className={posSettlementFormStyles.stateAction}
                 disabled={isRefreshing}
                 onClick={() => void loadHistory(page, true)}
                 type="button"
               >
-                {isRefreshing ? "히스토리 불러오는 중…" : "결제 히스토리 다시 불러오기"}
+                {isRefreshing ? "내역 불러오는 중…" : "결제 내역 다시 불러오기"}
               </button>
             </div>
           ) : historyViewState === "empty" ? (
@@ -301,7 +301,7 @@ export function PosSettlementForm() {
               <p className={posSettlementFormStyles.stateDescription}>저장된 결제 기록이 없습니다.</p>
             </div>
           ) : (
-            <ol className={posSettlementFormStyles.historyList} aria-label="결제 히스토리 목록">
+            <ol className={posSettlementFormStyles.historyList} aria-label="결제 내역 목록">
               {history.map((record, index) => (
                 <HistoryItem
                   index={index}
@@ -323,7 +323,7 @@ export function PosSettlementForm() {
           )}
 
           {historyViewState === "ready" || historyViewState === "empty" ? (
-            <nav className={posSettlementFormStyles.pagination} aria-label="결제 히스토리 페이지 이동">
+            <nav className={posSettlementFormStyles.pagination} aria-label="결제 내역 페이지 이동">
               <button
                 className={posSettlementFormStyles.stateAction}
                 disabled={isRefreshing || page === 0}

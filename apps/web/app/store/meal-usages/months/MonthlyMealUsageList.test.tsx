@@ -115,7 +115,7 @@ describe("MonthlyMealUsageList", () => {
     expect(reloadButton).toHaveTextContent("새로고침");
     expect(reloadButton).toHaveClass("h-11", "rounded-lg", "px-4");
     expect(reloadButton.querySelector("svg")).not.toBeInTheDocument();
-    const settlementLink = screen.getByRole("link", { name: "결제 히스토리" });
+    const settlementLink = screen.getByRole("link", { name: "결제 내역" });
     const pendingLink = screen.getByRole("link", { name: "확인 대기로 이동" });
     expect(settlementLink).toHaveAttribute("href", "/store/pos-settlements");
     expect(ledgerTitle.parentElement).toContainElement(settlementLink);

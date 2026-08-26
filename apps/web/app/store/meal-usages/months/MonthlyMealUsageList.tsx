@@ -492,7 +492,7 @@ export function MonthlyMealUsageList() {
               <div className={monthlyMealUsageListStyles.titleRow}>
                 <h1 id="ledger-title" className={monthlyMealUsageListStyles.title}>전체 장부</h1>
                 <div className={monthlyMealUsageListStyles.titleActions}>
-                  <a className={monthlyMealUsageListStyles.settlementLink} href="/store/pos-settlements">결제 히스토리</a>
+                  <a className={monthlyMealUsageListStyles.settlementLink} href="/store/pos-settlements">결제 내역</a>
                   <a className={monthlyMealUsageListStyles.pendingLink} href="/store/meal-usages">확인 대기로 이동</a>
                 </div>
               </div>
