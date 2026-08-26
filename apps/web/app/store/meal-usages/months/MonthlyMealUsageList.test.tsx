@@ -138,7 +138,7 @@ describe("MonthlyMealUsageList", () => {
     expect(screen.getByText("2페이지")).toBeVisible();
   });
 
-  it("places amount on the name line and centers confirmer and settlement status", async () => {
+  it("places amount and confirmer on the name line and keeps settlement status below", async () => {
     getConfirmedMealUsagesMock.mockResolvedValue(page({ hasNext: false }));
     render(<MonthlyMealUsageList />);
 
@@ -163,8 +163,12 @@ describe("MonthlyMealUsageList", () => {
     expect(row).toHaveClass("grid-cols-[minmax(0,1fr)_auto]", "gap-x-4", "gap-y-4", "px-5", "py-5", "sm:px-6");
     const side = confirmer.parentElement as HTMLElement;
     expect(customerRow).toHaveClass("mt-2", "flex", "min-w-0", "items-center", "justify-between", "gap-4");
-    expect(side).toHaveClass("flex", "min-w-0", "flex-col", "items-end", "justify-center", "gap-2", "text-right", "md:min-w-36");
+    expect(side).toHaveClass("grid", "min-w-0", "grid-rows-3", "items-center", "justify-items-end", "text-right", "md:min-w-36");
     expect(Array.from(side.children)).toEqual([confirmer, settlementStatus]);
+    expect(confirmer).toHaveClass("row-start-2");
+    expect(settlementStatus).toHaveClass("row-start-3");
+    expect(confirmer).toHaveClass("inline-flex", "items-center", "whitespace-nowrap");
+    expect(settlementStatus).toHaveClass("inline-flex", "items-center", "justify-end", "gap-1", "whitespace-nowrap");
     for (const entry of [confirmer, settlementStatus]) {
       expect(entry.parentElement).toBe(side);
     }
@@ -287,8 +291,12 @@ describe("MonthlyMealUsageList", () => {
     render(<MonthlyMealUsageList />);
 
     expect(await screen.findByText("결제 전")).toBeVisible();
-    expect(screen.getByText("결제 완료")).toBeVisible();
-    expect(screen.getByText("결제 완료(선불)")).toBeVisible();
+    const recordedStatus = screen.getByText("결제 완료", { exact: true });
+    const prepaidStatus = screen.getByText("결제 완료(선불)", { exact: true });
+    expect(recordedStatus).toBeVisible();
+    expect(prepaidStatus).toBeVisible();
+    expect(recordedStatus).toHaveTextContent("✓결제 완료");
+    expect(prepaidStatus).toHaveTextContent("✓결제 완료(선불)");
     expect(screen.getByText("직원이 입력한 POS 정산 내역이 저장된 상태")).toBeInTheDocument();
     expect(screen.getByText("선불 잔액으로 처리되어 추가 결제할 금액 없음")).toBeInTheDocument();
     expect(screen.getAllByText("확인자 HK")).toHaveLength(4);
@@ -386,7 +394,9 @@ describe("MonthlyMealUsageList", () => {
     await waitFor(() => expect(recordPosSettlementMock).toHaveBeenCalledWith({ mealContractId: contractId, posBusinessDate: "2026-08-11", submittedTotalMinor: 10_000, mealUsageIds: [first.mealUsageId, second.mealUsageId] }, "00000000-0000-0000-0000-000000000200"));
     await waitFor(() => expect(getConfirmedMealUsagesMock).toHaveBeenCalledTimes(2));
     const ledger = screen.getByRole("list", { name: "전체 장부 목록" });
-    expect(within(ledger).getByText("결제 완료", { exact: true })).toBeVisible();
+    const completedStatus = within(ledger).getByText("결제 완료", { exact: true });
+    expect(completedStatus).toBeVisible();
+    expect(completedStatus).toHaveTextContent("✓결제 완료");
     expect(within(ledger).queryByText("결제 전", { exact: true })).not.toBeInTheDocument();
     expect(screen.queryByText("1건 선택", { exact: true })).not.toBeInTheDocument();
     expect(within(dialog).getByText("결제 기록 저장 완료")).toBeVisible();

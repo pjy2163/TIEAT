@@ -580,6 +580,8 @@ export function MonthlyMealUsageList() {
                   const contractLocked = Boolean(activeContractId && item.mealContractId !== activeContractId);
                   const disabled = isLoading || contractLocked;
                   const checked = selectedUsageIds.has(item.id);
+                  const statusLabel = settlementStatusLabel(item.settlementStatus);
+                  const isCompleted = item.settlementStatus === "PAYMENT_RECORDED" || item.settlementStatus === "PREPAID_SETTLED";
                   return (
                   <li
                     aria-pressed={selectable && !contractLocked ? checked : undefined}
@@ -625,9 +627,10 @@ export function MonthlyMealUsageList() {
                     </div>
                     <div className={monthlyMealUsageListStyles.side}>
                       <p className={monthlyMealUsageListStyles.confirmedInitials}>확인자 {item.confirmedStaffInitials}</p>
-                      {settlementStatusLabel(item.settlementStatus) ? (
+                      {statusLabel ? (
                         <p className={monthlyMealUsageListStyles.settlementStatus}>
-                          {settlementStatusLabel(item.settlementStatus)}
+                          {isCompleted ? <span aria-hidden="true" className={monthlyMealUsageListStyles.settlementCheck}>✓</span> : null}
+                          {statusLabel}
                           {item.settlementStatus === "PAYMENT_RECORDED" ? (
                             <span className="sr-only">직원이 입력한 POS 정산 내역이 저장된 상태</span>
                           ) : item.settlementStatus === "PREPAID_SETTLED" ? (
