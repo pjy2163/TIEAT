@@ -1,6 +1,8 @@
 import { storeAuthStyles } from "../auth/StoreAuth.styles";
 
 export const signupStyles = {
+  ...storeAuthStyles,
+  card: `${storeAuthStyles.card} ${storeAuthStyles.cardWide}`,
   step: "mt-5 flex items-center gap-2 text-xs font-medium text-[var(--text-muted)]",
   stepCurrent: "rounded-full bg-[#edf2ff] px-2.5 py-1 text-[var(--accent)]",
   stepPending: "rounded-full bg-[var(--surface-subtle)] px-2.5 py-1",

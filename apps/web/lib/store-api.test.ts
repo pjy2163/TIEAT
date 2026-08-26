@@ -174,12 +174,15 @@ describe("store API", () => {
         legacy: false,
         created: true,
         partnerDisplayName: "협력사 A",
+        partnerKind: "ORGANIZATION",
         paymentType: "POSTPAID",
+        mealContractId: "33333333-3333-4333-8333-333333333333",
       }));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(registerFirstPartner({
       partnerName: "협력사 A",
+      partnerKind: "ORGANIZATION",
       paymentType: "POSTPAID",
       initialPrepaidBalanceMinor: 0,
       qrSelectable: true,
@@ -195,6 +198,7 @@ describe("store API", () => {
       },
       body: JSON.stringify({
         partnerName: "협력사 A",
+        partnerKind: "ORGANIZATION",
         paymentType: "POSTPAID",
         initialPrepaidBalanceMinor: 0,
         qrSelectable: true,

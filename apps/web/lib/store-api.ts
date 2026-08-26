@@ -1,3 +1,5 @@
+import type { PartnerKind } from "./partner-kind";
+
 export type PendingMealUsage = {
   mealUsageId: string;
   status: "PENDING";
@@ -29,6 +31,7 @@ export type StoreOnboardingStatus = {
 
 export type FirstPartnerRegistration = {
   partnerName: string;
+  partnerKind: PartnerKind;
   paymentType: "POSTPAID" | "PREPAID_WITH_RECEIVABLE_OVERFLOW";
   initialPrepaidBalanceMinor: number;
   qrSelectable: boolean;
@@ -37,7 +40,9 @@ export type FirstPartnerRegistration = {
 export type FirstPartnerRegistrationResult = StoreOnboardingStatus & {
   created: boolean;
   partnerDisplayName: string | null;
+  partnerKind: PartnerKind | null;
   paymentType: "POSTPAID" | "PREPAID_WITH_RECEIVABLE_OVERFLOW" | null;
+  mealContractId: string | null;
 };
 
 type CsrfToken = {
@@ -188,6 +193,10 @@ function parseFirstPartnerRegistrationResult(value: unknown): FirstPartnerRegist
   if (!isRecord(value)
     || typeof value.created !== "boolean"
     || (value.partnerDisplayName !== null && !isNonEmptyString(value.partnerDisplayName))
+    || (value.partnerKind !== null
+      && value.partnerKind !== "INDIVIDUAL"
+      && value.partnerKind !== "ORGANIZATION")
+    || (value.mealContractId !== null && !isUuid(value.mealContractId))
     || (value.paymentType !== null
       && value.paymentType !== "POSTPAID"
       && value.paymentType !== "PREPAID_WITH_RECEIVABLE_OVERFLOW")) {
@@ -197,7 +206,9 @@ function parseFirstPartnerRegistrationResult(value: unknown): FirstPartnerRegist
     ...status,
     created: value.created,
     partnerDisplayName: value.partnerDisplayName,
+    partnerKind: value.partnerKind,
     paymentType: value.paymentType,
+    mealContractId: value.mealContractId,
   };
 }
 
