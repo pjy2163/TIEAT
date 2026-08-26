@@ -20,6 +20,11 @@ import { posSettlementFormStyles } from "./PosSettlementForm.styles";
 type ReceivableViewState = "loading" | "ready" | "empty" | "error";
 type HistoryViewState = "loading" | "ready" | "empty" | "error";
 type AccessState = "allowed" | "forbidden";
+type PartnerReceivableGroup = {
+  key: string;
+  partnerDisplayName: string | null;
+  contracts: PartnerReceivableSummary[];
+};
 const amountFormatter = new Intl.NumberFormat("ko-KR", {
   style: "currency",
   currency: "KRW",
@@ -161,6 +166,26 @@ function reconstructSeedSelection(
   }
   const totalMinor = selected.reduce((total, item) => total + item.receivableCreatedMinor, 0);
   return Number.isSafeInteger(totalMinor) && totalMinor > 0 ? { selected, totalMinor } : null;
+}
+
+function groupPartnerSummaries(summaries: PartnerReceivableSummary[]): PartnerReceivableGroup[] {
+  const groups = new Map<string, PartnerReceivableGroup>();
+  for (const summary of summaries) {
+    const key = summary.partnerOrganizationId
+      ? "organization:" + summary.partnerOrganizationId
+      : "contract:" + summary.mealContractId;
+    const group = groups.get(key);
+    if (group) {
+      group.contracts.push(summary);
+      continue;
+    }
+    groups.set(key, {
+      key,
+      partnerDisplayName: summary.partnerDisplayName,
+      contracts: [summary],
+    });
+  }
+  return Array.from(groups.values());
 }
 
 function StatePanel({
@@ -337,6 +362,7 @@ export function PosSettlementForm() {
     }
     return grouped;
   }, [receivables]);
+  const partnerGroups = useMemo(() => groupPartnerSummaries(partnerSummaries), [partnerSummaries]);
   const selectedMealContractId = selectedReceivables[0]?.mealContractId ?? null;
   const derivedTotalMinor = selectedReceivables.reduce(
     (total, receivable) => total + receivable.receivableCreatedMinor,
@@ -512,87 +538,101 @@ export function PosSettlementForm() {
               ) : null}
               {formError ? <p className={posSettlementFormStyles.notice} role="alert">{formError}</p> : null}
               <div className={posSettlementFormStyles.partnerList}>
-                {partnerSummaries.map((partner) => {
-                  const partnerReceivables = receivablesByMealContractId.get(partner.mealContractId) ?? [];
-                  const partnerName = partner.partnerDisplayName ?? "협력사 정보 없음";
+                {partnerGroups.map((group) => {
+                  const partnerName = group.partnerDisplayName ?? "협력사 정보 없음";
                   return (
-                    <section className={posSettlementFormStyles.partnerSection} key={partner.mealContractId}>
+                    <section className={posSettlementFormStyles.partnerSection} key={group.key}>
                       <header className={posSettlementFormStyles.partnerHeader}>
                         <div>
                           <h3 className={posSettlementFormStyles.partnerTitle}>{partnerName}</h3>
-                          <p className={posSettlementFormStyles.partnerMeta}>
-                            마지막 결제일: {partner.previousPosBusinessDate ?? "기록 없음"}
-                          </p>
                         </div>
-                        <dl className={posSettlementFormStyles.partnerSummary}>
-                          <div>
-                            <dt>마지막 결제일 이후 사용 금액</dt>
-                            <dd>{amountFormatter.format(partner.periodConfirmedUsageTotalMinor)}</dd>
-                          </div>
-                          <div>
-                            <dt>선불로 처리된 금액</dt>
-                            <dd>{amountFormatter.format(partner.periodPrepaidAppliedTotalMinor)}</dd>
-                          </div>
-                          <div>
-                            <dt>결제할 금액</dt>
-                            <dd>{partner.outstandingReceivableCount}건 · {amountFormatter.format(partner.outstandingReceivableTotalMinor)}</dd>
-                          </div>
-                        </dl>
                       </header>
-                      <span className="sr-only">선불 잔액으로 처리되어 추가 결제할 금액 없음</span>
-                      {partnerReceivables.length === 0 ? (
-                        <p className={posSettlementFormStyles.noPartnerReceivables}>결제할 금액 없음</p>
-                      ) : (
-                        <div className={posSettlementFormStyles.tableWrap}>
-                          <table className={posSettlementFormStyles.table}>
-                            <thead className={posSettlementFormStyles.tableHeader}>
-                              <tr>
-                                <th scope="col">선택</th>
-                                <th scope="col">사용한 날짜</th>
-                                <th scope="col" className="text-right">남은 금액</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {partnerReceivables.map((receivable) => {
-                                const disabled = isSubmitting || Boolean(
-                                  selectedMealContractId && selectedMealContractId !== receivable.mealContractId,
-                                );
-                                const checked = selectedUsageIds.has(receivable.mealUsageId);
-                                return (
-                                  <tr
-                                    className={disabled ? posSettlementFormStyles.disabledRow : posSettlementFormStyles.row}
-                                    key={receivable.mealUsageId}
-                                  >
-                                    <td>
-                                      <input
-                                        aria-label={
-                                          (receivable.partnerDisplayName ?? partnerName)
-                                          + " "
-                                          + dateFormatter.format(new Date(receivable.confirmedAt))
-                                          + " 선택"
-                                        }
-                                        checked={checked}
-                                        className={posSettlementFormStyles.checkbox}
-                                        disabled={disabled}
-                                        onChange={() => toggleReceivable(receivable)}
-                                        type="checkbox"
-                                      />
-                                    </td>
-                                    <td>
-                                      <p className={posSettlementFormStyles.primary}>
-                                        {dateFormatter.format(new Date(receivable.confirmedAt))}
-                                      </p>
-                                    </td>
-                                    <td className={posSettlementFormStyles.amount}>
-                                      {amountFormatter.format(receivable.receivableCreatedMinor)}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
+                      <div className={posSettlementFormStyles.contractList}>
+                        {group.contracts.map((partner, contractIndex) => {
+                          const partnerReceivables = receivablesByMealContractId.get(partner.mealContractId) ?? [];
+                          const contractPartnerName = partner.partnerDisplayName ?? partnerName;
+                          return (
+                            <section className={posSettlementFormStyles.contractSection} key={partner.mealContractId}>
+                              <header className={posSettlementFormStyles.contractHeader}>
+                                <div>
+                                  <h4 className={posSettlementFormStyles.contractTitle}>계약 {contractIndex + 1}</h4>
+                                  <p className={posSettlementFormStyles.partnerMeta}>
+                                    마지막 결제일: {partner.previousPosBusinessDate ?? "기록 없음"}
+                                  </p>
+                                </div>
+                                <dl className={posSettlementFormStyles.partnerSummary}>
+                                  <div>
+                                    <dt>마지막 결제일 이후 사용 금액</dt>
+                                    <dd>{amountFormatter.format(partner.periodConfirmedUsageTotalMinor)}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>선불로 처리된 금액</dt>
+                                    <dd>{amountFormatter.format(partner.periodPrepaidAppliedTotalMinor)}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>결제할 금액</dt>
+                                    <dd>{partner.outstandingReceivableCount}건 · {amountFormatter.format(partner.outstandingReceivableTotalMinor)}</dd>
+                                  </div>
+                                </dl>
+                              </header>
+                              <span className="sr-only">선불 잔액으로 처리되어 추가 결제할 금액 없음</span>
+                              {partnerReceivables.length === 0 ? (
+                                <p className={posSettlementFormStyles.noPartnerReceivables}>결제할 금액 없음</p>
+                              ) : (
+                                <div className={posSettlementFormStyles.tableWrap}>
+                                  <table className={posSettlementFormStyles.table}>
+                                    <thead className={posSettlementFormStyles.tableHeader}>
+                                      <tr>
+                                        <th scope="col">선택</th>
+                                        <th scope="col">사용한 날짜</th>
+                                        <th scope="col" className="text-right">남은 금액</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {partnerReceivables.map((receivable) => {
+                                        const disabled = isSubmitting || Boolean(
+                                          selectedMealContractId && selectedMealContractId !== receivable.mealContractId,
+                                        );
+                                        const checked = selectedUsageIds.has(receivable.mealUsageId);
+                                        return (
+                                          <tr
+                                            className={disabled ? posSettlementFormStyles.disabledRow : posSettlementFormStyles.row}
+                                            key={receivable.mealUsageId}
+                                          >
+                                            <td>
+                                              <input
+                                                aria-label={
+                                                  (receivable.partnerDisplayName ?? contractPartnerName)
+                                                  + " "
+                                                  + dateFormatter.format(new Date(receivable.confirmedAt))
+                                                  + " 선택"
+                                                }
+                                                checked={checked}
+                                                className={posSettlementFormStyles.checkbox}
+                                                disabled={disabled}
+                                                onChange={() => toggleReceivable(receivable)}
+                                                type="checkbox"
+                                              />
+                                            </td>
+                                            <td>
+                                              <p className={posSettlementFormStyles.primary}>
+                                                {dateFormatter.format(new Date(receivable.confirmedAt))}
+                                              </p>
+                                            </td>
+                                            <td className={posSettlementFormStyles.amount}>
+                                              {amountFormatter.format(receivable.receivableCreatedMinor)}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </section>
+                          );
+                        })}
+                      </div>
                     </section>
                   );
                 })}

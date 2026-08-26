@@ -28,6 +28,7 @@ const receivable = {
 
 const partnerSummary = {
   mealContractId: receivable.mealContractId,
+  partnerOrganizationId: "00000000-0000-0000-0000-000000000010",
   partnerDisplayName: receivable.partnerDisplayName,
   previousPosBusinessDate: "2026-08-11",
   periodConfirmedUsageTotalMinor: 12_000,
@@ -76,6 +77,36 @@ describe("POS settlement API", () => {
       credentials: "same-origin",
     });
     expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("storeId");
+  });
+
+  it("normalizes missing or null partner organization identifiers for legacy summaries", async () => {
+    const missingPartnerOrganizationIdSummary = {
+      mealContractId: "00000000-0000-0000-0000-000000000003",
+      partnerDisplayName: "협력사 legacy",
+      previousPosBusinessDate: null,
+      periodConfirmedUsageTotalMinor: 0,
+      periodPrepaidAppliedTotalMinor: 0,
+      outstandingReceivableCount: 0,
+      outstandingReceivableTotalMinor: 0,
+    };
+    const nullPartnerOrganizationIdSummary = {
+      ...missingPartnerOrganizationIdSummary,
+      mealContractId: "00000000-0000-0000-0000-000000000004",
+      partnerOrganizationId: null,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(response(200, {
+      items: [],
+      partners: [missingPartnerOrganizationIdSummary, nullPartnerOrganizationIdSummary],
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getOutstandingReceivables()).resolves.toEqual({
+      items: [],
+      partners: [
+        { ...missingPartnerOrganizationIdSummary, partnerOrganizationId: null },
+        nullPartnerOrganizationIdSummary,
+      ],
+    });
   });
 
   it("gets recent saved settlement history from the server-scoped API", async () => {

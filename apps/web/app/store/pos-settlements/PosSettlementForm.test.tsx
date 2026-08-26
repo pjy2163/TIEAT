@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/store-api";
@@ -94,7 +94,10 @@ function historyPage(items: PosSettlement[]): PosSettlementHistoryPage {
   return { items, page: 0, size: 20, hasNext: false };
 }
 
-function receivableOverview(items: typeof firstReceivable[]): OutstandingReceivableOverview {
+function receivableOverview(
+  items: typeof firstReceivable[],
+  partnerOrganizationIds: Map<string, string | null> = new Map(),
+): OutstandingReceivableOverview {
   const byMealContractId = new Map<string, typeof firstReceivable[]>();
   for (const item of items) {
     const candidates = byMealContractId.get(item.mealContractId) ?? [];
@@ -105,6 +108,7 @@ function receivableOverview(items: typeof firstReceivable[]): OutstandingReceiva
     items,
     partners: Array.from(byMealContractId, ([mealContractId, candidates]) => ({
       mealContractId,
+      partnerOrganizationId: partnerOrganizationIds.get(mealContractId) ?? null,
       partnerDisplayName: candidates[0]?.partnerDisplayName ?? null,
       previousPosBusinessDate: "2026-08-11",
       periodConfirmedUsageTotalMinor: candidates.reduce(
@@ -160,6 +164,47 @@ describe("PosSettlementForm", () => {
     expect(checkbox).toBeChecked();
     expect(screen.getByLabelText("결제 금액")).toHaveValue(1_000);
     expect(window.sessionStorage.getItem(POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY)).toBeNull();
+  });
+
+  it("groups shared partner contracts while keeping legacy contracts independent and selection contract-scoped", async () => {
+    const user = userEvent.setup();
+    const sharedContractReceivable = {
+      ...otherContractReceivable,
+      mealUsageId: "00000000-0000-0000-0000-000000000004",
+      mealContractId: "00000000-0000-0000-0000-000000000013",
+      partnerDisplayName: "협력사 A",
+      confirmedAt: "2026-08-12T02:00:00Z",
+    };
+    const legacyContractReceivable = {
+      ...otherContractReceivable,
+      mealUsageId: "00000000-0000-0000-0000-000000000005",
+      mealContractId: "00000000-0000-0000-0000-000000000014",
+      partnerDisplayName: "협력사 legacy",
+    };
+    const sharedPartnerOrganizationId = "00000000-0000-0000-0000-000000000010";
+    getOutstandingReceivablesMock.mockResolvedValue(receivableOverview(
+      [firstReceivable, sharedContractReceivable, legacyContractReceivable],
+      new Map([
+        [firstReceivable.mealContractId, sharedPartnerOrganizationId],
+        [sharedContractReceivable.mealContractId, sharedPartnerOrganizationId],
+      ]),
+    ));
+    getRecentPosSettlementsMock.mockResolvedValue(historyPage([]));
+
+    render(<PosSettlementForm />);
+
+    const firstCheckbox = await screen.findByRole("checkbox", { name: selectionLabel(firstReceivable) });
+    const sharedPartnerGroup = screen.getByRole("heading", { name: "협력사 A", level: 3 }).closest("section");
+    expect(sharedPartnerGroup).not.toBeNull();
+    expect(within(sharedPartnerGroup as HTMLElement).getAllByRole("heading", { level: 4 })).toHaveLength(2);
+    const legacyPartnerGroup = screen.getByRole("heading", { name: "협력사 legacy", level: 3 }).closest("section");
+    expect(legacyPartnerGroup).not.toBeNull();
+    expect(within(legacyPartnerGroup as HTMLElement).getAllByRole("heading", { level: 4 })).toHaveLength(1);
+
+    const sharedContractCheckbox = screen.getByRole("checkbox", { name: selectionLabel(sharedContractReceivable) });
+    expect(sharedContractCheckbox).toBeEnabled();
+    await user.click(firstCheckbox);
+    expect(sharedContractCheckbox).toBeDisabled();
   });
 
   it("requires explicit same-contract selection and a typed settlement total, then refreshes saved history from the API", async () => {

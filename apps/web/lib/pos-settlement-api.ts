@@ -15,6 +15,7 @@ export type OutstandingReceivableOverview = {
 
 export type PartnerReceivableSummary = {
   mealContractId: string;
+  partnerOrganizationId: string | null;
   partnerDisplayName: string | null;
   previousPosBusinessDate: string | null;
   periodConfirmedUsageTotalMinor: number;
@@ -241,8 +242,12 @@ function parsePartnerReceivableSummary(value: unknown): PartnerReceivableSummary
     || value.periodPrepaidAppliedTotalMinor > value.periodConfirmedUsageTotalMinor) {
     throw new InvalidApiResponseError();
   }
+  const partnerOrganizationId = value.partnerOrganizationId === undefined || value.partnerOrganizationId === null
+    ? null
+    : isUuid(value.partnerOrganizationId) ? value.partnerOrganizationId : (() => { throw new InvalidApiResponseError(); })();
   return {
     mealContractId: value.mealContractId,
+    partnerOrganizationId,
     partnerDisplayName: value.partnerDisplayName,
     previousPosBusinessDate: value.previousPosBusinessDate,
     periodConfirmedUsageTotalMinor: value.periodConfirmedUsageTotalMinor,
