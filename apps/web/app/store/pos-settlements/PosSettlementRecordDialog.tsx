@@ -103,6 +103,7 @@ export function PosSettlementRecordDialog({
   const [selectedUsageIds, setSelectedUsageIds] = useState<Set<string>>(new Set());
   const [posBusinessDate, setPosBusinessDate] = useState("");
   const [submittedTotalInput, setSubmittedTotalInput] = useState("");
+  const [pendingReceiptFile, setPendingReceiptFile] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [settlement, setSettlement] = useState<PosSettlement | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -156,6 +157,7 @@ export function PosSettlementRecordDialog({
     setFormError(null);
     setSettlement(null);
     setSelectedUsageIds(new Set());
+    setPendingReceiptFile(null);
     setLedgerRefreshWarning(false);
     if (seed.mealUsageIds.length === 0) {
       setViewState("error");
@@ -344,7 +346,13 @@ export function PosSettlementRecordDialog({
                   </li>
                 ))}
               </ul>
-              {settlement.posSettlementId ? <ReceiptAttachment posSettlementId={settlement.posSettlementId} /> : null}
+              {settlement.posSettlementId ? (
+                <ReceiptAttachment
+                  onPendingFileChange={setPendingReceiptFile}
+                  pendingFile={pendingReceiptFile}
+                  posSettlementId={settlement.posSettlementId}
+                />
+              ) : null}
               <button className={posSettlementFormStyles.newSettlement} onClick={requestClose} type="button">닫기</button>
             </div>
           ) : (
@@ -394,6 +402,7 @@ export function PosSettlementRecordDialog({
                     />
                   </label>
                 </div>
+                <ReceiptAttachment onPendingFileChange={setPendingReceiptFile} pendingFile={pendingReceiptFile} />
                 <button className={posSettlementFormStyles.submit} disabled={isSubmitting || selectedReceivables.length === 0} type="submit">
                   {isSubmitting ? "결제 기록 저장 중…" : "결제 기록 저장하기"}
                 </button>

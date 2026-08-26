@@ -331,7 +331,7 @@ describe("MonthlyMealUsageList", () => {
     expect(openButton).toHaveFocus();
   });
 
-  it("records an exact multi-item allocation, reuses idempotency, and keeps receipt upload in the dialog", async () => {
+  it("records an exact multi-item allocation and attaches a receipt selected before saving", async () => {
     const user = userEvent.setup();
     const contractId = items[0].mealContractId;
     const first = { mealUsageId: items[0].id, mealContractId: contractId, partnerDisplayName: "협력사 A", confirmedAt: items[0].createdAt, receivableCreatedMinor: 7_500 };
@@ -369,6 +369,11 @@ describe("MonthlyMealUsageList", () => {
     expect(amountInput).toHaveValue("1,800");
     fireEvent.change(amountInput, { target: { value: "10,000" } });
     expect(amountInput).toHaveValue("10,000");
+    const receiptFile = new File(["receipt"], "receipt.jpg", { type: "image/jpeg" });
+    const receiptInput = within(dialog).getByLabelText("영수증 첨부");
+    fireEvent.change(receiptInput, { target: { files: [receiptFile] } });
+    expect(within(dialog).getByText("결제 기록 저장 후 영수증을 자동으로 첨부합니다.")).toBeVisible();
+    expect(within(dialog).getByText("선택한 파일: receipt.jpg")).toBeVisible();
     await user.click(within(dialog).getByRole("button", { name: "결제 기록 저장하기" }));
 
     await waitFor(() => expect(recordPosSettlementMock).toHaveBeenCalledWith({ mealContractId: contractId, posBusinessDate: "2026-08-11", submittedTotalMinor: 10_000, mealUsageIds: [first.mealUsageId, second.mealUsageId] }, "00000000-0000-0000-0000-000000000200"));
@@ -378,9 +383,7 @@ describe("MonthlyMealUsageList", () => {
     expect(within(ledger).queryByText("결제 전", { exact: true })).not.toBeInTheDocument();
     expect(screen.queryByText("1건 선택", { exact: true })).not.toBeInTheDocument();
     expect(within(dialog).getByText("결제 기록 저장 완료")).toBeVisible();
-    const fileInput = within(dialog).getByLabelText("영수증 첨부");
-    expect(fileInput).toHaveAttribute("accept", "image/jpeg,image/png,application/pdf");
-    fireEvent.change(fileInput, { target: { files: [new File(["receipt"], "receipt.jpg", { type: "image/jpeg" })] } });
+    expect(within(dialog).getByLabelText("영수증 첨부")).toHaveAttribute("accept", "image/jpeg,image/png,application/pdf");
     await waitFor(() => expect(uploadPosSettlementReceiptMock).toHaveBeenCalledWith(savedSettlement.posSettlementId, expect.any(File)));
   });
 
