@@ -157,6 +157,7 @@ public class PosSettlementPersistenceAdapter implements PosSettlementRepository 
                 ),
                 partner_summary as (
                     select confirmed.meal_contract_id,
+                           confirmed.partner_organization_id,
                            coalesce(partner_organization.display_name, max(confirmed.partner_display_name)) as partner_display_name,
                            latest_pos_settlement.previous_pos_business_date,
                            coalesce(sum(confirmed.amount) filter (
@@ -187,6 +188,7 @@ public class PosSettlementPersistenceAdapter implements PosSettlementRepository 
                     left join partner_organizations partner_organization
                         on partner_organization.id = confirmed.partner_organization_id
                     group by confirmed.meal_contract_id,
+                             confirmed.partner_organization_id,
                              partner_organization.display_name,
                              latest_pos_settlement.previous_pos_business_date
                     having coalesce(sum(confirmed.amount) filter (
@@ -202,6 +204,7 @@ public class PosSettlementPersistenceAdapter implements PosSettlementRepository 
                         ) > 0
                 )
                 select partner_summary.meal_contract_id,
+                       partner_summary.partner_organization_id,
                        partner_summary.partner_display_name,
                        partner_summary.previous_pos_business_date,
                        partner_summary.period_confirmed_usage_total_minor,
@@ -226,6 +229,7 @@ public class PosSettlementPersistenceAdapter implements PosSettlementRepository 
                 if (!partnersByMealContractId.containsKey(mealContractId)) {
                     partnersByMealContractId.put(mealContractId, new PartnerReceivableSummary(
                         new MealContractId(mealContractId),
+                        resultSet.getObject("partner_organization_id", UUID.class),
                         resultSet.getString("partner_display_name"),
                         resultSet.getObject("previous_pos_business_date", LocalDate.class),
                         resultSet.getLong("period_confirmed_usage_total_minor"),

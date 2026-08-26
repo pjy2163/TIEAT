@@ -72,6 +72,7 @@ public interface PosSettlementRepository {
 
     record PartnerReceivableSummary(
         MealContractId mealContractId,
+        UUID partnerOrganizationId,
         String partnerDisplayName,
         LocalDate previousPosBusinessDate,
         long periodConfirmedUsageTotalMinor,

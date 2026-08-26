@@ -193,10 +193,14 @@ class PosSettlementHttpIntegrationTest {
         );
         JsonNode contractSummary = partnerSummary(receivableOverview.get("partners"), contract.id());
         assertThat(fieldNames(contractSummary)).containsExactlyInAnyOrder(
-            "mealContractId", "partnerDisplayName", "previousPosBusinessDate",
+            "mealContractId", "partnerOrganizationId", "partnerDisplayName", "previousPosBusinessDate",
             "periodConfirmedUsageTotalMinor", "periodPrepaidAppliedTotalMinor",
             "outstandingReceivableCount", "outstandingReceivableTotalMinor"
         );
+        assertThat(contractSummary.get("partnerOrganizationId").asText())
+            .isEqualTo(partnerOrganizationId.value().toString());
+        JsonNode legacyContractSummary = partnerSummary(receivableOverview.get("partners"), prepaidCoveredContract.id());
+        assertThat(legacyContractSummary.get("partnerOrganizationId").isNull()).isTrue();
         assertThat(contractSummary.get("previousPosBusinessDate").asText()).isEqualTo("2026-08-10");
         assertThat(contractSummary.get("outstandingReceivableCount").asLong()).isEqualTo(2);
         assertThat(contractSummary.get("outstandingReceivableTotalMinor").asLong()).isEqualTo(3_000);
@@ -218,7 +222,7 @@ class PosSettlementHttpIntegrationTest {
 
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
         assertThat(fieldNames(response)).containsExactlyInAnyOrder(
-            "posBusinessDate", "submittedTotalMinor", "recordedAt", "allocations"
+            "posSettlementId", "posBusinessDate", "submittedTotalMinor", "recordedAt", "allocations"
         );
         assertThat(fieldNames(response.get("allocations").get(0))).containsExactlyInAnyOrder(
             "partnerDisplayName", "confirmedAt", "receivableAmountMinor"

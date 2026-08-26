@@ -206,6 +206,7 @@ class PosSettlementController {
 
     record PartnerReceivableSummaryResponse(
         UUID mealContractId,
+        UUID partnerOrganizationId,
         String partnerDisplayName,
         LocalDate previousPosBusinessDate,
         long periodConfirmedUsageTotalMinor,
@@ -219,6 +220,7 @@ class PosSettlementController {
         ) {
             return new PartnerReceivableSummaryResponse(
                 summary.mealContractId().value(),
+                summary.partnerOrganizationId(),
                 summary.partnerDisplayName(),
                 summary.previousPosBusinessDate(),
                 summary.periodConfirmedUsageTotalMinor(),
