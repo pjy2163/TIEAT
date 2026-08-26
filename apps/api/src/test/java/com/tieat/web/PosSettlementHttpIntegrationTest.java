@@ -432,7 +432,8 @@ class PosSettlementHttpIntegrationTest {
             .andExpect(jsonPath("$.items[0].receipt.sizeBytes").value(1))
             .andExpect(jsonPath("$.items[1].receipt.status").value("EXPIRED"))
             .andExpect(jsonPath("$.items[1].receipt.fileName").value("expired-receipt.jpg"))
-            .andExpect(jsonPath("$.hasNext").value(true));
+            .andExpect(jsonPath("$.hasNext").value(true))
+            .andReturn();
         String firstHistoryJson = firstHistoryPage.getResponse().getContentAsString();
         assertThat(firstHistoryJson).contains("posSettlementId");
         assertThat(firstHistoryJson).doesNotContain(
@@ -450,7 +451,8 @@ class PosSettlementHttpIntegrationTest {
             .andExpect(jsonPath("$.items[0].allocations[0].receivableAmountMinor").value(4_000))
             .andExpect(jsonPath("$.items[0].receipt.status").value("NONE"))
             .andExpect(jsonPath("$.items[0].receipt.fileName").value(org.hamcrest.Matchers.nullValue()))
-            .andExpect(jsonPath("$.hasNext").value(false));
+            .andExpect(jsonPath("$.hasNext").value(false))
+            .andReturn();
         assertThat(secondHistoryPage.getResponse().getContentAsString()).doesNotContain(STORE_ID.value().toString());
     }
 
