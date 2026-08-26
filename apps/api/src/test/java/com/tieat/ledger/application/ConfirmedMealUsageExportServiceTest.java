@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 class ConfirmedMealUsageExportServiceTest {
 
@@ -30,6 +32,17 @@ class ConfirmedMealUsageExportServiceTest {
         UUID.fromString("8cb73a47-d5c5-4f7a-8db0-b61e171c4f0a")
     );
     private static final Instant GENERATED_AT = Instant.parse("2026-08-26T04:00:00Z");
+
+    @Test
+    void exportsWithReadOnlyRepeatableReadTransaction() throws NoSuchMethodException {
+        Transactional transaction = ConfirmedMealUsageExportService.class
+            .getMethod("export", StoreId.class, String.class, String.class, MealContractId.class)
+            .getAnnotation(Transactional.class);
+
+        assertThat(transaction).isNotNull();
+        assertThat(transaction.readOnly()).isTrue();
+        assertThat(transaction.isolation()).isEqualTo(Isolation.REPEATABLE_READ);
+    }
 
     @Test
     void collectsAllPagesThroughTheExistingStoreAndContractScopedQueryBeforeGenerating() {
