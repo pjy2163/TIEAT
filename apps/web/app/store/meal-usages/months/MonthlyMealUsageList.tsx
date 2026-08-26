@@ -408,8 +408,13 @@ export function MonthlyMealUsageList() {
       const link = document.createElement("a");
       link.href = objectUrl;
       link.download = "confirmed-meal-usages.xlsx";
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+      document.body.appendChild(link);
+      try {
+        link.click();
+      } finally {
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+      }
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         clearSensitiveRows();

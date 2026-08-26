@@ -242,6 +242,32 @@ describe("MonthlyMealUsageList", () => {
     );
   });
 
+  it("attaches the temporary XLSX link during click and removes it afterward", async () => {
+    const objectUrl = "blob:http://localhost/export";
+    const createObjectUrl = vi.fn().mockReturnValue(objectUrl);
+    const revokeObjectUrl = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      expect(document.body).toContainElement(this);
+    });
+    vi.stubGlobal("URL", { createObjectURL: createObjectUrl, revokeObjectURL: revokeObjectUrl });
+    getConfirmedMealUsagesMock.mockResolvedValue(page({ hasNext: false }));
+    downloadConfirmedMealUsagesExportMock.mockResolvedValue(new Blob(["xlsx"]));
+
+    try {
+      render(<MonthlyMealUsageList />);
+      await screen.findByText("협력사 A");
+      await userEvent.setup().click(screen.getByRole("button", { name: "현재 범위 XLSX 다운로드" }));
+
+      expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
+      expect(click).toHaveBeenCalledTimes(1);
+      expect(document.body.querySelector('a[download="confirmed-meal-usages.xlsx"]')).not.toBeInTheDocument();
+      await waitFor(() => expect(revokeObjectUrl).toHaveBeenCalledWith(objectUrl));
+    } finally {
+      click.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("renders each additive settlement status and safely omits an absent status", async () => {
     getConfirmedMealUsagesMock.mockResolvedValue(page({
       items: [
