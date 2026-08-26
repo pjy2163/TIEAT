@@ -82,7 +82,7 @@ describe("MealUsageList", () => {
 
     expect(await screen.findByText("매장 태블릿 입력")).toBeVisible();
     expect(screen.getByText("모바일 QR 입력")).toBeVisible();
-    expect(screen.getAllByText("확인 대기")).toHaveLength(2);
+    expect(screen.getAllByText("확인 대기", { selector: "span" })).toHaveLength(2);
     expect(screen.getByText("₩12,000")).toBeVisible();
     expect(screen.getByText("₩1,234,567")).toBeVisible();
     expect(screen.getAllByText(/2026\. 8\. 5\./)).toHaveLength(2);
@@ -117,7 +117,15 @@ describe("MealUsageList", () => {
 
     render(<MealUsageList />);
 
-    expect(await screen.findByText("확인 대기 거래가 없습니다")).toBeVisible();
+    expect(await screen.findByText("확인 대기가 없습니다")).toBeVisible();
+    const pendingTitle = screen.getByRole("heading", { level: 1, name: "확인 대기" });
+    const ledgerLink = screen.getByRole("link", { name: "전체 장부" });
+    expect(pendingTitle).toBeVisible();
+    expect(ledgerLink).toHaveAttribute("href", "/store/meal-usages/months");
+    expect(pendingTitle.parentElement).toContainElement(ledgerLink);
+    expect(screen.queryByRole("link", { name: "월별 장부" })).not.toBeInTheDocument();
+    expect(screen.queryByText("오래된 거래부터 표시합니다.")).not.toBeInTheDocument();
+    expect(screen.queryByText("새 거래가 생기면 이 목록에서 확인할 수 있습니다.")).not.toBeInTheDocument();
   });
 
   it("places confirm and reject icon buttons beside the confirmer initials input", async () => {
@@ -491,12 +499,12 @@ describe("MealUsageList", () => {
 
     render(<MealUsageList />);
     await flushUpdates();
-    expect(screen.getByText("확인 대기 거래가 없습니다")).toBeVisible();
+    expect(screen.getByText("확인 대기가 없습니다")).toBeVisible();
 
     await vi.advanceTimersByTimeAsync(2_000);
     await flushUpdates();
     expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2);
-    expect(screen.getByText("확인 대기 거래가 없습니다")).toBeVisible();
+    expect(screen.getByText("확인 대기가 없습니다")).toBeVisible();
     expect(screen.queryByText("목록을 불러오지 못했습니다")).not.toBeInTheDocument();
 
     await vi.advanceTimersByTimeAsync(1_999);
@@ -530,7 +538,7 @@ describe("MealUsageList", () => {
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/store/login?next=/store/meal-usages"));
     expect(screen.queryByText("₩12,000")).not.toBeInTheDocument();
-    expect(screen.queryByRole("list", { name: "확인 대기 거래 목록" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "확인 대기 목록" })).not.toBeInTheDocument();
   });
 
   it("opens a selected transaction summary and sends original initials", async () => {
@@ -554,7 +562,7 @@ describe("MealUsageList", () => {
     expect(confirmMealUsageMock).toHaveBeenCalledWith(pendingItem.mealUsageId, " Hk ");
     await waitFor(() => expect(getPendingMealUsagesMock).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole("heading", { name: "이 거래를 확정할까요?" })).not.toBeInTheDocument();
-    expect(screen.getByText("확인 대기 거래가 없습니다")).toBeVisible();
+    expect(screen.getByText("확인 대기가 없습니다")).toBeVisible();
     expect(screen.getByRole("status")).toHaveTextContent("요청을 확정했습니다.");
   });
 
@@ -840,7 +848,7 @@ describe("MealUsageList", () => {
     await user.click(screen.getByRole("button", { name: "거절" }));
 
     await waitFor(() => expect(rejectMealUsageMock).toHaveBeenCalledWith(partnerMobilePendingItem.mealUsageId));
-    expect(screen.getByText("확인 대기 거래가 없습니다")).toBeVisible();
+    expect(screen.getByText("확인 대기가 없습니다")).toBeVisible();
     expect(screen.getByRole("status")).toHaveTextContent("요청을 거절했습니다.");
     expect(screen.queryByText("요청을 확정했습니다.")).not.toBeInTheDocument();
   });

@@ -13,6 +13,7 @@ import {
   UnexpectedRejectionResponseError,
 } from "@/lib/store-api";
 import { mealUsageListStyles } from "./MealUsageList.styles";
+import { RefreshButton } from "./RefreshButton";
 
 type ViewState = "loading" | "ready" | "empty" | "forbidden" | "error";
 type ReconciliationMode = "terminal" | "ambiguous";
@@ -703,7 +704,7 @@ export function MealUsageList() {
   if (viewState === "loading") {
     return (
       <main className={mealUsageListStyles.page} aria-busy="true">
-        <section className={mealUsageListStyles.container} aria-label="확인 대기 거래 불러오는 중">
+        <section className={mealUsageListStyles.container} aria-label="확인 대기 불러오는 중">
           <div className="h-4 w-24 rounded-sm bg-[var(--surface)]" />
           <div className="mt-3 h-9 w-52 rounded-sm bg-[var(--surface)]" />
           <div className={`${mealUsageListStyles.card} p-5`}>
@@ -715,7 +716,7 @@ export function MealUsageList() {
   }
 
   if (viewState === "forbidden") {
-    return <StatePanel title="접근 권한이 없습니다" description="이 계정으로는 확인 대기 거래를 볼 수 없습니다." />;
+    return <StatePanel title="접근 권한이 없습니다" description="이 계정으로는 확인 대기를 볼 수 없습니다." />;
   }
 
   if (viewState === "error") {
@@ -728,16 +729,17 @@ export function MealUsageList() {
     <main className={mealUsageListStyles.page}>
       <section className={mealUsageListStyles.container} aria-labelledby="pending-title">
         <header className={mealUsageListStyles.header}>
-          <div>
-            <p className={mealUsageListStyles.eyebrow}>TIEAT STORE</p>
-            <h1 id="pending-title" className={mealUsageListStyles.title}>확인 대기 거래</h1>
-            <p className={mealUsageListStyles.description}>오래된 거래부터 표시합니다.</p>
-          </div>
-          <div className={mealUsageListStyles.headerActions}>
-            <a className={mealUsageListStyles.monthlyLedgerLink} href="/store/meal-usages/months">월별 장부</a>
-            <button className={mealUsageListStyles.refresh} type="button" onClick={handleManualRefresh} disabled={isRefreshing || isReconciling || isConfirming}>
-              {isRefreshing ? "새로고침 중…" : "새로고침"}
-            </button>
+          <p className={mealUsageListStyles.eyebrow}>TIEAT STORE</p>
+          <div className={mealUsageListStyles.headerLine}>
+            <div className={mealUsageListStyles.titleRow}>
+              <h1 id="pending-title" className={mealUsageListStyles.title}>확인 대기</h1>
+              <a className={mealUsageListStyles.ledgerLink} href="/store/meal-usages/months">전체 장부</a>
+            </div>
+            <RefreshButton
+              disabled={isRefreshing || isReconciling || isConfirming}
+              isRefreshing={isRefreshing}
+              onClick={handleManualRefresh}
+            />
           </div>
         </header>
 
@@ -762,12 +764,11 @@ export function MealUsageList() {
           ) : null}
           {viewState === "empty" ? (
             <div className={mealUsageListStyles.state}>
-              <h2 className={mealUsageListStyles.stateTitle}>확인 대기 거래가 없습니다</h2>
-              <p className={mealUsageListStyles.stateDescription}>새 거래가 생기면 이 목록에서 확인할 수 있습니다.</p>
+              <h2 className={mealUsageListStyles.stateTitle}>확인 대기가 없습니다</h2>
             </div>
           ) : (
             <>
-              <ul className={mealUsageListStyles.list} aria-label="확인 대기 거래 목록">
+              <ul className={mealUsageListStyles.list} aria-label="확인 대기 목록">
                 {items.map((item) => {
                   const isSelected = item.mealUsageId === selectedMealUsage?.mealUsageId;
                   return (
