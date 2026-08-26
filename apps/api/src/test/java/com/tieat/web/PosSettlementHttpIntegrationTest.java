@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -30,6 +31,7 @@ import com.tieat.settlement.application.RecordPosSettlementCommand;
 import com.tieat.settlement.application.RecordPosSettlementUseCase;
 import com.tieat.store.domain.StoreId;
 import com.tieat.web.StoreOnboardingHttpIntegrationSupport.SessionHandle;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -50,9 +52,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.junit.jupiter.Container;
@@ -65,6 +69,7 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+@TestPropertySource(properties = "tieat.receipts.provider=local")
 class PosSettlementHttpIntegrationTest {
 
     private static final StoreId STORE_ID = new StoreId(UUID.fromString("9d5e37dd-dbe2-40dc-97fb-8e77c89aa4cb"));
@@ -457,6 +462,109 @@ class PosSettlementHttpIntegrationTest {
     }
 
     @Test
+    void verifiesLocalReceiptUploadDownloadAndStoreScopedFailureBoundaries() throws Exception {
+        seedAccount("store-hk", "correct-password", STORE_ID);
+        seedAccount("other-store", "correct-password", OTHER_STORE_ID);
+        MealContract contract = postpaidContract(STORE_ID);
+        mealContractRepository.save(contract);
+        MealUsage usage = confirmedUsage(contract.id(), STORE_ID, 1_000, 0, 1_000, 0);
+        mealUsageRepository.save(usage);
+        UUID settlementId = UUID.randomUUID();
+        insertSettlement(
+            settlementId,
+            STORE_ID,
+            contract.id(),
+            LocalDate.of(2026, 8, 11),
+            "store-hk",
+            Instant.parse("2026-08-12T03:00:00Z"),
+            new SettlementAllocationFixture(usage.id().value(), 1_000)
+        );
+        SessionHandle storeSession = authenticatedSession("store-hk", "correct-password");
+        SessionHandle otherStoreSession = authenticatedSession("other-store", "correct-password");
+        byte[] originalPdf = "%PDF-1.7\nTIEAT receipt\n".getBytes(StandardCharsets.US_ASCII);
+
+        mockMvc.perform(multipart("/api/v1/pos-settlements/{posSettlementId}/receipt", settlementId)
+                .file(receiptFile("settlement.pdf", originalPdf))
+                .cookie(storeSession.cookie()))
+            .andExpect(problem(HttpStatus.FORBIDDEN.value(), "CSRF_TOKEN_INVALID"));
+        assertThat(jdbcTemplate.queryForObject("select count(*) from pos_settlement_receipts", Long.class)).isZero();
+
+        MvcResult uploaded = mockMvc.perform(receiptUploadRequest(
+                storeSession,
+                csrfToken(storeSession),
+                settlementId,
+                receiptFile("settlement.pdf", originalPdf)
+            ))
+            .andExpect(status().isCreated())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+            .andReturn();
+        JsonNode uploadedBody = objectMapper.readTree(uploaded.getResponse().getContentAsString());
+        assertThat(fieldNames(uploadedBody)).containsExactlyInAnyOrder(
+            "posSettlementId", "fileName", "contentType", "sizeBytes", "uploadedAt", "expiresAt"
+        );
+        assertThat(uploadedBody.get("posSettlementId").asText()).isEqualTo(settlementId.toString());
+        assertThat(uploadedBody.get("fileName").asText()).isEqualTo("settlement.pdf");
+        assertThat(uploadedBody.get("contentType").asText()).isEqualTo(MediaType.APPLICATION_PDF_VALUE);
+        assertThat(uploadedBody.get("sizeBytes").asLong()).isEqualTo(originalPdf.length);
+
+        mockMvc.perform(get("/api/v1/pos-settlements/{posSettlementId}/receipt", settlementId)
+                .cookie(storeSession.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
+            .andExpect(content().contentType(MediaType.APPLICATION_PDF))
+            .andExpect(header().string(
+                HttpHeaders.CONTENT_DISPOSITION,
+                org.hamcrest.Matchers.allOf(
+                    org.hamcrest.Matchers.containsString("attachment"),
+                    org.hamcrest.Matchers.containsString("settlement.pdf")
+                )
+            ))
+            .andExpect(content().bytes(originalPdf));
+
+        UUID receiptId = jdbcTemplate.queryForObject(
+            "select id from pos_settlement_receipts where pos_settlement_id = ?",
+            UUID.class,
+            settlementId
+        );
+        String objectKey = jdbcTemplate.queryForObject(
+            "select object_key from pos_settlement_receipts where pos_settlement_id = ?",
+            String.class,
+            settlementId
+        );
+        mockMvc.perform(receiptUploadRequest(
+                storeSession,
+                csrfToken(storeSession),
+                settlementId,
+                receiptFile("replacement.pdf", "%PDF-1.7\nreplacement\n".getBytes(StandardCharsets.US_ASCII))
+            ))
+            .andExpect(problem(HttpStatus.CONFLICT.value(), "POS_SETTLEMENT_RECEIPT_ALREADY_ATTACHED"));
+        assertThat(jdbcTemplate.queryForObject("select count(*) from pos_settlement_receipts", Long.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+            "select id from pos_settlement_receipts where pos_settlement_id = ?", UUID.class, settlementId
+        )).isEqualTo(receiptId);
+        assertThat(jdbcTemplate.queryForObject(
+            "select object_key from pos_settlement_receipts where pos_settlement_id = ?", String.class, settlementId
+        )).isEqualTo(objectKey);
+        mockMvc.perform(get("/api/v1/pos-settlements/{posSettlementId}/receipt", settlementId)
+                .cookie(storeSession.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(content().bytes(originalPdf));
+
+        MvcResult history = mockMvc.perform(get("/api/v1/pos-settlements?page=0&size=20")
+                .cookie(storeSession.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[0].receipt.status").value("AVAILABLE"))
+            .andReturn();
+        String historyJson = history.getResponse().getContentAsString();
+        assertThat(historyJson).doesNotContain(objectKey, receiptId.toString(), STORE_ID.value().toString());
+
+        mockMvc.perform(get("/api/v1/pos-settlements/{posSettlementId}/receipt", settlementId)
+                .cookie(otherStoreSession.cookie()))
+            .andExpect(problem(HttpStatus.NOT_FOUND.value(), "POS_SETTLEMENT_RECEIPT_NOT_FOUND"));
+    }
+
+    @Test
     void rejectsScopeStatusContractAndTotalFailuresWithoutCreatingAnAllocation() throws Exception {
         seedAccount("store-hk", "correct-password", STORE_ID);
         MealContract contract = postpaidContract(STORE_ID);
@@ -717,6 +825,22 @@ class PosSettlementHttpIntegrationTest {
             .header("Idempotency-Key", idempotencyKey.toString())
             .contentType(MediaType.APPLICATION_JSON)
             .content(body);
+    }
+
+    private MockMultipartFile receiptFile(String fileName, byte[] bytes) {
+        return new MockMultipartFile("file", fileName, MediaType.APPLICATION_PDF_VALUE, bytes);
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder receiptUploadRequest(
+        SessionHandle session,
+        String csrfToken,
+        UUID settlementId,
+        MockMultipartFile file
+    ) {
+        return multipart("/api/v1/pos-settlements/{posSettlementId}/receipt", settlementId)
+            .file(file)
+            .cookie(session.cookie())
+            .header("X-CSRF-TOKEN", csrfToken);
     }
 
     private void insertSettlement(
