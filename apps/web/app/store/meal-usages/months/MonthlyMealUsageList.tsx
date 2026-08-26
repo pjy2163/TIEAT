@@ -4,6 +4,7 @@ import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, us
 import { useRouter } from "next/navigation";
 import { ApiError } from "@/lib/store-api";
 import {
+  downloadConfirmedMealUsagesExport,
   getConfirmedMealUsages,
   type MonthlyMealUsage,
   type ConfirmedMealUsagePage,
@@ -68,6 +69,13 @@ function errorMessage(error: unknown): string {
   return "전체 장부를 불러오지 못했습니다. 다시 시도해 주세요.";
 }
 
+function exportErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && error.status === 413) {
+    return "내보낼 내역이 10,000건을 초과했습니다. 조회 기간을 줄여 다시 시도해 주세요.";
+  }
+  return "엑셀 파일을 내려받지 못했습니다. 잠시 후 다시 시도해 주세요.";
+}
+
 function settlementStatusLabel(status: MonthlyMealUsage["settlementStatus"]): string | null {
   switch (status) {
     case "PAYMENT_DUE":
@@ -104,6 +112,8 @@ export function MonthlyMealUsageList() {
   const [viewState, setViewState] = useState<"loading" | "ready" | "empty" | "forbidden" | "error" | "scope-not-found">("loading");
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [resultScope, setResultScope] = useState<string | null>(null);
   const [selectedUsageIds, setSelectedUsageIds] = useState<Set<string>>(new Set());
   const [selectedReceivables, setSelectedReceivables] = useState<OutstandingReceivable[]>([]);
@@ -134,6 +144,7 @@ export function MonthlyMealUsageList() {
     replaceResult(null);
     setResultScope(null);
     setLoadError(null);
+    setExportError(null);
     selectedUsageIdsRef.current = new Set();
     setSelectedUsageIds(new Set());
     setSelectedReceivables([]);
@@ -282,6 +293,7 @@ export function MonthlyMealUsageList() {
     clearSelection();
     setIsLoading(true);
     setLoadError(null);
+    setExportError(null);
     if (resultRef.current === null) {
       setViewState("loading");
     }
@@ -357,6 +369,7 @@ export function MonthlyMealUsageList() {
     const nextDate = event.target.value;
     if (!DATE_PATTERN.test(nextDate)) return;
     clearSelection();
+    setExportError(null);
     setDate(nextDate);
     setPage(0);
   }, [clearSelection]);
@@ -380,8 +393,40 @@ export function MonthlyMealUsageList() {
 
   const handleReload = useCallback(() => {
     clearSelection();
+    setExportError(null);
     void load(fromDate, toDate, page, selectedMealContractId);
   }, [clearSelection, fromDate, load, page, selectedMealContractId, toDate]);
+
+  const handleExport = useCallback(async () => {
+    setIsExporting(true);
+    setExportError(null);
+    try {
+      const workbook = selectedMealContractId === null
+        ? await downloadConfirmedMealUsagesExport(fromDate, toDate)
+        : await downloadConfirmedMealUsagesExport(fromDate, toDate, selectedMealContractId);
+      const objectUrl = URL.createObjectURL(workbook);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = "confirmed-meal-usages.xlsx";
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        clearSensitiveRows();
+        setViewState("loading");
+        routerRef.current.replace("/store/login?next=/store/meal-usages/months");
+        return;
+      }
+      if (error instanceof ApiError && error.status === 403) {
+        clearSensitiveRows();
+        setViewState("forbidden");
+        return;
+      }
+      setExportError(exportErrorMessage(error));
+    } finally {
+      setIsExporting(false);
+    }
+  }, [clearSensitiveRows, fromDate, selectedMealContractId, toDate]);
 
   const handleRowKeyDown = useCallback((event: KeyboardEvent<HTMLLIElement>, item: MonthlyMealUsage) => {
     if (!isSelectableUsage(item) || event.target !== event.currentTarget) return;
@@ -458,6 +503,20 @@ export function MonthlyMealUsageList() {
               isRefreshing={isLoading}
               onClick={handleReload}
             />
+            <div className={monthlyMealUsageListStyles.exportGroup}>
+              <button
+                className={monthlyMealUsageListStyles.exportButton}
+                disabled={isExporting || isLoading || !scopeReady || scopeState === "invalid"}
+                onClick={() => void handleExport()}
+                type="button"
+              >
+                {isExporting ? "XLSX 내보내는 중…" : "현재 범위 XLSX 다운로드"}
+              </button>
+              <p className={monthlyMealUsageListStyles.exportHint}>
+                조회 기간: {rangeLabel(fromDate, toDate)} · {selectedMealContractId === null ? "전체 협력사·계약" : "선택한 협력사·계약"}
+              </p>
+              {exportError ? <p className={monthlyMealUsageListStyles.exportError} role="alert">{exportError}</p> : null}
+            </div>
           </div>
         </header>
 

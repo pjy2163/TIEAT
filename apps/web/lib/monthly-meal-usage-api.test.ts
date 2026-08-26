@@ -1,11 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getConfirmedMealUsages, getMonthlyMealUsages } from "./monthly-meal-usage-api";
+import { downloadConfirmedMealUsagesExport, getConfirmedMealUsages, getMonthlyMealUsages } from "./monthly-meal-usage-api";
 
 function response(status: number, body?: unknown): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
     json: vi.fn().mockResolvedValue(body),
+  } as unknown as Response;
+}
+
+function exportResponse(status: number, contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", contentDisposition = 'attachment; filename="confirmed-meal-usages.xlsx"'): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: new Headers({ "content-type": contentType, "content-disposition": contentDisposition }),
+    json: vi.fn().mockResolvedValue(undefined),
+    blob: vi.fn().mockResolvedValue(new Blob(["xlsx"], { type: contentType })),
   } as unknown as Response;
 }
 
@@ -143,5 +153,42 @@ describe("monthly meal usage API", () => {
     });
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("downloads the strict date-range workbook with the selected contract scope and no-store", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(exportResponse(200));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(downloadConfirmedMealUsagesExport(
+      "2026-08-01",
+      "2026-08-31",
+      "00000000-0000-0000-0000-000000000011",
+    )).resolves.toBeInstanceOf(Blob);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/meal-usages/confirmed/export?fromDate=2026-08-01&toDate=2026-08-31&mealContractId=00000000-0000-0000-0000-000000000011",
+      { cache: "no-store", credentials: "same-origin" },
+    );
+  });
+
+  it("rejects malformed export headers and client scope before exposing workbook bytes", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(exportResponse(200, "application/octet-stream"))
+      .mockResolvedValueOnce(exportResponse(200, undefined, 'attachment; filename="unsafe.xlsx"'));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(downloadConfirmedMealUsagesExport("2026-08-01", "2026-08-31")).rejects.toMatchObject({
+      status: 0,
+      errorCode: "INVALID_API_RESPONSE",
+    });
+    await expect(downloadConfirmedMealUsagesExport("2026-08-01", "2026-08-31")).rejects.toMatchObject({
+      status: 0,
+      errorCode: "INVALID_API_RESPONSE",
+    });
+    await expect(downloadConfirmedMealUsagesExport("2026-02-30", "2026-03-01")).rejects.toMatchObject({
+      status: 0,
+      errorCode: "INVALID_API_RESPONSE",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

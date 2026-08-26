@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/store-api";
-import { getConfirmedMealUsages } from "@/lib/monthly-meal-usage-api";
+import { downloadConfirmedMealUsagesExport, getConfirmedMealUsages } from "@/lib/monthly-meal-usage-api";
 import {
   getOutstandingReceivables,
   recordPosSettlement,
@@ -18,7 +18,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/monthly-meal-usage-api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/monthly-meal-usage-api")>();
-  return { ...original, getConfirmedMealUsages: vi.fn() };
+  return { ...original, downloadConfirmedMealUsagesExport: vi.fn(), getConfirmedMealUsages: vi.fn() };
 });
 
 vi.mock("@/lib/pos-settlement-api", async (importOriginal) => {
@@ -32,6 +32,7 @@ vi.mock("@/lib/pos-settlement-api", async (importOriginal) => {
 });
 
 const getConfirmedMealUsagesMock = vi.mocked(getConfirmedMealUsages);
+const downloadConfirmedMealUsagesExportMock = vi.mocked(downloadConfirmedMealUsagesExport);
 const getOutstandingReceivablesMock = vi.mocked(getOutstandingReceivables);
 const recordPosSettlementMock = vi.mocked(recordPosSettlement);
 const uploadPosSettlementReceiptMock = vi.mocked(uploadPosSettlementReceipt);
@@ -216,6 +217,29 @@ describe("MonthlyMealUsageList", () => {
     fireEvent.change(screen.getByLabelText("종료일"), { target: { value: "2026-09-30" } });
     await waitFor(() => expect(getConfirmedMealUsagesMock).toHaveBeenLastCalledWith("2026-07-01", "2026-09-30", 0, 20));
     await flushUpdates();
+  });
+
+  it("shows the current export scope and keeps the export busy/error state local to the button", async () => {
+    let rejectExport: ((reason?: unknown) => void) | undefined;
+    getConfirmedMealUsagesMock.mockResolvedValue(page({ hasNext: false }));
+    downloadConfirmedMealUsagesExportMock.mockImplementation(() => new Promise((_, reject) => {
+      rejectExport = reject;
+    }));
+    render(<MonthlyMealUsageList />);
+
+    await screen.findByText("협력사 A");
+    expect(screen.getByText(/조회 기간: .* · 전체 협력사·계약/)).toBeVisible();
+    const exportButton = screen.getByRole("button", { name: "현재 범위 XLSX 다운로드" });
+    await userEvent.setup().click(exportButton);
+    expect(screen.getByRole("button", { name: "XLSX 내보내는 중…" })).toBeDisabled();
+
+    rejectExport?.(new Error("download unavailable"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("엑셀 파일을 내려받지 못했습니다.");
+    expect(screen.getByRole("button", { name: "현재 범위 XLSX 다운로드" })).toBeEnabled();
+    expect(downloadConfirmedMealUsagesExportMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+    );
   });
 
   it("renders each additive settlement status and safely omits an absent status", async () => {

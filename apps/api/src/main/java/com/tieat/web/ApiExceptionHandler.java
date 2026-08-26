@@ -10,6 +10,7 @@ import com.tieat.ledger.application.MealUsageNotFoundException;
 import com.tieat.ledger.application.InvalidPendingMealUsageQueryException;
 import com.tieat.ledger.application.InvalidMonthlyMealUsageQueryException;
 import com.tieat.ledger.application.InvalidConfirmedMealUsageQueryException;
+import com.tieat.ledger.application.ConfirmedMealUsageExportTooLargeException;
 import com.tieat.onboarding.application.OnboardingException;
 import com.tieat.identity.application.SessionReauthenticationFailedException;
 import com.tieat.identity.application.SessionReauthenticationInvalidException;
@@ -366,6 +367,19 @@ public class ApiExceptionHandler {
         );
     }
 
+    @ExceptionHandler(ConfirmedMealUsageExportTooLargeException.class)
+    ResponseEntity<ProblemDetail> handleConfirmedMealUsageExportTooLarge(
+        ConfirmedMealUsageExportTooLargeException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.PAYLOAD_TOO_LARGE,
+            "CONFIRMED_MEAL_USAGE_EXPORT_TOO_LARGE",
+            "Confirmed meal usage export exceeds 10000 rows"
+        );
+    }
+
     @ExceptionHandler({
         BindException.class,
         HttpMessageNotReadableException.class,
@@ -411,6 +425,7 @@ public class ApiExceptionHandler {
         ResponseEntity.BodyBuilder response = ResponseEntity.status(status);
         if (problemDetailFactory.isPublicMealUsageQrRequest(request)
             || problemDetailFactory.isMonthlyMealUsageRequest(request)
+            || problemDetailFactory.isConfirmedMealUsageRequest(request)
             || problemDetailFactory.isPosSettlementRequest(request)
             || problemDetailFactory.isStoreOnboardingRequest(request)
             || problemDetailFactory.isSessionReauthenticationRequest(request)) {

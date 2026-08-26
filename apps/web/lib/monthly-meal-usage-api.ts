@@ -38,6 +38,8 @@ export type ConfirmedMealUsagePage = {
 };
 
 const API_PATH = "/api/v1";
+const CONFIRMED_MEAL_USAGE_EXPORT_PATH = `${API_PATH}/meal-usages/confirmed/export`;
+const XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const YEAR_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 const DATE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
@@ -66,6 +68,13 @@ function confirmedLedgerPath(
     ? ""
     : `&mealContractId=${encodeURIComponent(mealContractId)}`;
   return `${API_PATH}/meal-usages/confirmed?fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}&page=${page}&size=${size}${contractQuery}`;
+}
+
+function confirmedMealUsageExportPath(fromDate: string, toDate: string, mealContractId?: string): string {
+  const contractQuery = mealContractId === undefined
+    ? ""
+    : `&mealContractId=${encodeURIComponent(mealContractId)}`;
+  return `${CONFIRMED_MEAL_USAGE_EXPORT_PATH}?fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}${contractQuery}`;
 }
 
 async function apiError(response: Response): Promise<ApiError> {
@@ -97,6 +106,12 @@ function isIsoInstant(value: unknown): value is string {
   return calendarDate.getUTCFullYear() === year
     && calendarDate.getUTCMonth() === month - 1
     && calendarDate.getUTCDate() === day;
+}
+
+function isCalendarDate(value: string): boolean {
+  if (!DATE_PATTERN.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function hasExactlyFields(value: Record<string, unknown>, expectedFields: readonly string[]): boolean {
@@ -263,8 +278,8 @@ export async function getConfirmedMealUsages(
   size: number,
   mealContractId?: string,
 ): Promise<ConfirmedMealUsagePage> {
-  if (!DATE_PATTERN.test(fromDate)
-    || !DATE_PATTERN.test(toDate)
+  if (!isCalendarDate(fromDate)
+    || !isCalendarDate(toDate)
     || !Number.isInteger(page)
     || page < 0
     || !Number.isInteger(size)
@@ -283,4 +298,33 @@ export async function getConfirmedMealUsages(
   }
 
   return parseConfirmedMealUsagePage(await response.json() as unknown, fromDate, toDate, page, size);
+}
+
+export async function downloadConfirmedMealUsagesExport(
+  fromDate: string,
+  toDate: string,
+  mealContractId?: string,
+): Promise<Blob> {
+  if (!isCalendarDate(fromDate)
+    || !isCalendarDate(toDate)
+    || (mealContractId !== undefined && !isUuid(mealContractId))) {
+    throw new InvalidApiResponseError();
+  }
+  const response = await fetch(confirmedMealUsageExportPath(fromDate, toDate, mealContractId), {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+
+  const contentType = response.headers.get("content-type");
+  const contentDisposition = response.headers.get("content-disposition");
+  if (contentType !== XLSX_MEDIA_TYPE
+    || contentDisposition === null
+    || !/^attachment; filename="confirmed-meal-usages\.xlsx"$/.test(contentDisposition)) {
+    throw new InvalidApiResponseError();
+  }
+  return response.blob();
 }
