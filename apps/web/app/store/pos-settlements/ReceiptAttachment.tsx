@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { ApiError } from "@/lib/store-api";
 import {
-  downloadPosSettlementReceipt,
   uploadPosSettlementReceipt,
+  type PosSettlementReceipt,
 } from "@/lib/pos-settlement-api";
 import { posSettlementFormStyles } from "./PosSettlementForm.styles";
+import { ReceiptDownload } from "./ReceiptDownload";
 
 function receiptErrorMessage(error: unknown): string {
   if (error instanceof ApiError && error.errorCode === "POS_SETTLEMENT_RECEIPT_ALREADY_ATTACHED") {
@@ -22,8 +23,8 @@ function receiptErrorMessage(error: unknown): string {
 }
 
 export function ReceiptAttachment({ posSettlementId }: { posSettlementId: string }) {
-  const [busy, setBusy] = useState<"upload" | "download" | null>(null);
-  const [attached, setAttached] = useState(false);
+  const [busy, setBusy] = useState<"upload" | null>(null);
+  const [receipt, setReceipt] = useState<PosSettlementReceipt | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   async function upload(file: File | undefined) {
@@ -39,31 +40,9 @@ export function ReceiptAttachment({ posSettlementId }: { posSettlementId: string
     setBusy("upload");
     setMessage(null);
     try {
-      await uploadPosSettlementReceipt(posSettlementId, file);
-      setAttached(true);
+      const uploaded = await uploadPosSettlementReceipt(posSettlementId, file);
+      setReceipt(uploaded);
       setMessage("영수증을 안전하게 첨부했습니다.");
-    } catch (error) {
-      setMessage(receiptErrorMessage(error));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function download() {
-    setBusy("download");
-    setMessage(null);
-    try {
-      const response = await downloadPosSettlementReceipt(posSettlementId);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = "receipt";
-      document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 0);
-      setAttached(true);
     } catch (error) {
       setMessage(receiptErrorMessage(error));
     } finally {
@@ -78,19 +57,12 @@ export function ReceiptAttachment({ posSettlementId }: { posSettlementId: string
         <input
           accept="image/jpeg,image/png,application/pdf"
           capture="environment"
-          disabled={busy !== null || attached}
+          disabled={busy !== null || receipt !== null}
           onChange={(event) => void upload(event.target.files?.[0])}
           type="file"
         />
       </label>
-      <button
-        className={posSettlementFormStyles.stateAction}
-        disabled={busy !== null}
-        onClick={() => void download()}
-        type="button"
-      >
-        {busy === "download" ? "영수증 불러오는 중…" : "영수증 다운로드"}
-      </button>
+      {receipt ? <ReceiptDownload posSettlementId={posSettlementId} fileName={receipt.fileName} /> : null}
       {message ? <p className={posSettlementFormStyles.secondary} role="status">{message}</p> : null}
     </div>
   );

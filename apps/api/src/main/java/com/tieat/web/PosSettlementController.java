@@ -8,6 +8,7 @@ import com.tieat.settlement.application.RecordPosSettlementCommand;
 import com.tieat.settlement.application.RecordPosSettlementUseCase;
 import com.tieat.settlement.domain.PosSettlement;
 import com.tieat.settlement.domain.PosSettlementRepository;
+import com.tieat.settlement.receipt.application.PosSettlementReceiptService;
 import com.tieat.store.domain.StoreId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,6 +30,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -47,13 +49,16 @@ class PosSettlementController {
 
     private final RecordPosSettlementUseCase recordPosSettlementUseCase;
     private final PosSettlementRepository posSettlementRepository;
+    private final PosSettlementReceiptService receiptService;
 
     PosSettlementController(
         RecordPosSettlementUseCase recordPosSettlementUseCase,
-        PosSettlementRepository posSettlementRepository
+        PosSettlementRepository posSettlementRepository,
+        ObjectProvider<PosSettlementReceiptService> receiptServiceProvider
     ) {
         this.recordPosSettlementUseCase = recordPosSettlementUseCase;
         this.posSettlementRepository = posSettlementRepository;
+        this.receiptService = receiptServiceProvider.getIfAvailable();
     }
 
     @Operation(summary = "List recorded POS settlements for the authenticated store")
@@ -76,9 +81,15 @@ class PosSettlementController {
         PosSettlementPage settlements = recordPosSettlementUseCase.listSettlements(
             new ListPosSettlementsQuery(principal.storeId(), page, size)
         );
+        Map<UUID, PosSettlementReceiptService.ReceiptSummary> receiptSummaries = receiptService == null
+            ? Map.of()
+            : receiptService.summariesFor(
+                principal.storeId(),
+                settlements.items().stream().map(PosSettlement::id).toList()
+            );
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
-            .body(PosSettlementHistoryResponse.from(settlements, this::toResponse, principal.storeId()));
+            .body(PosSettlementHistoryResponse.from(settlements, this::toResponse, principal.storeId(), receiptSummaries));
     }
 
     @Operation(
@@ -169,18 +180,79 @@ class PosSettlementController {
         }
     }
 
-    record PosSettlementHistoryResponse(List<PosSettlementResponse> items, int page, int size, boolean hasNext) {
+    record PosSettlementHistoryResponse(List<PosSettlementHistoryItemResponse> items, int page, int size, boolean hasNext) {
 
         static PosSettlementHistoryResponse from(
             PosSettlementPage page,
             java.util.function.BiFunction<PosSettlement, StoreId, PosSettlementResponse> responseMapper,
-            StoreId storeId
+            StoreId storeId,
+            Map<UUID, PosSettlementReceiptService.ReceiptSummary> receiptSummaries
         ) {
             return new PosSettlementHistoryResponse(
-                page.items().stream().map(settlement -> responseMapper.apply(settlement, storeId)).toList(),
+                page.items().stream().map(settlement -> PosSettlementHistoryItemResponse.from(
+                    responseMapper.apply(settlement, storeId),
+                    receiptSummaries.get(settlement.id())
+                )).toList(),
                 page.page(),
                 page.size(),
                 page.hasNext()
+            );
+        }
+    }
+
+    record PosSettlementHistoryItemResponse(
+        UUID posSettlementId,
+        LocalDate posBusinessDate,
+        long submittedTotalMinor,
+        Instant recordedAt,
+        List<PosSettlementAllocationResponse> allocations,
+        PosSettlementReceiptSummaryResponse receipt
+    ) {
+
+        static PosSettlementHistoryItemResponse from(
+            PosSettlementResponse response,
+            PosSettlementReceiptService.ReceiptSummary receiptSummary
+        ) {
+            return new PosSettlementHistoryItemResponse(
+                response.posSettlementId(),
+                response.posBusinessDate(),
+                response.submittedTotalMinor(),
+                response.recordedAt(),
+                response.allocations(),
+                PosSettlementReceiptSummaryResponse.from(receiptSummary)
+            );
+        }
+    }
+
+    record PosSettlementReceiptSummaryResponse(
+        PosSettlementReceiptService.ReceiptStatus status,
+        String fileName,
+        String contentType,
+        Long sizeBytes,
+        Instant uploadedAt,
+        Instant expiresAt
+    ) {
+
+        static PosSettlementReceiptSummaryResponse from(
+            PosSettlementReceiptService.ReceiptSummary summary
+        ) {
+            if (summary == null) {
+                return new PosSettlementReceiptSummaryResponse(
+                    PosSettlementReceiptService.ReceiptStatus.NONE,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+                );
+            }
+            return new PosSettlementReceiptSummaryResponse(
+                summary.status(),
+                summary.fileName(),
+                summary.contentType(),
+                summary.sizeBytes(),
+                summary.uploadedAt(),
+                summary.expiresAt()
             );
         }
     }

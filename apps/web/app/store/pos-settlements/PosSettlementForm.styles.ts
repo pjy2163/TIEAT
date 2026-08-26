@@ -62,6 +62,7 @@ export const posSettlementFormStyles = {
   historyCard: "mt-6 overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-[0_8px_30px_rgba(17,24,39,0.04)]",
   historyHeader: "flex flex-col gap-4 border-b border-[var(--border)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6",
   historyTitle: "text-base font-semibold text-[var(--text-primary)]",
+  historyPageLabel: "text-sm font-medium tabular-nums text-[var(--text-secondary)]",
   historyDescription: "mt-1 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]",
   historyList: "divide-y divide-[var(--border)]",
   historyItem: "px-5 py-5 sm:px-6",
@@ -73,4 +74,9 @@ export const posSettlementFormStyles = {
   historyDetailGrid: "grid gap-3 text-sm sm:grid-cols-2 [&_dt]:text-[var(--text-muted)] [&_dd]:mt-1 [&_dd]:font-semibold [&_dd]:text-[var(--text-primary)]",
   historyAllocationList: "mt-4 divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] text-sm [&_li]:flex [&_li]:items-start [&_li]:justify-between [&_li]:gap-3 [&_li]:px-3 [&_li]:py-4",
   historyAllocationUsage: "break-all text-[var(--text-secondary)]",
+  historyReceipt: "mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-[var(--border)] bg-white p-3",
+  historyReceiptStatus: "text-sm font-semibold text-[var(--text-primary)]",
+  historyReceiptMeta: "max-w-full break-all text-xs text-[var(--text-secondary)]",
+  receiptDownload: "flex flex-wrap items-center gap-2",
+  pagination: "flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-4 sm:px-6",
 };

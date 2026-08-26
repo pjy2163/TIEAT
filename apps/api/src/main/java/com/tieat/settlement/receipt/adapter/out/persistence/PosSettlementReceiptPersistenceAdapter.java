@@ -4,6 +4,7 @@ import com.tieat.settlement.receipt.domain.PosSettlementReceipt;
 import com.tieat.store.domain.StoreId;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -51,6 +52,28 @@ public class PosSettlementReceiptPersistenceAdapter {
             posSettlementId,
             storeId.value()
         ).stream().findFirst();
+    }
+
+    public List<PosSettlementReceipt> findBySettlementIdsAndStoreId(List<UUID> posSettlementIds, StoreId storeId) {
+        Objects.requireNonNull(posSettlementIds, "POS settlement ids must be supplied");
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        List<UUID> ids = List.copyOf(posSettlementIds);
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = String.join(", ", java.util.Collections.nCopies(ids.size(), "?"));
+        List<Object> arguments = new ArrayList<>(ids.size() + 1);
+        arguments.add(storeId.value());
+        arguments.addAll(ids);
+        return jdbcTemplate.query(
+            """
+                select id, pos_settlement_id, store_id, object_key, file_name, content_type,
+                       size_bytes, uploaded_at, expires_at, scan_status, deleted_at
+                from pos_settlement_receipts
+                where store_id = ? and pos_settlement_id in (""" + placeholders + ")",
+            (resultSet, rowNum) -> toDomain(resultSet),
+            arguments.toArray()
+        );
     }
 
     public void insert(PosSettlementReceipt receipt) {

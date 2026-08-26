@@ -31,6 +31,21 @@ export type PosSettlement = {
   submittedTotalMinor: number;
   recordedAt: string;
   allocations: PosSettlementAllocation[];
+  /** Additive history field; legacy responses may omit it. */
+  receipt?: PosSettlementReceiptSummary;
+};
+
+export type PosSettlementReceiptStatus = "NONE" | "AVAILABLE" | "EXPIRED";
+
+export type PosSettlementReceiptContentType = "image/jpeg" | "image/png" | "application/pdf";
+
+export type PosSettlementReceiptSummary = {
+  status: PosSettlementReceiptStatus;
+  fileName: string | null;
+  contentType: PosSettlementReceiptContentType | null;
+  sizeBytes: number | null;
+  uploadedAt: string | null;
+  expiresAt: string | null;
 };
 
 export type PosSettlementHistoryPage = {
@@ -82,8 +97,7 @@ const API_PATH = "/api/v1";
 const RECEIVABLES_PATH = `${API_PATH}/pos-settlements/receivables`;
 const SETTLEMENTS_PATH = `${API_PATH}/pos-settlements`;
 
-const RECENT_SETTLEMENTS_PAGE = 0;
-const RECENT_SETTLEMENTS_SIZE = 20;
+export const POS_SETTLEMENT_HISTORY_PAGE_SIZE = 20;
 export const POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY = "tieat.pos-settlement-selection.v1";
 const POS_SETTLEMENT_SELECTION_SEED_TTL_MS = 5 * 60 * 1000;
 
@@ -182,6 +196,17 @@ function isPositiveSafeInteger(value: unknown): value is number {
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function emptyPosSettlementReceiptSummary(): PosSettlementReceiptSummary {
+  return {
+    status: "NONE",
+    fileName: null,
+    contentType: null,
+    sizeBytes: null,
+    uploadedAt: null,
+    expiresAt: null,
+  };
 }
 
 function isIsoInstant(value: unknown): value is string {
@@ -331,9 +356,44 @@ function parsePosSettlement(value: unknown): PosSettlement {
     submittedTotalMinor: value.submittedTotalMinor,
     recordedAt: value.recordedAt,
     allocations,
+    receipt: value.receipt === undefined || value.receipt === null
+      ? emptyPosSettlementReceiptSummary()
+      : parsePosSettlementReceiptSummary(value.receipt),
   };
   if (posSettlementId !== undefined) parsed.posSettlementId = posSettlementId;
   return parsed;
+}
+
+function parsePosSettlementReceiptSummary(value: unknown): PosSettlementReceiptSummary {
+  if (!isRecord(value)
+    || (value.status !== "NONE" && value.status !== "AVAILABLE" && value.status !== "EXPIRED")) {
+    throw new InvalidApiResponseError();
+  }
+  if (value.status === "NONE") {
+    if ((value.fileName !== undefined && value.fileName !== null)
+      || (value.contentType !== undefined && value.contentType !== null)
+      || (value.sizeBytes !== undefined && value.sizeBytes !== null)
+      || (value.uploadedAt !== undefined && value.uploadedAt !== null)
+      || (value.expiresAt !== undefined && value.expiresAt !== null)) {
+      throw new InvalidApiResponseError();
+    }
+    return emptyPosSettlementReceiptSummary();
+  }
+  if (!isNonEmptyString(value.fileName)
+    || (value.contentType !== "image/jpeg" && value.contentType !== "image/png" && value.contentType !== "application/pdf")
+    || !isPositiveSafeInteger(value.sizeBytes)
+    || !isIsoInstant(value.uploadedAt)
+    || !isIsoInstant(value.expiresAt)) {
+    throw new InvalidApiResponseError();
+  }
+  return {
+    status: value.status,
+    fileName: value.fileName,
+    contentType: value.contentType,
+    sizeBytes: value.sizeBytes,
+    uploadedAt: value.uploadedAt,
+    expiresAt: value.expiresAt,
+  };
 }
 
 export type PosSettlementReceipt = {
@@ -368,8 +428,9 @@ function parsePosSettlementReceipt(value: unknown): PosSettlementReceipt {
 function parsePosSettlementHistoryPage(value: unknown): PosSettlementHistoryPage {
   if (!isRecord(value)
     || !Array.isArray(value.items)
-    || value.page !== RECENT_SETTLEMENTS_PAGE
-    || value.size !== RECENT_SETTLEMENTS_SIZE
+    || !isNonNegativeSafeInteger(value.page)
+    || !isPositiveSafeInteger(value.size)
+    || value.size > 100
     || typeof value.hasNext !== "boolean") {
     throw new InvalidApiResponseError();
   }
@@ -411,8 +472,9 @@ export async function getOutstandingReceivables(): Promise<OutstandingReceivable
   return parseOutstandingReceivableOverview(body);
 }
 
-export async function getRecentPosSettlements(): Promise<PosSettlementHistoryPage> {
-  const response = await fetch(SETTLEMENTS_PATH + "?page=" + RECENT_SETTLEMENTS_PAGE + "&size=" + RECENT_SETTLEMENTS_SIZE, {
+export async function getRecentPosSettlements(page = 0): Promise<PosSettlementHistoryPage> {
+  if (!isNonNegativeSafeInteger(page)) throw new InvalidApiResponseError();
+  const response = await fetch(SETTLEMENTS_PATH + "?page=" + page + "&size=" + POS_SETTLEMENT_HISTORY_PAGE_SIZE, {
     cache: "no-store",
     credentials: "same-origin",
   });

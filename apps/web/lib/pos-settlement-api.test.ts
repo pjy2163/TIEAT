@@ -51,6 +51,14 @@ const settlement = {
     confirmedAt: receivable.confirmedAt,
     receivableAmountMinor: 12_000,
   }],
+  receipt: {
+    status: "NONE" as const,
+    fileName: null,
+    contentType: null,
+    sizeBytes: null,
+    uploadedAt: null,
+    expiresAt: null,
+  },
 };
 
 const historyPage = {
@@ -120,6 +128,73 @@ describe("POS settlement API", () => {
       credentials: "same-origin",
     });
     expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("storeId");
+  });
+
+  it("requests a later history page and keeps only safe receipt metadata", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(200, {
+      ...historyPage,
+      page: 2,
+      hasNext: true,
+      items: [{
+        ...settlement,
+        posSettlementId: "00000000-0000-0000-0000-000000000101",
+        receipt: {
+          status: "AVAILABLE",
+          fileName: "settlement.pdf",
+          contentType: "application/pdf",
+          sizeBytes: 1_024,
+          uploadedAt: "2026-08-12T02:00:00Z",
+          expiresAt: "2027-08-12T02:00:00Z",
+          objectKey: "opaque-object-key",
+          storeId: "00000000-0000-0000-0000-000000000099",
+          id: "00000000-0000-0000-0000-000000000102",
+        },
+      }],
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const parsed = await getRecentPosSettlements(2);
+    expect(parsed).toEqual({
+      page: 2,
+      size: 20,
+      hasNext: true,
+      items: [{
+        ...settlement,
+        posSettlementId: "00000000-0000-0000-0000-000000000101",
+        receipt: {
+          status: "AVAILABLE",
+          fileName: "settlement.pdf",
+          contentType: "application/pdf",
+          sizeBytes: 1_024,
+          uploadedAt: "2026-08-12T02:00:00Z",
+          expiresAt: "2027-08-12T02:00:00Z",
+        },
+      }],
+    });
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/pos-settlements?page=2&size=20", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    expect(JSON.stringify(parsed)).not.toContain("opaque-object-key");
+    expect(JSON.stringify(parsed)).not.toContain("storeId");
+  });
+
+  it("normalizes legacy history items that do not contain a receipt summary", async () => {
+    const { receipt: _receipt, ...legacySettlement } = settlement;
+    const fetchMock = vi.fn().mockResolvedValue(response(200, {
+      items: [legacySettlement],
+      page: 0,
+      size: 20,
+      hasNext: false,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getRecentPosSettlements()).resolves.toEqual({
+      items: [{ ...legacySettlement, receipt: settlement.receipt }],
+      page: 0,
+      size: 20,
+      hasNext: false,
+    });
   });
 
   it("gets fresh CSRF and sends the complete POS attestation without a client store scope", async () => {

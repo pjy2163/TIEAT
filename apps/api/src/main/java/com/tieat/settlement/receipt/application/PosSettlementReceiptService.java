@@ -8,9 +8,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -113,6 +116,27 @@ public class PosSettlementReceiptService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public Map<UUID, ReceiptSummary> summariesFor(StoreId storeId, List<UUID> posSettlementIds) {
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        Objects.requireNonNull(posSettlementIds, "POS settlement ids must be supplied");
+        List<UUID> ids = List.copyOf(posSettlementIds);
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, PosSettlementReceipt> receiptsBySettlementId = repository
+            .findBySettlementIdsAndStoreId(ids, storeId)
+            .stream()
+            .collect(Collectors.toMap(PosSettlementReceipt::posSettlementId, java.util.function.Function.identity()));
+        Instant now = Instant.now(clock);
+        Map<UUID, ReceiptSummary> summaries = new HashMap<>();
+        for (UUID id : ids) {
+            PosSettlementReceipt receipt = receiptsBySettlementId.get(id);
+            summaries.put(id, receipt == null ? ReceiptSummary.none() : ReceiptSummary.from(receipt, now));
+        }
+        return Map.copyOf(summaries);
+    }
+
     @Transactional
     public int cleanupExpired(int limit) {
         Instant now = Instant.now(clock);
@@ -207,5 +231,51 @@ public class PosSettlementReceiptService {
             Objects.requireNonNull(receipt, "Receipt must be supplied");
             Objects.requireNonNull(bytes, "Receipt bytes must be supplied");
         }
+    }
+
+    public record ReceiptSummary(
+        ReceiptStatus status,
+        String fileName,
+        String contentType,
+        Long sizeBytes,
+        Instant uploadedAt,
+        Instant expiresAt
+    ) {
+
+        public ReceiptSummary {
+            Objects.requireNonNull(status, "Receipt summary status must be supplied");
+            if (status == ReceiptStatus.NONE) {
+                if (fileName != null || contentType != null || sizeBytes != null || uploadedAt != null || expiresAt != null) {
+                    throw new IllegalArgumentException("A missing receipt cannot have metadata");
+                }
+            } else if (fileName == null || fileName.isBlank() || contentType == null || contentType.isBlank()
+                || sizeBytes == null || sizeBytes <= 0 || uploadedAt == null || expiresAt == null) {
+                throw new IllegalArgumentException("An attached receipt summary must include metadata");
+            }
+        }
+
+        static ReceiptSummary none() {
+            return new ReceiptSummary(ReceiptStatus.NONE, null, null, null, null, null);
+        }
+
+        static ReceiptSummary from(PosSettlementReceipt receipt, Instant now) {
+            ReceiptStatus status = receipt.deletedAt() != null || receipt.isExpired(now)
+                ? ReceiptStatus.EXPIRED
+                : ReceiptStatus.AVAILABLE;
+            return new ReceiptSummary(
+                status,
+                receipt.fileName(),
+                receipt.contentType(),
+                receipt.sizeBytes(),
+                receipt.uploadedAt(),
+                receipt.expiresAt()
+            );
+        }
+    }
+
+    public enum ReceiptStatus {
+        NONE,
+        AVAILABLE,
+        EXPIRED
     }
 }

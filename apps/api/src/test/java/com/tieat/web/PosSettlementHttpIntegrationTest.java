@@ -106,6 +106,7 @@ class PosSettlementHttpIntegrationTest {
 
     @BeforeEach
     void clearDatabase() {
+        jdbcTemplate.update("delete from pos_settlement_receipts");
         jdbcTemplate.update("delete from pos_settlement_allocations");
         jdbcTemplate.update("delete from pos_settlements");
         jdbcTemplate.update("delete from public_meal_usage_idempotency_keys");
@@ -314,8 +315,14 @@ class PosSettlementHttpIntegrationTest {
         JsonNode historyBody = objectMapper.readTree(history.getResponse().getContentAsString());
         assertThat(fieldNames(historyBody)).containsExactlyInAnyOrder("items", "page", "size", "hasNext");
         assertThat(fieldNames(historyBody.get("items").get(0))).containsExactlyInAnyOrder(
-            "posBusinessDate", "submittedTotalMinor", "recordedAt", "allocations"
+            "posSettlementId", "posBusinessDate", "submittedTotalMinor", "recordedAt", "allocations", "receipt"
         );
+        assertThat(historyBody.get("items").get(0).get("posSettlementId").asText())
+            .isEqualTo(recordedBody.get("posSettlementId").asText());
+        assertThat(fieldNames(historyBody.get("items").get(0).get("receipt")))
+            .containsExactlyInAnyOrder("status", "fileName", "contentType", "sizeBytes", "uploadedAt", "expiresAt");
+        assertThat(historyBody.get("items").get(0).get("receipt").get("status").asText()).isEqualTo("NONE");
+        assertThat(historyBody.get("items").get(0).get("receipt").get("fileName").isNull()).isTrue();
         assertThat(fieldNames(historyBody.get("items").get(0).get("allocations").get(0)))
             .containsExactlyInAnyOrder("partnerDisplayName", "confirmedAt", "receivableAmountMinor");
         for (JsonNode allocation : historyBody.get("items").get(0).get("allocations")) {
@@ -384,9 +391,29 @@ class PosSettlementHttpIntegrationTest {
             Instant.parse("2026-08-12T04:00:00Z"),
             new SettlementAllocationFixture(otherStoreUsage.id().value(), 5_000)
         );
+        UUID availableReceiptId = UUID.fromString("00000000-0000-0000-0000-000000000101");
+        UUID expiredReceiptId = UUID.fromString("00000000-0000-0000-0000-000000000102");
+        Instant availableUploadedAt = Instant.now().minusSeconds(24L * 60 * 60);
+        Instant expiredUploadedAt = Instant.now().minusSeconds(366L * 24 * 60 * 60);
+        insertReceipt(
+            availableReceiptId,
+            latestSettlementId,
+            STORE_ID,
+            "settlement.pdf",
+            "application/pdf",
+            availableUploadedAt
+        );
+        insertReceipt(
+            expiredReceiptId,
+            tieHigherSettlementId,
+            STORE_ID,
+            "expired-receipt.jpg",
+            "image/jpeg",
+            expiredUploadedAt
+        );
         SessionHandle session = authenticatedSession("store-hk", "correct-password");
 
-        mockMvc.perform(get("/api/v1/pos-settlements?page=0&size=2").cookie(session.cookie()))
+        MvcResult firstHistoryPage = mockMvc.perform(get("/api/v1/pos-settlements?page=0&size=2").cookie(session.cookie()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.items.length()").value(2))
             .andExpect(jsonPath("$.items[0].recordedAt").value("2026-08-12T03:00:00Z"))
@@ -399,15 +426,32 @@ class PosSettlementHttpIntegrationTest {
             .andExpect(jsonPath("$.items[1].submittedTotalMinor").value(3_000))
             .andExpect(jsonPath("$.items[1].allocations.length()").value(1))
             .andExpect(jsonPath("$.items[1].allocations[0].receivableAmountMinor").value(3_000))
+            .andExpect(jsonPath("$.items[0].receipt.status").value("AVAILABLE"))
+            .andExpect(jsonPath("$.items[0].receipt.fileName").value("settlement.pdf"))
+            .andExpect(jsonPath("$.items[0].receipt.contentType").value("application/pdf"))
+            .andExpect(jsonPath("$.items[0].receipt.sizeBytes").value(1))
+            .andExpect(jsonPath("$.items[1].receipt.status").value("EXPIRED"))
+            .andExpect(jsonPath("$.items[1].receipt.fileName").value("expired-receipt.jpg"))
             .andExpect(jsonPath("$.hasNext").value(true));
-        mockMvc.perform(get("/api/v1/pos-settlements?page=1&size=2").cookie(session.cookie()))
+        String firstHistoryJson = firstHistoryPage.getResponse().getContentAsString();
+        assertThat(firstHistoryJson).contains("posSettlementId");
+        assertThat(firstHistoryJson).doesNotContain(
+            "opaque-object-key",
+            availableReceiptId.toString(),
+            expiredReceiptId.toString(),
+            STORE_ID.value().toString()
+        );
+        MvcResult secondHistoryPage = mockMvc.perform(get("/api/v1/pos-settlements?page=1&size=2").cookie(session.cookie()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.items.length()").value(1))
             .andExpect(jsonPath("$.items[0].recordedAt").value("2026-08-12T02:00:00Z"))
             .andExpect(jsonPath("$.items[0].submittedTotalMinor").value(4_000))
             .andExpect(jsonPath("$.items[0].allocations.length()").value(1))
             .andExpect(jsonPath("$.items[0].allocations[0].receivableAmountMinor").value(4_000))
+            .andExpect(jsonPath("$.items[0].receipt.status").value("NONE"))
+            .andExpect(jsonPath("$.items[0].receipt.fileName").value(org.hamcrest.Matchers.nullValue()))
             .andExpect(jsonPath("$.hasNext").value(false));
+        assertThat(secondHistoryPage.getResponse().getContentAsString()).doesNotContain(STORE_ID.value().toString());
     }
 
     @Test
@@ -714,6 +758,33 @@ class PosSettlementHttpIntegrationTest {
                 allocation.receivableAmountMinor()
             );
         }
+    }
+
+    private void insertReceipt(
+        UUID receiptId,
+        UUID settlementId,
+        StoreId storeId,
+        String fileName,
+        String contentType,
+        Instant uploadedAt
+    ) {
+        jdbcTemplate.update(
+            """
+                insert into pos_settlement_receipts
+                    (id, pos_settlement_id, store_id, object_key, file_name, content_type,
+                     size_bytes, uploaded_at, expires_at, scan_status, deleted_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'CLEAN', null)
+                """,
+            receiptId,
+            settlementId,
+            storeId.value(),
+            "opaque-object-key-" + receiptId,
+            fileName,
+            contentType,
+            1L,
+            java.sql.Timestamp.from(uploadedAt),
+            java.sql.Timestamp.from(uploadedAt.plusSeconds(365L * 24 * 60 * 60))
+        );
     }
 
     private String settlementBody(MealContractId contractId, List<UUID> usageIds, long total) {
