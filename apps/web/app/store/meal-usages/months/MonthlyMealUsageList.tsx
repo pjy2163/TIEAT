@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, KeyboardEvent, MouseEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError } from "@/lib/store-api";
 import {
@@ -9,14 +9,13 @@ import {
   type ConfirmedMealUsagePage,
 } from "@/lib/monthly-meal-usage-api";
 import {
-  discardPosSettlementSelectionSeed,
   getOutstandingReceivables,
-  writePosSettlementSelectionSeed,
   type OutstandingReceivable,
 } from "@/lib/pos-settlement-api";
 import { useStorePartnerContext } from "../../StorePartnerContext";
 import { StorePartnerScopeBar } from "../../StorePartnerScopeBar";
 import { RefreshButton } from "../RefreshButton";
+import { PosSettlementRecordDialog, type PosSettlementRecordSeed } from "../../pos-settlements/PosSettlementRecordDialog";
 import { monthlyMealUsageListStyles } from "./MonthlyMealUsageList.styles";
 
 const PAGE_SIZE = 20;
@@ -110,12 +109,14 @@ export function MonthlyMealUsageList() {
   const [selectedReceivables, setSelectedReceivables] = useState<OutstandingReceivable[]>([]);
   const [selectionState, setSelectionState] = useState<"idle" | "loading" | "ready" | "blocked">("idle");
   const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [paymentSource, setPaymentSource] = useState<PosSettlementRecordSeed | null>(null);
   const mountedRef = useRef(false);
   const requestEpochRef = useRef(0);
   const resultRef = useRef<ConfirmedMealUsagePage | null>(null);
   const selectedUsageIdsRef = useRef<Set<string>>(new Set());
   const selectionRequestEpochRef = useRef(0);
   const renderedScopeRef = useRef<string | null>(null);
+  const paymentTriggerRef = useRef<HTMLElement | null>(null);
   const routerRef = useRef(router);
   routerRef.current = router;
 
@@ -124,21 +125,25 @@ export function MonthlyMealUsageList() {
     setResult(next);
   }, []);
 
+  const closePaymentDialog = useCallback(() => {
+    setPaymentSource(null);
+    paymentTriggerRef.current?.focus();
+  }, []);
+
   const clearSensitiveRows = useCallback(() => {
     replaceResult(null);
     setResultScope(null);
     setLoadError(null);
-    discardPosSettlementSelectionSeed();
     selectedUsageIdsRef.current = new Set();
     setSelectedUsageIds(new Set());
     setSelectedReceivables([]);
     setSelectionState("idle");
     setSelectionError(null);
     selectionRequestEpochRef.current += 1;
-  }, [replaceResult]);
+    closePaymentDialog();
+  }, [closePaymentDialog, replaceResult]);
 
   const clearSelection = useCallback(() => {
-    discardPosSettlementSelectionSeed();
     selectedUsageIdsRef.current = new Set();
     setSelectedUsageIds(new Set());
     setSelectedReceivables([]);
@@ -211,39 +216,60 @@ export function MonthlyMealUsageList() {
     if (!isSelectableUsage(item)) return;
     const next = new Set(selectedUsageIdsRef.current);
     const nextSelected = shouldSelect ?? !next.has(item.id);
-    if (nextSelected) next.add(item.id);
-    else next.delete(item.id);
+    if (nextSelected) {
+      const currentContractId = selectedReceivables[0]?.mealContractId
+        ?? resultRef.current?.items.find((candidate) => selectedUsageIdsRef.current.has(candidate.id))?.mealContractId;
+      if (currentContractId && (!item.mealContractId || currentContractId !== item.mealContractId)) {
+        setSelectionError("한 번에 한 계약의 결제할 금액만 선택할 수 있습니다.");
+        return;
+      }
+      next.add(item.id);
+    } else {
+      next.delete(item.id);
+    }
     replaceSelection(next);
-  }, [replaceSelection]);
+  }, [replaceSelection, selectedReceivables]);
 
   const selectCurrentPage = useCallback((onlyDue: boolean) => {
     const current = resultRef.current;
     if (!current) return;
-    const ids = current.items
+    const candidates = current.items
       .filter((item) => !onlyDue || isSelectableUsage(item))
-      .filter(isSelectableUsage)
-      .map((item) => item.id);
-    replaceSelection(new Set(ids));
-  }, [replaceSelection]);
-
-  const handoffSelection = useCallback((event: MouseEvent<HTMLAnchorElement>) => {
-    if (selectionState !== "ready" || selectedUsageIds.size === 0 || selectedReceivables.length !== selectedUsageIds.size) {
-      event.preventDefault();
+      .filter(isSelectableUsage);
+    const contractIds = new Set(candidates.map((item) => item.mealContractId).filter((id): id is string => Boolean(id)));
+    if (contractIds.size > 1) {
+      setSelectionState("blocked");
+      setSelectionError("한 번에 한 계약의 결제할 금액만 선택할 수 있습니다. 항목을 개별 선택해 같은 계약만 묶어 주세요.");
       return;
     }
-    const mealContractId = selectedReceivables[0]?.mealContractId ?? null;
-    const amountMinor = selectedReceivables.reduce((total, item) => total + item.receivableCreatedMinor, 0);
-    const written = writePosSettlementSelectionSeed({
-      mealUsageIds: Array.from(selectedUsageIds),
-      mealContractId,
-      amountMinor,
-    });
-    if (!written) {
-      event.preventDefault();
-      setSelectionState("blocked");
-      setSelectionError("선택한 금액을 다음 화면으로 안전하게 전달하지 못했습니다. 다시 선택해 주세요.");
+    replaceSelection(new Set(candidates.map((item) => item.id)));
+  }, [replaceSelection]);
+
+  const openPaymentDialog = useCallback(() => {
+    if (selectionState !== "ready" || selectedUsageIds.size === 0 || selectedReceivables.length !== selectedUsageIds.size) {
+      setSelectionError(selectionMismatchMessage());
+      return;
     }
+    const first = selectedReceivables[0];
+    if (!first) return;
+    paymentTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setPaymentSource({
+      mealContractId: first.mealContractId,
+      mealUsageIds: selectedReceivables.map((item) => item.mealUsageId),
+      partnerDisplayName: first.partnerDisplayName,
+    });
   }, [selectedReceivables, selectedUsageIds, selectionState]);
+
+  const handleDialogSessionExpired = useCallback(() => {
+    clearSensitiveRows();
+    setViewState("loading");
+    routerRef.current.replace("/store/login?next=/store/meal-usages/months");
+  }, [clearSensitiveRows]);
+
+  const handleDialogAccessDenied = useCallback(() => {
+    clearSensitiveRows();
+    setViewState("forbidden");
+  }, [clearSensitiveRows]);
 
   const load = useCallback(async (
     requestedFromDate: string,
@@ -312,14 +338,15 @@ export function MonthlyMealUsageList() {
     if (renderedScopeRef.current === scopeIdentity) return;
     renderedScopeRef.current = scopeIdentity;
     requestEpochRef.current += 1;
+    closePaymentDialog();
+    clearSelection();
     replaceResult(null);
     setResultScope(null);
     setLoadError(null);
-    clearSelection();
     setPage(0);
     setIsLoading(scopeState !== "invalid");
     setViewState(scopeState === "invalid" ? "scope-not-found" : "loading");
-  }, [clearSelection, replaceResult, scopeIdentity, scopeState]);
+  }, [clearSelection, closePaymentDialog, replaceResult, scopeIdentity, scopeState]);
 
   useEffect(() => {
     if (!scopeReady || scopeState === "invalid") return;
@@ -341,9 +368,11 @@ export function MonthlyMealUsageList() {
       || resultScope !== selectedMealContractId);
   const hasNext = result !== null && !isDisplayingEarlierSafePage && result.hasNext;
   const visibleItems = result !== null && !isDisplayingEarlierSafePage ? result.items : [];
-  const selectableItems = useMemo(() => visibleItems.filter(isSelectableUsage), [visibleItems]);
+  const selectableItems = visibleItems.filter(isSelectableUsage);
   const selectedAmountMinor = selectedReceivables.reduce((total, item) => total + item.receivableCreatedMinor, 0);
-
+  const activeContractId = selectedReceivables[0]?.mealContractId
+    ?? visibleItems.find((item) => selectedUsageIds.has(item.id))?.mealContractId
+    ?? null;
   const handlePageChange = useCallback((nextPage: number) => {
     clearSelection();
     setPage(Math.max(0, nextPage));
@@ -356,7 +385,7 @@ export function MonthlyMealUsageList() {
 
   const handleRowKeyDown = useCallback((event: KeyboardEvent<HTMLLIElement>, item: MonthlyMealUsage) => {
     if (!isSelectableUsage(item) || event.target !== event.currentTarget) return;
-    if (event.key !== " " && event.key !== "Spacebar") return;
+    if (event.key !== " " && event.key !== "Spacebar" && event.key !== "Enter") return;
     event.preventDefault();
     toggleUsageSelection(item);
   }, [toggleUsageSelection]);
@@ -475,28 +504,34 @@ export function MonthlyMealUsageList() {
               <ul className={monthlyMealUsageListStyles.list} aria-label="전체 장부 목록">
                 {visibleItems.map((item) => {
                   const selectable = isSelectableUsage(item);
+                  const contractLocked = Boolean(activeContractId && item.mealContractId !== activeContractId);
+                  const disabled = isLoading || contractLocked;
                   const checked = selectedUsageIds.has(item.id);
                   return (
                   <li
-                    aria-pressed={selectable ? checked : undefined}
+                    aria-pressed={selectable && !contractLocked ? checked : undefined}
                     className={`${monthlyMealUsageListStyles.row} ${selectable ? monthlyMealUsageListStyles.selectableRow : monthlyMealUsageListStyles.unselectableRow}`}
                     key={item.id}
                     onClick={(event) => {
-                      if (!selectable) return;
+                      if (!selectable || disabled) return;
                       const target = event.target as HTMLElement;
                       if (target.closest("input,button,a")) return;
                       toggleUsageSelection(item);
                     }}
-                    onKeyDown={(event) => handleRowKeyDown(event, item)}
-                    role={selectable ? "button" : undefined}
-                    tabIndex={selectable ? 0 : undefined}
+                    onKeyDown={(event) => {
+                      if (disabled) return;
+                      handleRowKeyDown(event, item);
+                    }}
+                    role={selectable && !contractLocked ? "button" : undefined}
+                    tabIndex={selectable && !contractLocked ? 0 : undefined}
                   >
                     <div className={monthlyMealUsageListStyles.rowMain}>
                       {selectable ? (
                         <input
-                          aria-label={`${item.partnerDisplayName ?? "협력사 정보 미입력"} ${dateFormatter.format(new Date(item.createdAt))} 선택`}
+                          aria-label={`${item.partnerDisplayName ?? "협력사 정보 미입력"} ${dateFormatter.format(new Date(item.createdAt))} 선택${contractLocked ? " (다른 계약)" : ""}`}
                           checked={checked}
                           className={monthlyMealUsageListStyles.checkbox}
+                          disabled={disabled}
                           onChange={(event) => {
                             event.stopPropagation();
                             toggleUsageSelection(item, event.target.checked);
@@ -556,16 +591,25 @@ export function MonthlyMealUsageList() {
               </div>
               <div className={monthlyMealUsageListStyles.selectionActions}>
                 <button className={monthlyMealUsageListStyles.clearSelection} onClick={clearSelection} type="button">선택 해제</button>
-                <a
+                <button
                   className={monthlyMealUsageListStyles.selectionSubmit}
-                  href="/store/pos-settlements"
-                  onClick={handoffSelection}
+                  disabled={selectionState !== "ready" || selectedReceivables.length !== selectedUsageIds.size}
+                  onClick={openPaymentDialog}
+                  type="button"
                 >
                   선택한 결제할 금액 기록하기
-                </a>
+                </button>
               </div>
             </div>
           </aside>
+        ) : null}
+        {paymentSource ? (
+          <PosSettlementRecordDialog
+            onAccessDenied={handleDialogAccessDenied}
+            onClose={closePaymentDialog}
+            onSessionExpired={handleDialogSessionExpired}
+            seed={paymentSource}
+          />
         ) : null}
       </section>
     </main>

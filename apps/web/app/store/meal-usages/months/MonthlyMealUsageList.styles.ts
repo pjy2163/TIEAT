@@ -17,8 +17,6 @@ export const monthlyMealUsageListStyles = {
   settlementLink: "inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-[#b9c8ff] bg-[#f4f6ff] px-3 text-sm font-semibold text-[#244cda] transition-colors hover:border-[#8ea8ff] hover:bg-[#e9eeff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2",
   pendingLink: "inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-2 text-sm font-semibold text-[#244cda] underline decoration-[#b9c8ff] underline-offset-4 hover:text-[var(--accent)]",
   card: "mt-6 overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-[0_8px_30px_rgba(17,24,39,0.04)]",
-  pageSelectionControls: "flex flex-col gap-2 border-b border-[var(--border)] bg-[var(--surface-subtle)] px-5 py-4 sm:flex-row sm:px-6",
-  pageSelectionButton: "inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-3 py-2 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:text-[var(--text-muted)]",
   alert: "m-4 rounded-lg border border-[#f1c7cd] bg-[#fff7f8] px-3 py-3 text-sm leading-5 text-[var(--danger)]",
   loadingNotice: "m-4 rounded-lg border border-[#cfdafe] bg-[#f4f6ff] px-3 py-3 text-sm leading-5 text-[#244cda]",
   total: "flex items-center justify-between gap-4 border-b border-[var(--border)] px-5 py-4 sm:px-6",
@@ -51,6 +49,8 @@ export const monthlyMealUsageListStyles = {
   selectionSummary: "flex min-w-0 flex-col gap-1 text-sm text-[var(--text-secondary)] sm:flex-row sm:items-baseline sm:gap-3",
   selectionError: "text-xs leading-5 text-[var(--danger)] sm:max-w-md",
   selectionActions: "flex w-full gap-2 sm:w-auto",
+  pageSelectionControls: "flex flex-col gap-2 border-b border-[var(--border)] bg-[var(--surface-subtle)] px-5 py-4 sm:flex-row sm:px-6",
+  pageSelectionButton: "inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-3 py-2 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:text-[var(--text-muted)]",
   clearSelection: "inline-flex min-h-11 flex-1 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-3 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 sm:flex-none",
-  selectionSubmit: "inline-flex min-h-11 flex-[2] items-center justify-center rounded-lg bg-[var(--accent)] px-4 text-center text-sm font-semibold text-white transition-colors hover:bg-[#244cda] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 sm:flex-none",
+  selectionSubmit: "inline-flex min-h-11 flex-[2] items-center justify-center rounded-lg bg-[var(--accent)] px-4 text-center text-sm font-semibold text-white transition-colors hover:bg-[#244cda] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[#98abef] sm:flex-none",
 };

@@ -1,8 +1,13 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/store-api";
 import { getConfirmedMealUsages } from "@/lib/monthly-meal-usage-api";
-import { getOutstandingReceivables, POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY } from "@/lib/pos-settlement-api";
+import {
+  getOutstandingReceivables,
+  recordPosSettlement,
+  uploadPosSettlementReceipt,
+} from "@/lib/pos-settlement-api";
 import { MonthlyMealUsageList } from "./MonthlyMealUsageList";
 
 const replace = vi.fn();
@@ -18,11 +23,18 @@ vi.mock("@/lib/monthly-meal-usage-api", async (importOriginal) => {
 
 vi.mock("@/lib/pos-settlement-api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/pos-settlement-api")>();
-  return { ...original, getOutstandingReceivables: vi.fn() };
+  return {
+    ...original,
+    getOutstandingReceivables: vi.fn(),
+    recordPosSettlement: vi.fn(),
+    uploadPosSettlementReceipt: vi.fn(),
+  };
 });
 
 const getConfirmedMealUsagesMock = vi.mocked(getConfirmedMealUsages);
 const getOutstandingReceivablesMock = vi.mocked(getOutstandingReceivables);
+const recordPosSettlementMock = vi.mocked(recordPosSettlement);
+const uploadPosSettlementReceiptMock = vi.mocked(uploadPosSettlementReceipt);
 
 function currentKoreanDateForTest(): string {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -42,6 +54,7 @@ const testToday = currentKoreanDateForTest();
 const items = [
   {
     id: "00000000-0000-0000-0000-000000000001",
+    mealContractId: "00000000-0000-0000-0000-000000000011",
     status: "CONFIRMED" as const,
     partnerDisplayName: "협력사 A",
     amountMinor: 12_000,
@@ -225,50 +238,97 @@ describe("MonthlyMealUsageList", () => {
     expect(screen.getAllByText("결제 전")).toHaveLength(1);
   });
 
-  it("selects only current-page payment-due rows and hands off the authoritative receivable amount", async () => {
-    const authoritativeAmount = 7_500;
+  it("keeps current-page selection and opens the latest same-contract dialog without navigation", async () => {
+    const user = userEvent.setup();
+    const contractId = items[0].mealContractId;
+    const receivable = (mealUsageId: string, amount: number, mealContractId = contractId, partnerDisplayName = "협력사 A") => ({
+      mealUsageId,
+      mealContractId,
+      partnerDisplayName,
+      confirmedAt: items[0].createdAt,
+      receivableCreatedMinor: amount,
+    });
     getConfirmedMealUsagesMock.mockResolvedValue(page({
-      items: [
-        items[0],
-        { ...items[0], id: "00000000-0000-0000-0000-000000000002", settlementStatus: "PAYMENT_RECORDED" },
-      ],
+      items: [items[0], { ...items[0], id: "00000000-0000-0000-0000-000000000002", settlementStatus: "PAYMENT_RECORDED" }],
       hasNext: false,
     }));
     getOutstandingReceivablesMock.mockResolvedValue({
-      items: [{
-        mealUsageId: items[0].id,
-        mealContractId: "00000000-0000-0000-0000-000000000011",
-        partnerDisplayName: items[0].partnerDisplayName,
-        confirmedAt: items[0].createdAt,
-        receivableCreatedMinor: authoritativeAmount,
-      }],
-      partners: [{
-        mealContractId: "00000000-0000-0000-0000-000000000011",
-        partnerDisplayName: items[0].partnerDisplayName,
-        previousPosBusinessDate: null,
-        periodConfirmedUsageTotalMinor: authoritativeAmount,
-        periodPrepaidAppliedTotalMinor: 0,
-        outstandingReceivableCount: 1,
-        outstandingReceivableTotalMinor: authoritativeAmount,
-      }],
+      items: [receivable(items[0].id, 7_500), receivable("00000000-0000-0000-0000-000000000002", 2_500), receivable("00000000-0000-0000-0000-000000000003", 99_000, "00000000-0000-0000-0000-000000000012", "협력사 C")],
+      partners: [],
     });
     render(<MonthlyMealUsageList />);
 
-    const dueSelection = await screen.findByRole("checkbox", { name: /협력사 A .* 선택/ });
-    expect(dueSelection).toBeVisible();
-    expect(screen.getByRole("button", { name: "전체 선택 (현재 페이지 2건)" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "미결제 모두 선택 (현재 페이지 1건)" })).toBeVisible();
-
-    fireEvent.click(dueSelection);
+    await user.click(await screen.findByRole("checkbox", { name: /협력사 A .* 선택/ }));
     expect(await screen.findByText("1건 선택")).toBeVisible();
-    expect(await screen.findByText("결제할 금액 ₩7,500")).toBeVisible();
-    expect(screen.getByRole("link", { name: "선택한 결제할 금액 기록하기" })).toBeVisible();
-    expect(getOutstandingReceivablesMock).toHaveBeenCalledTimes(1);
-    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+    const openButton = await screen.findByRole("button", { name: "선택한 결제할 금액 기록하기" });
+    await waitFor(() => expect(openButton).toBeEnabled());
+    const currentUrl = window.location.href;
+    await user.click(openButton);
+    const dialog = await screen.findByRole("dialog", { name: "결제 기록" });
 
-    const handoff = screen.getByRole("link", { name: "선택한 결제할 금액 기록하기" });
-    fireEvent.click(handoff);
-    expect(window.sessionStorage.getItem(POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY)).toContain(items[0].id);
-    expect(window.sessionStorage.getItem(POS_SETTLEMENT_SELECTION_SEED_STORAGE_KEY)).toContain(String(authoritativeAmount));
+    expect(window.location.href).toBe(currentUrl);
+    expect(getOutstandingReceivablesMock).toHaveBeenCalledTimes(2);
+    expect(within(dialog).getAllByRole("checkbox", { name: /협력사 A .* 선택/ })).toHaveLength(2);
+    expect(within(dialog).queryByRole("checkbox", { name: /협력사 C .* 선택/ })).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText("결제 금액")).toHaveValue(7_500);
+    expect(dialog).toHaveClass("fixed", "inset-0");
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "결제 기록" })).not.toBeInTheDocument();
+    expect(openButton).toHaveFocus();
+  });
+
+  it("records an exact multi-item allocation, reuses idempotency, and keeps receipt upload in the dialog", async () => {
+    const user = userEvent.setup();
+    const contractId = items[0].mealContractId;
+    const first = { mealUsageId: items[0].id, mealContractId: contractId, partnerDisplayName: "협력사 A", confirmedAt: items[0].createdAt, receivableCreatedMinor: 7_500 };
+    const second = { ...first, mealUsageId: "00000000-0000-0000-0000-000000000002", receivableCreatedMinor: 2_500 };
+    const savedSettlement = { posSettlementId: "00000000-0000-0000-0000-000000000099", posBusinessDate: "2026-08-11", submittedTotalMinor: 10_000, recordedAt: "2026-08-12T02:00:00Z", allocations: [
+      { partnerDisplayName: first.partnerDisplayName, confirmedAt: first.confirmedAt, receivableAmountMinor: 7_500 },
+      { partnerDisplayName: second.partnerDisplayName, confirmedAt: second.confirmedAt, receivableAmountMinor: 2_500 },
+    ] };
+    getConfirmedMealUsagesMock.mockResolvedValue(page({ hasNext: false }));
+    getOutstandingReceivablesMock.mockResolvedValue({ items: [first, second], partners: [] });
+    recordPosSettlementMock.mockResolvedValue(savedSettlement);
+    uploadPosSettlementReceiptMock.mockResolvedValue({} as never);
+    vi.stubGlobal("crypto", { randomUUID: vi.fn().mockReturnValue("00000000-0000-0000-0000-000000000200") });
+    render(<MonthlyMealUsageList />);
+
+    await user.click(await screen.findByRole("checkbox", { name: /협력사 A .* 선택/ }));
+    const openButton = await screen.findByRole("button", { name: "선택한 결제할 금액 기록하기" });
+    await waitFor(() => expect(openButton).toBeEnabled());
+    await user.click(openButton);
+    const dialog = await screen.findByRole("dialog", { name: "결제 기록" });
+    await user.click(within(dialog).getAllByRole("checkbox", { name: /협력사 A .* 선택/ })[1]);
+    fireEvent.change(within(dialog).getByLabelText("결제일"), { target: { value: "2026-08-11" } });
+    expect(within(dialog).getByLabelText("결제 금액")).toHaveValue(10_000);
+    await user.click(within(dialog).getByRole("button", { name: "결제 기록 저장하기" }));
+
+    await waitFor(() => expect(recordPosSettlementMock).toHaveBeenCalledWith({ mealContractId: contractId, posBusinessDate: "2026-08-11", submittedTotalMinor: 10_000, mealUsageIds: [first.mealUsageId, second.mealUsageId] }, "00000000-0000-0000-0000-000000000200"));
+    expect(within(dialog).getByText("결제 기록 저장 완료")).toBeVisible();
+    const fileInput = within(dialog).getByLabelText("영수증 첨부");
+    expect(fileInput).toHaveAttribute("accept", "image/jpeg,image/png,application/pdf");
+    fireEvent.change(fileInput, { target: { files: [new File(["receipt"], "receipt.jpg", { type: "image/jpeg" })] } });
+    await waitFor(() => expect(uploadPosSettlementReceiptMock).toHaveBeenCalledWith(savedSettlement.posSettlementId, expect.any(File)));
+  });
+
+  it("keeps server validation failures in the modal and closes with the backdrop", async () => {
+    const user = userEvent.setup();
+    const receivable = { mealUsageId: items[0].id, mealContractId: items[0].mealContractId, partnerDisplayName: "협력사 A", confirmedAt: items[0].createdAt, receivableCreatedMinor: 7_500 };
+    getConfirmedMealUsagesMock.mockResolvedValue(page({ hasNext: false }));
+    getOutstandingReceivablesMock.mockResolvedValue({ items: [receivable], partners: [] });
+    recordPosSettlementMock.mockRejectedValue(new ApiError(409, "POS_SETTLEMENT_TOTAL_MISMATCH"));
+    vi.stubGlobal("crypto", { randomUUID: vi.fn().mockReturnValue("00000000-0000-0000-0000-000000000201") });
+    render(<MonthlyMealUsageList />);
+
+    await user.click(await screen.findByRole("checkbox", { name: /협력사 A .* 선택/ }));
+    const openButton = await screen.findByRole("button", { name: "선택한 결제할 금액 기록하기" });
+    await waitFor(() => expect(openButton).toBeEnabled());
+    await user.click(openButton);
+    const dialog = await screen.findByRole("dialog", { name: "결제 기록" });
+    fireEvent.change(within(dialog).getByLabelText("결제일"), { target: { value: "2026-08-11" } });
+    await user.click(within(dialog).getByRole("button", { name: "결제 기록 저장하기" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("결제 금액과 선택한 결제할 금액이 다릅니다.");
+    fireEvent.click(dialog);
+    expect(screen.queryByRole("dialog", { name: "결제 기록" })).not.toBeInTheDocument();
   });
 });
