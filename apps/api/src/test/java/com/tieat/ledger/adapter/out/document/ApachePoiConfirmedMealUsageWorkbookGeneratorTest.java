@@ -37,6 +37,7 @@ class ApachePoiConfirmedMealUsageWorkbookGeneratorTest {
             assertThat(sheet.getRow(2).getCell(0).getStringCellValue()).isEqualTo("조회 기간");
             assertThat(sheet.getRow(2).getCell(1).getStringCellValue()).isEqualTo("2026-08-01~2026-08-31");
             assertThat(sheet.getRow(3).getCell(1).getStringCellValue()).isEqualTo("선택한 협력사·계약");
+            assertThat(sheet.getRow(4).getCell(1).getStringCellValue()).isEqualTo("2026-08-26 13:00:00");
             assertThat(sheet.getRow(6).getCell(0).getStringCellValue()).isEqualTo("총금액(원)");
             assertThat(sheet.getRow(6).getCell(1).getNumericCellValue()).isEqualTo(12_000D);
             assertThat(sheet.getRow(9).getPhysicalNumberOfCells()).isEqualTo(5);
@@ -46,8 +47,8 @@ class ApachePoiConfirmedMealUsageWorkbookGeneratorTest {
             assertThat(sheet.getRow(9).getCell(3).getStringCellValue()).isEqualTo("금액(원)");
             assertThat(sheet.getRow(9).getCell(4).getStringCellValue()).isEqualTo("결제 상태");
             assertThat(sheet.getRow(10).getCell(0).getStringCellValue()).isEqualTo("협력사 A");
-            assertThat(sheet.getRow(10).getCell(1).getStringCellValue()).isEqualTo(USED_AT.toString());
-            assertThat(sheet.getRow(10).getCell(2).getStringCellValue()).isEqualTo(CONFIRMED_AT.toString());
+            assertThat(sheet.getRow(10).getCell(1).getStringCellValue()).isEqualTo("2026-08-05 10:00:00");
+            assertThat(sheet.getRow(10).getCell(2).getStringCellValue()).isEqualTo("2026-08-05 11:00:00");
             assertThat(sheet.getRow(10).getCell(3).getCellType()).isEqualTo(CellType.NUMERIC);
             assertThat(sheet.getRow(10).getCell(3).getNumericCellValue()).isEqualTo(12_000D);
             assertThat(sheet.getRow(10).getCell(4).getStringCellValue()).isEqualTo("결제 전");

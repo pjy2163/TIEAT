@@ -5,6 +5,8 @@ import com.tieat.ledger.application.ConfirmedMealUsageWorkbookGenerationExceptio
 import com.tieat.ledger.application.ConfirmedMealUsageWorkbookGenerator;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -23,6 +25,9 @@ public final class ApachePoiConfirmedMealUsageWorkbookGenerator implements Confi
 
     private static final String SHEET_NAME = "전체 장부";
     private static final String AMOUNT_FORMAT = "#,##0";
+    private static final DateTimeFormatter DISPLAY_DATE_TIME = DateTimeFormatter
+        .ofPattern("yyyy-MM-dd HH:mm:ss")
+        .withZone(ZoneId.of("Asia/Seoul"));
 
     @Override
     public byte[] generate(ConfirmedMealUsageExportSnapshot snapshot) {
@@ -43,7 +48,7 @@ public final class ApachePoiConfirmedMealUsageWorkbookGenerator implements Confi
 
             metadataRow(sheet, 2, "조회 기간", snapshot.fromDate() + "~" + snapshot.toDate(), metadataLabelStyle, metadataValueStyle);
             metadataRow(sheet, 3, "조회 범위", snapshot.scopeLabel(), metadataLabelStyle, metadataValueStyle);
-            metadataRow(sheet, 4, "생성 시각", snapshot.generatedAt().toString(), metadataLabelStyle, metadataValueStyle);
+            metadataRow(sheet, 4, "생성 시각", DISPLAY_DATE_TIME.format(snapshot.generatedAt()), metadataLabelStyle, metadataValueStyle);
             metadataNumberRow(sheet, 5, "건수", snapshot.rows().size(), metadataLabelStyle, metadataValueStyle);
             metadataNumberRow(sheet, 6, "총금액(원)", snapshot.totalAmountMinor(), metadataLabelStyle, amountStyle);
 
@@ -63,8 +68,8 @@ public final class ApachePoiConfirmedMealUsageWorkbookGenerator implements Confi
                 ConfirmedMealUsageExportSnapshot.Row source = snapshot.rows().get(index);
                 Row row = sheet.createRow(10 + index);
                 row.createCell(0).setCellValue(source.partnerDisplayName() == null ? "협력사 정보 없음" : source.partnerDisplayName());
-                row.createCell(1).setCellValue(source.usedAt().toString());
-                row.createCell(2).setCellValue(source.confirmedAt().toString());
+                row.createCell(1).setCellValue(DISPLAY_DATE_TIME.format(source.usedAt()));
+                row.createCell(2).setCellValue(DISPLAY_DATE_TIME.format(source.confirmedAt()));
                 row.createCell(3).setCellValue(source.amountMinor());
                 row.createCell(4).setCellValue(source.paymentStatus() == null ? "" : source.paymentStatus());
                 row.getCell(3).setCellStyle(amountStyle);
