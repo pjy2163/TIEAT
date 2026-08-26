@@ -10,6 +10,7 @@ import com.tieat.partnership.domain.MealContractRepository;
 import com.tieat.partnership.domain.PartnerOrganization;
 import com.tieat.partnership.domain.PartnerOrganizationId;
 import com.tieat.partnership.domain.PartnerOrganizationRepository;
+import com.tieat.partnership.domain.PartnerKind;
 import com.tieat.store.domain.Store;
 import com.tieat.store.domain.StoreId;
 import com.tieat.store.domain.StoreOnboardingStatus;
@@ -125,10 +126,11 @@ public class StoreOnboardingUseCase {
         long initialPrepaidBalanceMinor = validateInitialPrepaidBalance(
             command.paymentType(), command.initialPrepaidBalanceMinor()
         );
+        PartnerKind partnerKind = requirePartnerKind(command.partnerKind());
         boolean qrSelectable = requireExplicitQrSelection(command.qrSelectable());
 
         PartnerOrganization partnerOrganization = partnerOrganizationRepository.save(new PartnerOrganization(
-            new PartnerOrganizationId(UUID.randomUUID()), partnerName
+            new PartnerOrganizationId(UUID.randomUUID()), partnerName, partnerKind
         ));
         MealContract mealContract = mealContractRepository.save(new MealContract(
             new MealContractId(UUID.randomUUID()),
@@ -139,7 +141,12 @@ public class StoreOnboardingUseCase {
             qrSelectable
         ));
         storeRepository.save(store.completeOnboarding());
-        return PartnerRegistrationResult.created(partnerOrganization.displayName(), mealContract.paymentType());
+        return PartnerRegistrationResult.created(
+            partnerOrganization.displayName(),
+            partnerOrganization.partnerKind(),
+            mealContract.paymentType(),
+            mealContract.id().value()
+        );
     }
 
     private String normalizeLoginId(String rawLoginId) {
@@ -211,6 +218,13 @@ public class StoreOnboardingUseCase {
         return qrSelectable;
     }
 
+    private PartnerKind requirePartnerKind(PartnerKind partnerKind) {
+        if (partnerKind == null) {
+            throw OnboardingException.validationFailed();
+        }
+        return partnerKind;
+    }
+
     public record StoreSignupCommand(
         String inviteCode,
         String loginId,
@@ -228,6 +242,7 @@ public class StoreOnboardingUseCase {
     public record FirstPartnerRegistrationCommand(
         StoreId actorStoreId,
         String partnerName,
+        PartnerKind partnerKind,
         MealContractPaymentType paymentType,
         Long initialPrepaidBalanceMinor,
         Boolean qrSelectable
@@ -243,16 +258,25 @@ public class StoreOnboardingUseCase {
         boolean created,
         boolean legacy,
         String partnerDisplayName,
-        MealContractPaymentType paymentType
+        PartnerKind partnerKind,
+        MealContractPaymentType paymentType,
+        UUID mealContractId
     ) {
 
-        static PartnerRegistrationResult created(String partnerDisplayName, MealContractPaymentType paymentType) {
+        static PartnerRegistrationResult created(
+            String partnerDisplayName,
+            PartnerKind partnerKind,
+            MealContractPaymentType paymentType,
+            UUID mealContractId
+        ) {
             return new PartnerRegistrationResult(
                 StoreOnboardingStatus.COMPLETE,
                 true,
                 false,
                 partnerDisplayName,
-                paymentType
+                partnerKind,
+                paymentType,
+                mealContractId
             );
         }
 
@@ -261,6 +285,8 @@ public class StoreOnboardingUseCase {
                 StoreOnboardingStatus.COMPLETE,
                 false,
                 legacy,
+                null,
+                null,
                 null,
                 null
             );

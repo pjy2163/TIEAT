@@ -5,15 +5,18 @@ import com.tieat.identity.adapter.in.security.StoreAccountUserDetailsService;
 import com.tieat.onboarding.application.StoreOnboardingUseCase;
 import com.tieat.onboarding.application.StorePlaceSearchGateway;
 import com.tieat.partnership.domain.MealContractPaymentType;
+import com.tieat.partnership.domain.PartnerKind;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.CredentialsContainer;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -97,6 +100,7 @@ class StoreOnboardingController {
             new StoreOnboardingUseCase.FirstPartnerRegistrationCommand(
                 principal.storeId(),
                 request.partnerName(),
+                request.partnerKind(),
                 request.paymentType(),
                 request.initialPrepaidBalanceMinor(),
                 request.qrSelectable()
@@ -110,7 +114,9 @@ class StoreOnboardingController {
                 result.created(),
                 result.legacy(),
                 result.partnerDisplayName(),
-                result.paymentType() == null ? null : result.paymentType().name()
+                result.partnerKind() == null ? null : result.partnerKind().name(),
+                result.paymentType() == null ? null : result.paymentType().name(),
+                result.mealContractId()
             ));
     }
 
@@ -125,6 +131,9 @@ class StoreOnboardingController {
             null,
             userDetails.getAuthorities()
         );
+        if (authentication instanceof CredentialsContainer credentialsContainer) {
+            credentialsContainer.eraseCredentials();
+        }
         sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
@@ -171,6 +180,7 @@ class StoreOnboardingController {
 
     record FirstPartnerRegistrationRequest(
         String partnerName,
+        PartnerKind partnerKind,
         MealContractPaymentType paymentType,
         Long initialPrepaidBalanceMinor,
         Boolean qrSelectable
@@ -182,7 +192,9 @@ class StoreOnboardingController {
         boolean created,
         boolean legacy,
         String partnerDisplayName,
-        String paymentType
+        String partnerKind,
+        String paymentType,
+        UUID mealContractId
     ) {
     }
 }

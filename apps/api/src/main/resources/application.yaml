@@ -37,6 +37,8 @@ tieat:
     token-encryption-keys: ${TIEAT_QR_TOKEN_ENCRYPTION_KEYS:}
     token-encryption-key: ${TIEAT_QR_TOKEN_ENCRYPTION_KEY:}
     token-encryption-key-version: ${TIEAT_QR_TOKEN_ENCRYPTION_KEY_VERSION:1}
+  onboarding:
+    invite-code: ${TIEAT_ONBOARDING_INVITE_CODE:}
   receipts:
     provider: ${TIEAT_RECEIPTS_PROVIDER:local}
     local-root: ${TIEAT_RECEIPTS_LOCAL_ROOT:${java.io.tmpdir}/tieat-receipts-private}
