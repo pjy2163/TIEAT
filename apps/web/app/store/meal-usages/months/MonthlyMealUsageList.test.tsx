@@ -336,7 +336,12 @@ describe("MonthlyMealUsageList", () => {
       { partnerDisplayName: first.partnerDisplayName, confirmedAt: first.confirmedAt, receivableAmountMinor: 7_500 },
       { partnerDisplayName: second.partnerDisplayName, confirmedAt: second.confirmedAt, receivableAmountMinor: 2_500 },
     ] };
-    getConfirmedMealUsagesMock.mockResolvedValue(page({ hasNext: false }));
+    getConfirmedMealUsagesMock
+      .mockResolvedValueOnce(page({ hasNext: false }))
+      .mockResolvedValueOnce(page({
+        hasNext: false,
+        items: [{ ...items[0], settlementStatus: "PAYMENT_RECORDED" }],
+      }));
     getOutstandingReceivablesMock.mockResolvedValue({ items: [first, second], partners: [] });
     recordPosSettlementMock.mockResolvedValue(savedSettlement);
     uploadPosSettlementReceiptMock.mockResolvedValue({} as never);
@@ -354,6 +359,11 @@ describe("MonthlyMealUsageList", () => {
     await user.click(within(dialog).getByRole("button", { name: "결제 기록 저장하기" }));
 
     await waitFor(() => expect(recordPosSettlementMock).toHaveBeenCalledWith({ mealContractId: contractId, posBusinessDate: "2026-08-11", submittedTotalMinor: 10_000, mealUsageIds: [first.mealUsageId, second.mealUsageId] }, "00000000-0000-0000-0000-000000000200"));
+    await waitFor(() => expect(getConfirmedMealUsagesMock).toHaveBeenCalledTimes(2));
+    const ledger = screen.getByRole("list", { name: "전체 장부 목록" });
+    expect(within(ledger).getByText("결제 완료", { exact: true })).toBeVisible();
+    expect(within(ledger).queryByText("결제 전", { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText("1건 선택", { exact: true })).not.toBeInTheDocument();
     expect(within(dialog).getByText("결제 기록 저장 완료")).toBeVisible();
     const fileInput = within(dialog).getByLabelText("영수증 첨부");
     expect(fileInput).toHaveAttribute("accept", "image/jpeg,image/png,application/pdf");

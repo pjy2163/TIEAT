@@ -21,6 +21,7 @@ type PosSettlementRecordDialogProps = {
   seed: PosSettlementRecordSeed;
   onAccessDenied: () => void;
   onClose: () => void;
+  onSettlementRecorded: () => void;
   onSessionExpired: () => void;
 };
 
@@ -79,6 +80,7 @@ function sameContractReceivables(
 export function PosSettlementRecordDialog({
   onAccessDenied,
   onClose,
+  onSettlementRecorded,
   onSessionExpired,
   seed,
 }: PosSettlementRecordDialogProps) {
@@ -251,6 +253,7 @@ export function PosSettlementRecordDialog({
       if (!mountedRef.current) return;
       setSettlement(result);
       setViewState("success");
+      onSettlementRecorded();
     } catch (error) {
       if (!mountedRef.current) return;
       if (error instanceof ApiError && error.status === 401) {

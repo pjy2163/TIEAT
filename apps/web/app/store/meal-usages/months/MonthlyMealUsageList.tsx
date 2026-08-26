@@ -336,6 +336,11 @@ export function MonthlyMealUsageList() {
     }
   }, [clearSensitiveRows, clearSelection, replaceResult]);
 
+  const handleSettlementRecorded = useCallback(() => {
+    clearSelection();
+    void load(fromDate, toDate, page, selectedMealContractId);
+  }, [clearSelection, fromDate, load, page, selectedMealContractId, toDate]);
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -671,6 +676,7 @@ export function MonthlyMealUsageList() {
           <PosSettlementRecordDialog
             onAccessDenied={handleDialogAccessDenied}
             onClose={closePaymentDialog}
+            onSettlementRecorded={handleSettlementRecorded}
             onSessionExpired={handleDialogSessionExpired}
             seed={paymentSource}
           />
