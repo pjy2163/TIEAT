@@ -17,6 +17,11 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+  session:
+    jdbc:
+      initialize-schema: never
+      save-mode: on-set-attribute
+    timeout: 30m
   jackson:
     deserialization:
       fail-on-unknown-properties: true
@@ -25,6 +30,9 @@ springdoc:
   paths-to-match: /api/**
 
 tieat:
+  session:
+    cookie:
+      secure: ${TIEAT_SESSION_COOKIE_SECURE:}
   qr:
     token-encryption-keys: ${TIEAT_QR_TOKEN_ENCRYPTION_KEYS:}
     token-encryption-key: ${TIEAT_QR_TOKEN_ENCRYPTION_KEY:}
