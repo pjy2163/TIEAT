@@ -320,7 +320,10 @@ describe("MonthlyMealUsageList", () => {
     expect(getOutstandingReceivablesMock).toHaveBeenCalledTimes(2);
     expect(within(dialog).getAllByRole("checkbox", { name: /협력사 A .* 선택/ })).toHaveLength(2);
     expect(within(dialog).queryByRole("checkbox", { name: /협력사 C .* 선택/ })).not.toBeInTheDocument();
-    expect(within(dialog).getByLabelText("결제 금액")).toHaveValue(7_500);
+    const amountInput = within(dialog).getByLabelText("결제 금액");
+    expect(amountInput).toHaveValue("7,500");
+    expect(amountInput).toHaveAttribute("type", "text");
+    expect(amountInput).toHaveAttribute("inputmode", "numeric");
     expect(dialog).toHaveClass("fixed", "inset-0");
     fireEvent.keyDown(dialog, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "결제 기록" })).not.toBeInTheDocument();
@@ -355,7 +358,12 @@ describe("MonthlyMealUsageList", () => {
     const dialog = await screen.findByRole("dialog", { name: "결제 기록" });
     await user.click(within(dialog).getAllByRole("checkbox", { name: /협력사 A .* 선택/ })[1]);
     fireEvent.change(within(dialog).getByLabelText("결제일"), { target: { value: "2026-08-11" } });
-    expect(within(dialog).getByLabelText("결제 금액")).toHaveValue(10_000);
+    const amountInput = within(dialog).getByLabelText("결제 금액");
+    expect(amountInput).toHaveValue("10,000");
+    fireEvent.change(amountInput, { target: { value: "1800" } });
+    expect(amountInput).toHaveValue("1,800");
+    fireEvent.change(amountInput, { target: { value: "10,000" } });
+    expect(amountInput).toHaveValue("10,000");
     await user.click(within(dialog).getByRole("button", { name: "결제 기록 저장하기" }));
 
     await waitFor(() => expect(recordPosSettlementMock).toHaveBeenCalledWith({ mealContractId: contractId, posBusinessDate: "2026-08-11", submittedTotalMinor: 10_000, mealUsageIds: [first.mealUsageId, second.mealUsageId] }, "00000000-0000-0000-0000-000000000200"));

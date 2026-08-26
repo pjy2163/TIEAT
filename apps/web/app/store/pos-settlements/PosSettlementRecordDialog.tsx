@@ -63,6 +63,14 @@ function isPositiveInteger(value: string): boolean {
   return Number.isSafeInteger(Number(value)) && Number(value) > 0;
 }
 
+function normalizeAmountInput(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function formatAmountInput(value: string): string {
+  return normalizeAmountInput(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
 function sameContractReceivables(
   seed: PosSettlementRecordSeed,
   items: OutstandingReceivable[],
@@ -437,15 +445,13 @@ export function PosSettlementRecordDialog({
                       disabled={isSubmitting}
                       id="pos-record-dialog-submitted-total"
                       inputMode="numeric"
-                      min="1"
                       onChange={(event) => {
-                        setSubmittedTotalInput(event.target.value);
+                        setSubmittedTotalInput(normalizeAmountInput(event.target.value));
                         idempotencyKeyRef.current = null;
                       }}
                       required
-                      step="1"
-                      type="number"
-                      value={submittedTotalInput}
+                      type="text"
+                      value={formatAmountInput(submittedTotalInput)}
                     />
                   </label>
                 </div>
