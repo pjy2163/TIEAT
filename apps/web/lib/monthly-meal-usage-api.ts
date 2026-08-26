@@ -25,12 +25,46 @@ export type MonthlyMealUsagePage = {
   totalAmountMinor: number;
 };
 
+export type ConfirmedMealUsagePage = {
+  fromDate: string;
+  toDate: string;
+  timeZone: "Asia/Seoul";
+  items: MonthlyMealUsage[];
+  page: number;
+  size: number;
+  hasNext: boolean;
+  totalAmountMinor: number;
+};
+
 const API_PATH = "/api/v1";
 const YEAR_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+const DATE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
-function monthlyLedgerPath(fromMonth: string, toMonth: string, page: number, size: number): string {
+function monthlyLedgerPath(
+  fromMonth: string,
+  toMonth: string,
+  page: number,
+  size: number,
+  mealContractId?: string,
+): string {
   const toQuery = fromMonth === toMonth ? "" : `&to=${encodeURIComponent(toMonth)}`;
-  return `${API_PATH}/meal-usages/months/${encodeURIComponent(fromMonth)}?page=${page}&size=${size}${toQuery}`;
+  const contractQuery = mealContractId === undefined
+    ? ""
+    : `&mealContractId=${encodeURIComponent(mealContractId)}`;
+  return `${API_PATH}/meal-usages/months/${encodeURIComponent(fromMonth)}?page=${page}&size=${size}${toQuery}${contractQuery}`;
+}
+
+function confirmedLedgerPath(
+  fromDate: string,
+  toDate: string,
+  page: number,
+  size: number,
+  mealContractId?: string,
+): string {
+  const contractQuery = mealContractId === undefined
+    ? ""
+    : `&mealContractId=${encodeURIComponent(mealContractId)}`;
+  return `${API_PATH}/meal-usages/confirmed?fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}&page=${page}&size=${size}${contractQuery}`;
 }
 
 async function apiError(response: Response): Promise<ApiError> {
@@ -69,7 +103,7 @@ function hasExactlyFields(value: Record<string, unknown>, expectedFields: readon
   return actualFields.length === expectedFields.length && expectedFields.every((field) => field in value);
 }
 
-function parseMonthlyMealUsage(value: unknown): MonthlyMealUsage {
+function parseMealUsage(value: unknown): MonthlyMealUsage {
   if (!isRecord(value)
     || !hasExactlyFields(value, ["id", "status", "partnerDisplayName", "amountMinor", "createdAt", "confirmedStaffInitials", "settlementStatus"])
     || !isUuid(value.id)
@@ -123,7 +157,39 @@ function parseMonthlyMealUsagePage(
     fromMonth: value.fromMonth,
     toMonth: value.toMonth,
     timeZone: value.timeZone,
-    items: value.items.map(parseMonthlyMealUsage),
+    items: value.items.map(parseMealUsage),
+    page: value.page,
+    size: value.size,
+    hasNext: value.hasNext,
+    totalAmountMinor: value.totalAmountMinor,
+  };
+}
+
+function parseConfirmedMealUsagePage(
+  value: unknown,
+  expectedFromDate: string,
+  expectedToDate: string,
+  expectedPage: number,
+  expectedSize: number,
+): ConfirmedMealUsagePage {
+  if (!isRecord(value)
+    || value.fromDate !== expectedFromDate
+    || value.toDate !== expectedToDate
+    || value.timeZone !== "Asia/Seoul"
+    || !Array.isArray(value.items)
+    || value.page !== expectedPage
+    || value.size !== expectedSize
+    || typeof value.hasNext !== "boolean"
+    || typeof value.totalAmountMinor !== "number"
+    || !Number.isSafeInteger(value.totalAmountMinor)
+    || value.totalAmountMinor < 0) {
+    throw new InvalidApiResponseError();
+  }
+  return {
+    fromDate: value.fromDate,
+    toDate: value.toDate,
+    timeZone: value.timeZone,
+    items: value.items.map(parseMealUsage),
     page: value.page,
     size: value.size,
     hasNext: value.hasNext,
@@ -136,6 +202,7 @@ export function getMonthlyMealUsages(
   toMonth: string,
   page: number,
   size: number,
+  mealContractId?: string,
 ): Promise<MonthlyMealUsagePage>;
 export function getMonthlyMealUsages(
   month: string,
@@ -148,6 +215,7 @@ export async function getMonthlyMealUsages(
   toMonthOrPage: string | number,
   pageOrSize: number,
   sizeOrToMonth?: number | string,
+  mealContractId?: string,
 ): Promise<MonthlyMealUsagePage> {
   let toMonth: string;
   let page: number;
@@ -167,10 +235,11 @@ export async function getMonthlyMealUsages(
     || page < 0
     || !Number.isInteger(size)
     || size < 1
-    || size > 100) {
+    || size > 100
+    || (mealContractId !== undefined && !isUuid(mealContractId))) {
     throw new InvalidApiResponseError();
   }
-  const response = await fetch(monthlyLedgerPath(fromMonth, toMonth, page, size), {
+  const response = await fetch(monthlyLedgerPath(fromMonth, toMonth, page, size, mealContractId), {
     cache: "no-store",
     credentials: "same-origin",
   });
@@ -180,4 +249,33 @@ export async function getMonthlyMealUsages(
   }
 
   return parseMonthlyMealUsagePage(await response.json() as unknown, fromMonth, toMonth, page, size);
+}
+
+export async function getConfirmedMealUsages(
+  fromDate: string,
+  toDate: string,
+  page: number,
+  size: number,
+  mealContractId?: string,
+): Promise<ConfirmedMealUsagePage> {
+  if (!DATE_PATTERN.test(fromDate)
+    || !DATE_PATTERN.test(toDate)
+    || !Number.isInteger(page)
+    || page < 0
+    || !Number.isInteger(size)
+    || size < 1
+    || size > 100
+    || (mealContractId !== undefined && !isUuid(mealContractId))) {
+    throw new InvalidApiResponseError();
+  }
+  const response = await fetch(confirmedLedgerPath(fromDate, toDate, page, size, mealContractId), {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+
+  return parseConfirmedMealUsagePage(await response.json() as unknown, fromDate, toDate, page, size);
 }

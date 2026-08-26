@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getMonthlyMealUsages } from "./monthly-meal-usage-api";
+import { getConfirmedMealUsages, getMonthlyMealUsages } from "./monthly-meal-usage-api";
 
 function response(status: number, body?: unknown): Response {
   return {
@@ -23,6 +23,37 @@ describe("monthly meal usage API", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("gets the KST date-range confirmed page with an optional contract scope", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(200, {
+      fromDate: "2026-08-01",
+      toDate: "2026-08-31",
+      timeZone: "Asia/Seoul",
+      items: [item],
+      page: 0,
+      size: 20,
+      hasNext: false,
+      totalAmountMinor: 12_000,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getConfirmedMealUsages(
+      "2026-08-01",
+      "2026-08-31",
+      0,
+      20,
+      "00000000-0000-0000-0000-000000000011",
+    )).resolves.toMatchObject({
+      fromDate: "2026-08-01",
+      toDate: "2026-08-31",
+      totalAmountMinor: 12_000,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/meal-usages/confirmed?fromDate=2026-08-01&toDate=2026-08-31&page=0&size=20&mealContractId=00000000-0000-0000-0000-000000000011",
+      { cache: "no-store", credentials: "same-origin" },
+    );
   });
 
   it("gets only the server-scoped monthly page with no-store cache behavior", async () => {
