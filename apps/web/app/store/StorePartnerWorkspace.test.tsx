@@ -152,7 +152,7 @@ describe("R-032 store partner workspace", () => {
       "계약 2",
       partnerB.partnerDisplayName,
     ]);
-    expect(partnerSelect.querySelectorAll("optgroup")).toHaveLength(2);
+    expect(partnerSelect.querySelectorAll("optgroup")).toHaveLength(1);
     expect(partnerSelect.querySelector("optgroup")?.getAttribute("label")).toBe(partnerA.partnerDisplayName);
     expect(partnerSelect.querySelectorAll("option")).toHaveLength(4);
     expect(partnerSelect.querySelector(`option[value="${partnerB.mealContractId}"]`)).toHaveAttribute("aria-label", partnerB.partnerDisplayName);

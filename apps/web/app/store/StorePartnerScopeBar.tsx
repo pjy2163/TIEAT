@@ -104,7 +104,15 @@ export function StorePartnerScopeBar() {
             value={scopeState === "selected" ? selectedMealContractId ?? "" : ""}
           >
             <option value="">전체</option>
-            {partnerGroups.map((group) => (
+            {partnerGroups.map((group) => group.partners.length === 1 ? (
+              <option
+                aria-label={getPartnerOptionAriaLabel(group, 0)}
+                key={group.partners[0].mealContractId}
+                value={group.partners[0].mealContractId}
+              >
+                {getPartnerOptionLabel(group, 0)}
+              </option>
+            ) : (
               <optgroup key={group.key} label={group.partnerDisplayName}>
                 {group.partners.map((partner, index) => (
                   <option
