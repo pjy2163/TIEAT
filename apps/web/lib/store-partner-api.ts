@@ -110,11 +110,8 @@ function parseStorePartner(value: unknown): StorePartner {
     || (hasContacts && !isNullableContact(value.representativeEmail, 254))) {
     throw new InvalidApiResponseError();
   }
-  return {
+  const parsed: StorePartner = {
     mealContractId: value.mealContractId,
-    partnerOrganizationId: hasOrganizationId && value.partnerOrganizationId !== null
-      ? value.partnerOrganizationId as string
-      : null,
     partnerDisplayName: value.partnerDisplayName,
     partnerKind: value.partnerKind,
     paymentType: value.paymentType,
@@ -122,6 +119,10 @@ function parseStorePartner(value: unknown): StorePartner {
     representativePhone: hasContacts ? value.representativePhone as string | null : null,
     representativeEmail: hasContacts ? value.representativeEmail as string | null : null,
   };
+  if (hasOrganizationId) {
+    parsed.partnerOrganizationId = value.partnerOrganizationId === null ? null : value.partnerOrganizationId as string;
+  }
+  return parsed;
 }
 
 function hasOwnProperty(value: Record<string, unknown>, key: string): boolean {

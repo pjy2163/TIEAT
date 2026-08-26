@@ -44,7 +44,6 @@ describe("store partner API", () => {
 
     await expect(getStorePartners()).resolves.toEqual([{
       ...legacyFiveFieldPartner,
-      partnerOrganizationId: null,
       representativePhone: null,
       representativeEmail: null,
     }]);

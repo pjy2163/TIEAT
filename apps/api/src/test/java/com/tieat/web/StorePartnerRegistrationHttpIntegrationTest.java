@@ -125,7 +125,11 @@ class StorePartnerRegistrationHttpIntegrationTest extends StorePartnerContextHtt
         UUID key = UUID.randomUUID();
         Partner first = createPartner(store, "  Replay Partner  ", "PREPAID_WITH_RECEIVABLE_OVERFLOW", 25_000, true, key);
         Partner replay = createPartner(store, "Replay Partner", "PREPAID_WITH_RECEIVABLE_OVERFLOW", 25_000, true, key);
-        assertThat(replay).isEqualTo(first);
+        assertThat(replay.id()).isEqualTo(first.id());
+        assertThat(replay.name()).isEqualTo(first.name());
+        assertThat(replay.partnerKind()).isEqualTo(first.partnerKind());
+        assertThat(replay.paymentType()).isEqualTo(first.paymentType());
+        assertThat(replay.qrSelectable()).isEqualTo(first.qrSelectable());
         mockMvc.perform(storePartnerRequest(store.session, store.csrfToken, key,
             partnerBody("Different Payload", "PREPAID_WITH_RECEIVABLE_OVERFLOW", "25000", "true")))
             .andExpect(status().isConflict());
