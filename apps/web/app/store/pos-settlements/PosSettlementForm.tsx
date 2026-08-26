@@ -534,7 +534,7 @@ export function PosSettlementForm() {
             <>
               <h2 className="sr-only" id="pos-settlement-record-title">결제할 금액</h2>
               {selectedMealContractId ? (
-                <p className={posSettlementFormStyles.selectionHint} role="status">같은 협력사의 결제할 금액만 한 번에 기록할 수 있습니다.</p>
+                <p className={posSettlementFormStyles.selectionHint} role="status">같은 계약의 결제할 금액만 한 번에 기록할 수 있습니다.</p>
               ) : null}
               {formError ? <p className={posSettlementFormStyles.notice} role="alert">{formError}</p> : null}
               <div className={posSettlementFormStyles.partnerList}>

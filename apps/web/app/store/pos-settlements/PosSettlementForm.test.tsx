@@ -205,6 +205,7 @@ describe("PosSettlementForm", () => {
     expect(sharedContractCheckbox).toBeEnabled();
     await user.click(firstCheckbox);
     expect(sharedContractCheckbox).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent("같은 계약의 결제할 금액만 한 번에 기록할 수 있습니다.");
   });
 
   it("requires explicit same-contract selection and a typed settlement total, then refreshes saved history from the API", async () => {
