@@ -209,6 +209,9 @@ describe("R-032 store partner workspace", () => {
     await user.click(menuButton);
     const dialog = screen.getByRole("dialog", { name: "매장 작업 공간 메뉴" });
     expect(dialog).toHaveAttribute("open");
+    const paymentHistoryLinks = screen.getAllByRole("link", { name: "결제 히스토리" });
+    expect(paymentHistoryLinks).toHaveLength(2);
+    expect(paymentHistoryLinks.every((link) => link.getAttribute("href") === "/store/pos-settlements")).toBe(true);
     expect(screen.queryByRole("link", { name: "전체 협력사" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: partnerA.partnerDisplayName })).toHaveLength(4);
     const qrLinks = screen.getAllByRole("link", { name: "QR코드 보기" });

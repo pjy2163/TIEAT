@@ -67,7 +67,7 @@ function Navigation({ onNavigate, storeDisplayName }: NavigationProps) {
       <div className={styles.nav}>
         <Link aria-current={isActivePath(pathname, "/store/meal-usages") ? "page" : undefined} className={linkClassName(isActivePath(pathname, "/store/meal-usages"))} href="/store/meal-usages" onClick={onNavigate}>확인 대기</Link>
         <Link aria-current={allLedgerActive ? "page" : undefined} className={linkClassName(allLedgerActive)} href={ledgerPath} onClick={onNavigate}>전체 장부</Link>
-        <Link aria-current={isActivePath(pathname, "/store/pos-settlements") ? "page" : undefined} className={linkClassName(isActivePath(pathname, "/store/pos-settlements"))} href="/store/pos-settlements" onClick={onNavigate}>잔금 보기</Link>
+        <Link aria-current={isActivePath(pathname, "/store/pos-settlements") ? "page" : undefined} className={linkClassName(isActivePath(pathname, "/store/pos-settlements"))} href="/store/pos-settlements" onClick={onNavigate}>결제 히스토리</Link>
         <Link aria-current={isActivePath(pathname, "/store/profile") ? "page" : undefined} className={linkClassName(isActivePath(pathname, "/store/profile"))} href="/store/profile" onClick={onNavigate}>마이페이지</Link>
       </div>
 
