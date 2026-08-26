@@ -138,7 +138,7 @@ describe("MonthlyMealUsageList", () => {
     expect(screen.getByText("2페이지")).toBeVisible();
   });
 
-  it("places amount and confirmer on the name line and keeps settlement status below", async () => {
+  it("places amount, confirmer, and settlement status on one metadata line", async () => {
     getConfirmedMealUsagesMock.mockResolvedValue(page({ hasNext: false }));
     render(<MonthlyMealUsageList />);
 
@@ -150,7 +150,8 @@ describe("MonthlyMealUsageList", () => {
     const settlementStatus = scopedRow.getByText("결제 전");
     const inputter = scopedRow.getByText("이름 미입력");
     const customerRow = inputter.parentElement as HTMLElement;
-    expect(within(customerRow).getByText("₩12,000")).toBeVisible();
+    const paymentMeta = amount.parentElement as HTMLElement;
+    expect(within(paymentMeta).getByText("₩12,000")).toBeVisible();
     const inputTimeText = new Intl.DateTimeFormat("ko-KR", {
       timeZone: "Asia/Seoul",
       dateStyle: "medium",
@@ -160,22 +161,21 @@ describe("MonthlyMealUsageList", () => {
 
     expect(scopedRow.queryByText("입력자", { exact: true })).not.toBeInTheDocument();
     expect(scopedRow.queryByText("입력 시각", { exact: true })).not.toBeInTheDocument();
-    expect(row).toHaveClass("grid-cols-[minmax(0,1fr)_auto]", "gap-x-4", "gap-y-4", "px-5", "py-5", "sm:px-6");
-    const side = confirmer.parentElement as HTMLElement;
-    expect(customerRow).toHaveClass("mt-2", "flex", "min-w-0", "items-center", "justify-between", "gap-4");
-    expect(side).toHaveClass("grid", "min-w-0", "grid-rows-3", "items-center", "justify-items-end", "text-right", "md:min-w-36");
-    expect(Array.from(side.children)).toEqual([confirmer, settlementStatus]);
-    expect(confirmer).toHaveClass("row-start-2");
-    expect(settlementStatus).toHaveClass("row-start-3");
-    expect(confirmer).toHaveClass("inline-flex", "items-center", "whitespace-nowrap");
-    expect(settlementStatus).toHaveClass("inline-flex", "items-center", "justify-end", "gap-1", "whitespace-nowrap");
-    for (const entry of [confirmer, settlementStatus]) {
-      expect(entry.parentElement).toBe(side);
-    }
-    expect(amount.parentElement).toBe(customerRow);
+    expect(row).toHaveClass("flex", "items-stretch", "gap-x-4", "px-5", "py-5", "sm:px-6");
+    expect(customerRow).toHaveClass("mt-2", "flex", "min-w-0", "items-center", "justify-between", "gap-3");
+    expect(paymentMeta).toHaveClass("flex", "min-w-0", "items-center", "justify-end", "gap-3");
+    expect(Array.from(customerRow.children)).toEqual([inputter, paymentMeta]);
+    expect(Array.from(paymentMeta.children)).toEqual([amount, confirmer, settlementStatus]);
+    expect(confirmer).toHaveClass("inline-flex", "shrink-0", "items-center", "whitespace-nowrap");
+    expect(settlementStatus).toHaveClass("inline-flex", "shrink-0", "items-center", "gap-1", "whitespace-nowrap");
+    expect(confirmer.parentElement).toBe(paymentMeta);
+    expect(settlementStatus.parentElement).toBe(paymentMeta);
+    expect(amount.parentElement).toBe(paymentMeta);
     expect(inputter.compareDocumentPosition(amount) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(inputter.compareDocumentPosition(inputTime) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(amount.compareDocumentPosition(inputTime) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(amount.compareDocumentPosition(confirmer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(confirmer.compareDocumentPosition(settlementStatus) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(settlementStatus.compareDocumentPosition(inputTime) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(inputTime).toHaveClass("mt-2", "break-words");
     for (const className of ["text-sm", "font-medium", "leading-5", "text-[var(--text-secondary)]"]) {
       expect(inputter).toHaveClass(className);

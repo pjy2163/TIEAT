@@ -618,26 +618,26 @@ export function MonthlyMealUsageList() {
                         <p className={monthlyMealUsageListStyles.partner}>{item.partnerDisplayName ?? "협력사 정보 미입력"}</p>
                         <div className={monthlyMealUsageListStyles.customerRow}>
                           <p className={monthlyMealUsageListStyles.personMeta}>이름 미입력</p>
-                          <p className={monthlyMealUsageListStyles.amount}>{amountFormatter.format(item.amountMinor)}</p>
+                          <div className={monthlyMealUsageListStyles.paymentMeta}>
+                            <p className={monthlyMealUsageListStyles.amount}>{amountFormatter.format(item.amountMinor)}</p>
+                            <p className={monthlyMealUsageListStyles.confirmedInitials}>확인자 {item.confirmedStaffInitials}</p>
+                            {statusLabel ? (
+                              <p className={monthlyMealUsageListStyles.settlementStatus}>
+                                {isCompleted ? <span aria-hidden="true" className={monthlyMealUsageListStyles.settlementCheck}>✓</span> : null}
+                                {statusLabel}
+                                {item.settlementStatus === "PAYMENT_RECORDED" ? (
+                                  <span className="sr-only">직원이 입력한 POS 정산 내역이 저장된 상태</span>
+                                ) : item.settlementStatus === "PREPAID_SETTLED" ? (
+                                  <span className="sr-only">선불 잔액으로 처리되어 추가 결제할 금액 없음</span>
+                                ) : null}
+                              </p>
+                            ) : null}
+                          </div>
                         </div>
                         <p className={`${monthlyMealUsageListStyles.personMeta} ${monthlyMealUsageListStyles.metadata}`}>
                           {dateFormatter.format(new Date(item.createdAt))}
                         </p>
                       </div>
-                    </div>
-                    <div className={monthlyMealUsageListStyles.side}>
-                      <p className={monthlyMealUsageListStyles.confirmedInitials}>확인자 {item.confirmedStaffInitials}</p>
-                      {statusLabel ? (
-                        <p className={monthlyMealUsageListStyles.settlementStatus}>
-                          {isCompleted ? <span aria-hidden="true" className={monthlyMealUsageListStyles.settlementCheck}>✓</span> : null}
-                          {statusLabel}
-                          {item.settlementStatus === "PAYMENT_RECORDED" ? (
-                            <span className="sr-only">직원이 입력한 POS 정산 내역이 저장된 상태</span>
-                          ) : item.settlementStatus === "PREPAID_SETTLED" ? (
-                            <span className="sr-only">선불 잔액으로 처리되어 추가 결제할 금액 없음</span>
-                          ) : null}
-                        </p>
-                      ) : null}
                     </div>
                   </li>
                   );
