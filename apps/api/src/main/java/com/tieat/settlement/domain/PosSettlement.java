@@ -68,10 +68,15 @@ public record PosSettlement(
         long requestedSubmittedTotalMinor,
         List<UUID> requestedMealUsageIds
     ) {
+        Objects.requireNonNull(requestedMealUsageIds, "Requested meal usage ids must be supplied");
+        List<UUID> canonicalRequestedMealUsageIds = requestedMealUsageIds.stream()
+            .peek(id -> Objects.requireNonNull(id, "Requested meal usage id must be supplied"))
+            .sorted()
+            .toList();
         return mealContractId.equals(requestedMealContractId)
             && posBusinessDate.equals(requestedPosBusinessDate)
             && submittedTotalMinor == requestedSubmittedTotalMinor
-            && allocationUsageIds().equals(List.copyOf(requestedMealUsageIds));
+            && allocationUsageIds().equals(canonicalRequestedMealUsageIds);
     }
 
     public List<UUID> allocationUsageIds() {
