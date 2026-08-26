@@ -52,7 +52,8 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
         Objects.requireNonNull(storeId, "Store id must be supplied");
         return jdbcTemplate.query(
             """
-                select id, store_id, store_display_name, token_hash, created_at, expires_at, revoked_at
+                select id, store_id, store_display_name, token_hash, created_at, expires_at, revoked_at,
+                       token_ciphertext, token_nonce, token_key_version
                 from meal_usage_qr_contexts
                 where store_id = ? and revoked_at is null
                 """,
@@ -66,7 +67,8 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
         Objects.requireNonNull(storeId, "Store id must be supplied");
         return jdbcTemplate.query(
             """
-                select id, store_id, store_display_name, token_hash, created_at, expires_at, revoked_at
+                select id, store_id, store_display_name, token_hash, created_at, expires_at, revoked_at,
+                       token_ciphertext, token_nonce, token_key_version
                 from meal_usage_qr_contexts
                 where store_id = ? and revoked_at is null
                 for update
@@ -82,8 +84,9 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
         jdbcTemplate.update(
             """
                 insert into meal_usage_qr_contexts
-                    (id, store_id, store_display_name, token_hash, expires_at, revoked_at, created_at)
-                values (?, ?, ?, ?, ?, ?, ?)
+                    (id, store_id, store_display_name, token_hash, expires_at, revoked_at, created_at,
+                     token_ciphertext, token_nonce, token_key_version)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
             context.id().value(),
             context.storeId().value(),
@@ -91,7 +94,10 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
             context.tokenHash(),
             Timestamp.from(context.expiresAt()),
             context.revokedAt().map(Timestamp::from).orElse(null),
-            Timestamp.from(context.issuedAt())
+            Timestamp.from(context.issuedAt()),
+            context.protectedToken().map(MealUsageQrContext.ProtectedToken::ciphertext).orElse(null),
+            context.protectedToken().map(MealUsageQrContext.ProtectedToken::nonce).orElse(null),
+            context.protectedToken().map(MealUsageQrContext.ProtectedToken::keyVersion).orElse(null)
         );
     }
 
@@ -187,6 +193,16 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
 
     private MealUsageQrContext toContext(ResultSet resultSet) throws SQLException {
         Timestamp revokedAt = resultSet.getTimestamp("revoked_at");
+        byte[] tokenCiphertext = resultSet.getBytes("token_ciphertext");
+        byte[] tokenNonce = resultSet.getBytes("token_nonce");
+        int tokenKeyVersion = resultSet.getInt("token_key_version");
+        MealUsageQrContext.ProtectedToken protectedToken = null;
+        if (tokenCiphertext != null || tokenNonce != null || tokenKeyVersion != 0) {
+            if (tokenCiphertext == null || tokenNonce == null || resultSet.wasNull()) {
+                throw new IllegalStateException("QR token protection columns are incomplete");
+            }
+            protectedToken = new MealUsageQrContext.ProtectedToken(tokenCiphertext, tokenNonce, tokenKeyVersion);
+        }
         return new MealUsageQrContext(
             new MealUsageQrContextId(resultSet.getObject("id", UUID.class)),
             new StoreId(resultSet.getObject("store_id", UUID.class)),
@@ -194,7 +210,8 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
             resultSet.getString("token_hash"),
             resultSet.getTimestamp("created_at").toInstant(),
             resultSet.getTimestamp("expires_at").toInstant(),
-            revokedAt == null ? null : revokedAt.toInstant()
+            revokedAt == null ? null : revokedAt.toInstant(),
+            protectedToken
         );
     }
 

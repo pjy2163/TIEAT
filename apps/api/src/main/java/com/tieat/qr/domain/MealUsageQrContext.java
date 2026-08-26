@@ -17,6 +17,7 @@ public final class MealUsageQrContext {
     private final Instant issuedAt;
     private final Instant expiresAt;
     private final Instant revokedAt;
+    private final ProtectedToken protectedToken;
 
     public MealUsageQrContext(
         MealUsageQrContextId id,
@@ -26,6 +27,19 @@ public final class MealUsageQrContext {
         Instant issuedAt,
         Instant expiresAt,
         Instant revokedAt
+    ) {
+        this(id, storeId, storeDisplayName, tokenHash, issuedAt, expiresAt, revokedAt, null);
+    }
+
+    public MealUsageQrContext(
+        MealUsageQrContextId id,
+        StoreId storeId,
+        String storeDisplayName,
+        String tokenHash,
+        Instant issuedAt,
+        Instant expiresAt,
+        Instant revokedAt,
+        ProtectedToken protectedToken
     ) {
         this.id = Objects.requireNonNull(id, "Meal usage QR context id must be supplied");
         this.storeId = Objects.requireNonNull(storeId, "Store id must be supplied");
@@ -43,6 +57,7 @@ public final class MealUsageQrContext {
             throw new IllegalArgumentException("QR expiry must be after issue time");
         }
         this.revokedAt = revokedAt;
+        this.protectedToken = protectedToken;
     }
 
     public static MealUsageQrContext issue(
@@ -53,7 +68,28 @@ public final class MealUsageQrContext {
         Instant issuedAt
     ) {
         Objects.requireNonNull(issuedAt, "QR issue time must be supplied");
-        return new MealUsageQrContext(id, storeId, storeDisplayName, tokenHash, issuedAt, issuedAt.plus(DEFAULT_LIFETIME), null);
+        return issue(id, storeId, storeDisplayName, tokenHash, issuedAt, null);
+    }
+
+    public static MealUsageQrContext issue(
+        MealUsageQrContextId id,
+        StoreId storeId,
+        String storeDisplayName,
+        String tokenHash,
+        Instant issuedAt,
+        ProtectedToken protectedToken
+    ) {
+        Objects.requireNonNull(issuedAt, "QR issue time must be supplied");
+        return new MealUsageQrContext(
+            id,
+            storeId,
+            storeDisplayName,
+            tokenHash,
+            issuedAt,
+            issuedAt.plus(DEFAULT_LIFETIME),
+            null,
+            protectedToken
+        );
     }
 
     public boolean isActiveAt(Instant instant) {
@@ -87,5 +123,33 @@ public final class MealUsageQrContext {
 
     public Optional<Instant> revokedAt() {
         return Optional.ofNullable(revokedAt);
+    }
+
+    public Optional<ProtectedToken> protectedToken() {
+        return Optional.ofNullable(protectedToken);
+    }
+
+    public record ProtectedToken(byte[] ciphertext, byte[] nonce, int keyVersion) {
+
+        public ProtectedToken {
+            ciphertext = Objects.requireNonNull(ciphertext, "Protected QR token ciphertext must be supplied").clone();
+            nonce = Objects.requireNonNull(nonce, "Protected QR token nonce must be supplied").clone();
+            if (nonce.length != 12) {
+                throw new IllegalArgumentException("Protected QR token nonce must be 12 bytes");
+            }
+            if (keyVersion <= 0) {
+                throw new IllegalArgumentException("Protected QR token key version must be positive");
+            }
+        }
+
+        @Override
+        public byte[] ciphertext() {
+            return ciphertext.clone();
+        }
+
+        @Override
+        public byte[] nonce() {
+            return nonce.clone();
+        }
     }
 }

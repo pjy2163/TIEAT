@@ -22,10 +22,16 @@ public class ManageMealUsageQrOperationsUseCase {
 
     private final MealUsageQrOperationsRepository repository;
     private final Clock clock;
+    private final MealUsageQrTokenProtector tokenProtector;
 
-    public ManageMealUsageQrOperationsUseCase(MealUsageQrOperationsRepository repository, Clock clock) {
+    public ManageMealUsageQrOperationsUseCase(
+        MealUsageQrOperationsRepository repository,
+        Clock clock,
+        MealUsageQrTokenProtector tokenProtector
+    ) {
         this.repository = Objects.requireNonNull(repository);
         this.clock = Objects.requireNonNull(clock);
+        this.tokenProtector = Objects.requireNonNull(tokenProtector);
     }
 
     @Transactional
@@ -106,12 +112,14 @@ public class ManageMealUsageQrOperationsUseCase {
 
     private IssuedQr issueNewContext(StoreId storeId, String storeDisplayName, String operatorId, Instant now) {
         String rawToken = MealUsageQrToken.generate();
+        MealUsageQrContextId contextId = new MealUsageQrContextId(UUID.randomUUID());
         MealUsageQrContext context = MealUsageQrContext.issue(
-            new MealUsageQrContextId(UUID.randomUUID()),
+            contextId,
             storeId,
             storeDisplayName,
             MealUsageQrToken.sha256Hash(rawToken),
-            now
+            now,
+            tokenProtector.protect(rawToken, contextId, storeId)
         );
         repository.insert(context);
         repository.appendAudit(QrOperationAudit.qrIssued(operatorId, storeId, context.id(), now));

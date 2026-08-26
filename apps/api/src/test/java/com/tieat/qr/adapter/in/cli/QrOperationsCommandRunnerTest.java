@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tieat.partnership.domain.MealContractId;
 import com.tieat.qr.application.ManageMealUsageQrOperationsUseCase;
+import com.tieat.qr.application.MealUsageQrTokenProtector;
 import com.tieat.qr.application.QrOperationException;
 import com.tieat.qr.domain.MealUsageQrContext;
 import com.tieat.qr.domain.MealUsageQrContextId;
@@ -39,7 +40,8 @@ class QrOperationsCommandRunnerTest {
         IssueOnlyRepository repository = new IssueOnlyRepository();
         QrOperationsCommandRunner runner = new QrOperationsCommandRunner(new ManageMealUsageQrOperationsUseCase(
             repository,
-            Clock.fixed(Instant.parse("2026-08-10T00:00:00Z"), ZoneOffset.UTC)
+            Clock.fixed(Instant.parse("2026-08-10T00:00:00Z"), ZoneOffset.UTC),
+            testProtector()
         ));
 
         runner.run(new DefaultApplicationArguments(
@@ -57,6 +59,7 @@ class QrOperationsCommandRunnerTest {
         assertThat(countOccurrences(output.getOut(), rawToken)).isEqualTo(1);
         assertThat(output.getOut()).contains("QR_CONTEXT_ID=").doesNotContain("token_hash");
         assertThat(repository.contexts).hasSize(1);
+        assertThat(repository.contexts.getFirst().protectedToken()).isPresent();
         assertThat(repository.audits).hasSize(1);
 
         Throwable error = org.assertj.core.api.Assertions.catchThrowable(() -> runner.run(new DefaultApplicationArguments(
@@ -85,7 +88,8 @@ class QrOperationsCommandRunnerTest {
             IssueOnlyRepository repository = new IssueOnlyRepository();
             QrOperationsCommandRunner runner = new QrOperationsCommandRunner(new ManageMealUsageQrOperationsUseCase(
                 repository,
-                Clock.fixed(Instant.parse("2026-08-10T00:00:00Z"), ZoneOffset.UTC)
+                Clock.fixed(Instant.parse("2026-08-10T00:00:00Z"), ZoneOffset.UTC),
+                testProtector()
             ));
 
             assertThatThrownBy(() -> runner.run(new DefaultApplicationArguments(
@@ -110,6 +114,10 @@ class QrOperationsCommandRunnerTest {
             from += value.length();
         }
         return count;
+    }
+
+    private static MealUsageQrTokenProtector testProtector() {
+        return new MealUsageQrTokenProtector("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", 1);
     }
 
     private static final class IssueOnlyRepository implements MealUsageQrOperationsRepository {
