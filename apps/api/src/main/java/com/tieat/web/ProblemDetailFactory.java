@@ -45,7 +45,9 @@ public class ProblemDetailFactory {
         if (isPublicMealUsageQrRequest(request)
             || isMonthlyMealUsageRequest(request)
             || isPosSettlementRequest(request)
-            || isStoreOnboardingRequest(request)) {
+            || isStoreOnboardingRequest(request)
+            || isStoreMealUsageQrRequest(request)
+            || isSessionReauthenticationRequest(request)) {
             response.setHeader(HttpHeaders.CACHE_CONTROL, CacheControl.noStore().getHeaderValue());
         }
         objectMapper.writeValue(response.getOutputStream(), create(request, status, errorCode, detail));
@@ -69,5 +71,15 @@ public class ProblemDetailFactory {
     boolean isStoreOnboardingRequest(HttpServletRequest request) {
         String onboardingPrefix = request.getContextPath() + "/api/v1/store-";
         return request.getRequestURI().startsWith(onboardingPrefix);
+    }
+
+    boolean isStoreMealUsageQrRequest(HttpServletRequest request) {
+        String qrPath = request.getContextPath() + "/api/v1/store-meal-usage-qr";
+        return request.getRequestURI().equals(qrPath);
+    }
+
+    boolean isSessionReauthenticationRequest(HttpServletRequest request) {
+        String reauthenticationPath = request.getContextPath() + "/api/v1/session-reauthentications";
+        return request.getRequestURI().equals(reauthenticationPath);
     }
 }
