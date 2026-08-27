@@ -170,7 +170,7 @@ describe("R-032 store partner workspace", () => {
     expect(screen.queryByRole("option", { name: `${partnerB.partnerDisplayName} · 계약 1` })).not.toBeInTheDocument();
     expect(partnerMocks.getConfirmedMealUsages).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])-01$/), expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/), 0, 20);
 
-    await user.click(screen.getByRole("button", { name: "다음 페이지" }));
+    await user.click(screen.getByRole("button", { name: "다음" }));
     await waitFor(() => expect(partnerMocks.getConfirmedMealUsages).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])-01$/), expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/), 1, 20));
     expect(screen.queryByText("전체 장부 항목")).not.toBeInTheDocument();
 

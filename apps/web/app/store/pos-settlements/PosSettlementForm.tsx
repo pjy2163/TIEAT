@@ -13,6 +13,7 @@ import {
   type PosSettlementReceiptSummary,
 } from "@/lib/pos-settlement-api";
 import { useStorePartnerContext } from "../StorePartnerContext";
+import { StorePagination } from "../StorePagination";
 import { posSettlementFormStyles } from "./PosSettlementForm.styles";
 import { ReceiptAttachment } from "./ReceiptAttachment";
 import { ReceiptDownload } from "./ReceiptDownload";
@@ -340,10 +341,7 @@ export function PosSettlementForm() {
               <h2 className={posSettlementFormStyles.historyTitle} id="pos-settlement-history-title">저장된 결제 기록</h2>
             </div>
             {historyViewState === "ready" || historyViewState === "empty" ? (
-              <div className="flex flex-wrap items-center gap-3">
-                {hasActiveFilter ? <span className={posSettlementFormStyles.historyPageLabel}>필터 적용됨</span> : null}
-                <span className={posSettlementFormStyles.historyPageLabel}>페이지 {page + 1}</span>
-              </div>
+              hasActiveFilter ? <span className={posSettlementFormStyles.historyPageLabel}>필터 적용됨</span> : null
             ) : null}
           </header>
 
@@ -427,24 +425,13 @@ export function PosSettlementForm() {
           )}
 
           {historyViewState === "ready" || historyViewState === "empty" ? (
-            <nav className={posSettlementFormStyles.pagination} aria-label="결제 내역 페이지 이동">
-              <button
-                className={posSettlementFormStyles.stateAction}
-                disabled={isRefreshing || page === 0}
-                onClick={() => void loadHistory(page - 1)}
-                type="button"
-              >
-                이전
-              </button>
-              <button
-                className={posSettlementFormStyles.stateAction}
-                disabled={isRefreshing || !hasNext}
-                onClick={() => void loadHistory(page + 1)}
-                type="button"
-              >
-                다음
-              </button>
-            </nav>
+            <StorePagination
+              ariaLabel="결제 내역 페이지 이동"
+              hasNext={hasNext}
+              isLoading={isRefreshing}
+              onPageChange={(nextPage) => void loadHistory(nextPage)}
+              page={page}
+            />
           ) : null}
         </section>
       </section>

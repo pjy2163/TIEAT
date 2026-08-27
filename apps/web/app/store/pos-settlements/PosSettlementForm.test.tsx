@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/store-api";
@@ -140,18 +140,21 @@ describe("PosSettlementForm history view", () => {
     render(<PosSettlementForm />);
 
     await screen.findByRole("heading", { name: "결제일 2026-08-11", level: 2 });
-    expect(screen.getByText("페이지 1")).toBeVisible();
-    expect(screen.getByRole("button", { name: "이전" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "다음" })).toBeEnabled();
+    const pagination = screen.getByRole("navigation", { name: "결제 내역 페이지 이동" });
+    expect(pagination).toHaveClass("items-center", "justify-center", "gap-3");
+    expect(within(pagination).getByText("1페이지")).toBeVisible();
+    expect(within(pagination).getByRole("button", { name: "이전" })).toBeDisabled();
+    expect(within(pagination).getByRole("button", { name: "다음" })).toBeEnabled();
 
-    await user.click(screen.getByRole("button", { name: "다음" }));
+    await user.click(within(pagination).getByRole("button", { name: "다음" }));
     await waitFor(() => expect(getRecentPosSettlementsMock).toHaveBeenLastCalledWith(1, {}));
     expect(await screen.findByRole("heading", { name: "결제일 2026-08-10", level: 2 })).toBeVisible();
-    expect(screen.getByText("페이지 2")).toBeVisible();
-    expect(screen.getByRole("button", { name: "이전" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "다음" })).toBeDisabled();
+    const nextPagination = screen.getByRole("navigation", { name: "결제 내역 페이지 이동" });
+    expect(within(nextPagination).getByText("2페이지")).toBeVisible();
+    expect(within(nextPagination).getByRole("button", { name: "이전" })).toBeEnabled();
+    expect(within(nextPagination).getByRole("button", { name: "다음" })).toBeDisabled();
 
-    await user.click(screen.getByRole("button", { name: "이전" }));
+    await user.click(within(nextPagination).getByRole("button", { name: "이전" }));
     await waitFor(() => expect(getRecentPosSettlementsMock).toHaveBeenLastCalledWith(0, {}));
     expect(await screen.findByRole("heading", { name: "결제일 2026-08-11", level: 2 })).toBeVisible();
   });

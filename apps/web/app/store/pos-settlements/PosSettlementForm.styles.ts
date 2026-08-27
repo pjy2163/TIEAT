@@ -93,5 +93,4 @@ export const posSettlementFormStyles = {
   historyReceiptStatus: "text-sm font-semibold text-[var(--text-primary)]",
   historyReceiptMeta: "max-w-full break-all text-xs text-[var(--text-secondary)]",
   receiptDownload: "flex flex-wrap items-center gap-2",
-  pagination: "flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] px-5 py-4 sm:px-6",
 };

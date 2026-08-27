@@ -14,6 +14,7 @@ import {
   type OutstandingReceivable,
 } from "@/lib/pos-settlement-api";
 import { useStorePartnerContext } from "../../StorePartnerContext";
+import { StorePagination } from "../../StorePagination";
 import { StorePartnerScopeBar } from "../../StorePartnerScopeBar";
 import { RefreshButton } from "../RefreshButton";
 import { PosSettlementRecordDialog, type PosSettlementRecordSeed } from "../../pos-settlements/PosSettlementRecordDialog";
@@ -642,15 +643,13 @@ export function MonthlyMealUsageList() {
               </ul>
             </>
           )}
-          <nav className={monthlyMealUsageListStyles.pager} aria-label="전체 장부 페이지">
-            <button className={monthlyMealUsageListStyles.pagerButton} type="button" onClick={() => handlePageChange(page - 1)} disabled={page === 0 || isLoading}>
-              이전 페이지
-            </button>
-            <p className={monthlyMealUsageListStyles.pageLabel}>{page + 1}페이지</p>
-            <button className={monthlyMealUsageListStyles.pagerButton} type="button" onClick={() => handlePageChange(page + 1)} disabled={!hasNext || isLoading}>
-              다음 페이지
-            </button>
-          </nav>
+          <StorePagination
+            ariaLabel="전체 장부 페이지"
+            hasNext={hasNext}
+            isLoading={isLoading}
+            onPageChange={handlePageChange}
+            page={page}
+          />
         </div>
         {selectedUsageIds.size > 0 ? (
           <aside className={monthlyMealUsageListStyles.selectionBar} aria-label="선택한 결제할 금액 작업">

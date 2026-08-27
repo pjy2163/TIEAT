@@ -116,6 +116,10 @@ describe("MonthlyMealUsageList", () => {
     expect(reloadButton).toHaveTextContent("새로고침");
     expect(reloadButton).toHaveClass("h-11", "rounded-lg", "px-4");
     expect(reloadButton.querySelector("svg")).not.toBeInTheDocument();
+    const pagination = screen.getByRole("navigation", { name: "전체 장부 페이지" });
+    expect(pagination).toHaveClass("items-center", "justify-center", "gap-3");
+    expect(within(pagination).getByText("1페이지")).toBeVisible();
+    expect(within(pagination).getByRole("button", { name: "다음" })).toBeEnabled();
     const settlementLink = screen.getByRole("link", { name: "결제 내역" });
     const pendingLink = screen.getByRole("link", { name: "확인 대기로 이동" });
     expect(settlementLink).toHaveAttribute("href", "/store/pos-settlements");
@@ -138,7 +142,7 @@ describe("MonthlyMealUsageList", () => {
     });
     expect(getConfirmedMealUsagesMock).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "다음 페이지" }));
+    fireEvent.click(screen.getByRole("button", { name: "다음" }));
     await waitFor(() => expect(getConfirmedMealUsagesMock).toHaveBeenLastCalledWith(expect.any(String), expect.any(String), 1, 20));
     expect(screen.getByText("2페이지")).toBeVisible();
   });
