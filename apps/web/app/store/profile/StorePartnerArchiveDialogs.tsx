@@ -148,7 +148,7 @@ export function StorePartnerArchiveDialogs({
   return (
     <>
       <h2 className={styles.dialogTitle} id="store-partner-dialog-title">삭제 PIN {pinConfigured ? "변경" : "설정"}</h2>
-      <p className={styles.dialogDescription}>매장 직원이 협력사 archive를 승인할 때 사용하는 공용 PIN입니다. 원문은 저장하지 않습니다.</p>
+      <p className={styles.dialogDescription}>협력사 삭제를 위해 필요한 비밀번호입니다.</p>
       {pinConfigured ? (
         <>
           <label className={styles.fieldLabel} htmlFor="current-archive-pin">현재 삭제 PIN</label>
