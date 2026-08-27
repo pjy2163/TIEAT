@@ -6,6 +6,7 @@ export const storeAuthStyles = {
   eyebrow: "text-xs font-semibold tracking-[0.08em] text-[var(--accent)]",
   title: "mt-3 text-2xl font-semibold tracking-[0.01em] text-[var(--text-primary)] sm:text-3xl",
   description: "mt-2 text-sm leading-6 text-[var(--text-secondary)]",
+  notice: "mt-5 rounded-lg border border-[var(--border)] bg-[var(--surface-subtle)] px-3 py-3 text-sm leading-5 text-[var(--text-secondary)]",
   form: "mt-8 space-y-5",
   field: "space-y-2",
   label: "block text-sm font-medium text-[var(--text-primary)]",

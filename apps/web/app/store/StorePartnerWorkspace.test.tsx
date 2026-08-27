@@ -130,6 +130,17 @@ afterEach(() => {
 });
 
 describe("R-032 store partner workspace", () => {
+  it("keeps the current workspace route when an unauthenticated visitor is sent to login", async () => {
+    setUrl("/store/pos-settlements");
+    partnerMocks.getStorePartners.mockRejectedValue(new ApiError(401, "AUTHENTICATION_REQUIRED"));
+    partnerMocks.getStoreProfile.mockRejectedValue(new ApiError(401, "AUTHENTICATION_REQUIRED"));
+
+    render(<Workspace><p>업무 화면</p></Workspace>);
+
+    await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith("/store/login?next=/store/pos-settlements"));
+    expect(navigation.replace).not.toHaveBeenCalledWith("/store/login?next=/store/meal-usages/months");
+  });
+
   it("shares canonical scope URLs, invokes filtered and unfiltered ledgers, resets page, and hides stale rows", async () => {
     const user = userEvent.setup();
     let releaseStale: ((value: ConfirmedMealUsagePage) => void) | null = null;

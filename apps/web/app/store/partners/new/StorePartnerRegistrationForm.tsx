@@ -4,6 +4,7 @@ import { type FormEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ApiError, InvalidApiResponseError } from "@/lib/store-api";
+import { storeLoginRedirect } from "@/lib/store-auth";
 import { createStorePartner, type StorePartner, type StorePartnerRegistration } from "@/lib/store-partner-api";
 import { useStorePartnerContext } from "../../StorePartnerContext";
 import { StorePartnerKindFields } from "../StorePartnerKindFields";
@@ -115,7 +116,7 @@ export function StorePartnerRegistrationForm() {
       if (error instanceof ApiError && error.status === 401) {
         submissionRef.current = null;
         setLockState(null);
-        router.replace("/store/login?next=/store/meal-usages/months");
+        router.replace(storeLoginRedirect("/store/partners/new"));
       } else if (error instanceof ApiError && error.status === 400) {
         submissionRef.current = null;
         setLockState(null);

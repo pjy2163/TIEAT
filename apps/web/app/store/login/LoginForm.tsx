@@ -2,23 +2,20 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { hasSafeStoreNext, safeStoreNext } from "@/lib/store-auth";
 import { ApiError, getStoreOnboardingStatus, login } from "@/lib/store-api";
 import { StoreAuthField } from "../auth/StoreAuthField";
 import { StoreAuthShell } from "../auth/StoreAuthShell";
 import { storeAuthStyles } from "../auth/StoreAuth.styles";
 import { loginStyles } from "./LoginForm.styles";
 
-function safeNext(value: string | null): string {
-  return value === "/store/profile" || value === "/store/meal-usages" || value === "/store/meal-usages/months" || value === "/store/pos-settlements"
-    ? value
-    : "/store/meal-usages";
-}
-
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const nextPath = searchParams.get("next");
+  const isLoginRequired = hasSafeStoreNext(nextPath);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,7 +34,7 @@ export function LoginForm() {
       router.replace(
         onboarding.onboardingStatus === "PARTNER_REQUIRED"
           ? "/store/onboarding/partner"
-          : safeNext(searchParams.get("next")),
+          : safeStoreNext(nextPath),
       );
     } catch (error) {
       if (!sessionCreated && error instanceof ApiError && error.status === 401) {
@@ -59,6 +56,7 @@ export function LoginForm() {
       titleId="login-title"
       width="narrow"
     >
+      {isLoginRequired ? <p className={storeAuthStyles.notice} role="status">이 화면은 로그인이 필요합니다. 로그인해 주세요.</p> : null}
       <form className={storeAuthStyles.form} onSubmit={onSubmit}>
         <StoreAuthField label="로그인 ID" htmlFor="loginId">
           <input className={storeAuthStyles.input} id="loginId" name="loginId" autoComplete="username" required />

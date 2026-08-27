@@ -100,6 +100,13 @@ describe("LoginForm", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/store/meal-usages/months"));
   });
 
+  it("guides a redirected visitor to log in before returning to the requested screen", () => {
+    nextValue = "/store/pos-settlements";
+    render(<LoginForm />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("이 화면은 로그인이 필요합니다. 로그인해 주세요.");
+  });
+
   it("resumes first-partner registration before an otherwise safe next destination", async () => {
     const user = userEvent.setup();
     nextValue = "/store/meal-usages/months";

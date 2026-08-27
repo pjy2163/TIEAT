@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ApiError } from "@/lib/store-api";
+import { storeLoginRedirect } from "@/lib/store-auth";
 import { getStorePartners, getStoreProfile, type StorePartner } from "@/lib/store-partner-api";
 
 const STORE_WORKSPACE_PATHS = new Set([
@@ -95,10 +96,10 @@ export function StorePartnerProvider({ children }: Readonly<{ children: React.Re
         if (error instanceof ApiError && error.status === 401) {
           setRawScope({ kind: "all" });
           directoryRequestedRef.current = true;
-          router.replace("/store/login?next=/store/meal-usages/months");
+          router.replace(storeLoginRedirect(pathname));
         }
       });
-  }, [router]);
+  }, [pathname, router]);
 
   useEffect(() => {
     if (!isWorkspaceRoute) {
@@ -127,13 +128,13 @@ export function StorePartnerProvider({ children }: Readonly<{ children: React.Re
         if (!active) return;
         setStoreDisplayName(null);
         if (error instanceof ApiError && error.status === 401) {
-          router.replace("/store/login?next=/store/meal-usages/months");
+          router.replace(storeLoginRedirect(pathname));
         }
       });
     return () => {
       active = false;
     };
-  }, [isWorkspaceRoute, router]);
+  }, [isWorkspaceRoute, pathname, router]);
 
   useEffect(() => {
     if (!isWorkspaceRoute || directoryRequestedRef.current) return;
