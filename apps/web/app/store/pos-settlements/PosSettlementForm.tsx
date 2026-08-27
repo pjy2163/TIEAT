@@ -320,9 +320,6 @@ export function PosSettlementForm() {
         <header className={posSettlementFormStyles.header}>
           <div>
             <h1 className={posSettlementFormStyles.title} id="pos-settlement-title">결제 내역</h1>
-            <p className={posSettlementFormStyles.description}>
-              POS에서 실제 결제한 뒤 저장한 기록을 날짜와 금액으로 다시 확인합니다.
-            </p>
           </div>
           <button
             className={posSettlementFormStyles.refresh}

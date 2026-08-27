@@ -5,7 +5,6 @@ export const posSettlementFormStyles = {
   container: "mx-auto w-full max-w-5xl",
   header: "flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between",
   title: "text-2xl font-semibold tracking-[0.01em] text-[var(--text-primary)] sm:text-3xl",
-  description: "mt-2 max-w-3xl text-sm leading-6 text-[var(--text-secondary)]",
   refresh: `${storeActionStyles.neutral} h-11 shrink-0`,
   card: "mt-6 overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-[0_8px_30px_rgba(17,24,39,0.04)]",
   state: "px-5 py-10 text-center sm:px-8",
