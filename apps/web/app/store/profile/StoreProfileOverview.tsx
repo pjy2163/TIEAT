@@ -12,9 +12,14 @@ type StoreProfileOverviewProps = Readonly<{
   partners: StorePartner[];
   directoryState: StorePartnerDirectoryState;
   partnerKindFilter: PartnerKindFilter;
+  pinConfigured: boolean | null;
+  pinStatusError: string | null;
+  pinStatusLoading: boolean;
   onPartnerKindFilterChange: (filter: PartnerKindFilter) => void;
   onRefreshDirectory: () => void;
   onOpenDetail: (partner: StorePartner) => void;
+  onOpenPinSettings: () => void;
+  onRefreshPinStatus: () => void;
 }>;
 
 export function StoreProfileOverview({
@@ -22,9 +27,14 @@ export function StoreProfileOverview({
   partners,
   directoryState,
   partnerKindFilter,
+  pinConfigured,
+  pinStatusError,
+  pinStatusLoading,
   onPartnerKindFilterChange,
   onRefreshDirectory,
   onOpenDetail,
+  onOpenPinSettings,
+  onRefreshPinStatus,
 }: StoreProfileOverviewProps) {
   const visiblePartners = filterPartnersByKind(partners, partnerKindFilter);
 
@@ -47,7 +57,26 @@ export function StoreProfileOverview({
               <dd className={styles.detailValue}>{profile.loginId}</dd>
             </div>
           </dl>
-          <StoreLogoutButton />
+          <div className={styles.accountActions}>
+            <div className={styles.pinSettingsArea}>
+              <button
+                className={styles.pinSettingsButton}
+                disabled={pinStatusLoading || (!pinStatusError && pinConfigured === null)}
+                onClick={pinStatusError ? onRefreshPinStatus : onOpenPinSettings}
+                type="button"
+              >
+                {pinStatusLoading
+                  ? "삭제 PIN 확인 중..."
+                  : pinStatusError
+                    ? "삭제 PIN 다시 확인"
+                    : pinConfigured
+                      ? "삭제 PIN 변경"
+                      : "삭제 PIN 설정"}
+              </button>
+              {pinStatusError ? <p className={styles.pinStatusError} role="alert">{pinStatusError}</p> : null}
+            </div>
+            <StoreLogoutButton />
+          </div>
         </section>
 
         <section className={styles.card} aria-labelledby="store-partners-title">

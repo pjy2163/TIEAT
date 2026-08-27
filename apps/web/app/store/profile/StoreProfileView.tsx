@@ -19,7 +19,7 @@ import { StorePartnerArchiveDialogs } from "./StorePartnerArchiveDialogs";
 import { StorePartnerDetailDialog } from "./StorePartnerDetailDialog";
 import { ProfileState } from "./ProfileState";
 import { StoreProfileOverview } from "./StoreProfileOverview";
-import { apiErrorMessage, ledgerHref, parsePositiveAmount } from "./StoreProfileView.helpers";
+import { apiErrorMessage, parsePositiveAmount } from "./StoreProfileView.helpers";
 import type { ArchiveRetrySnapshot, StoreProfileModalMode } from "./StoreProfileView.types";
 
 type ProfileViewState = "loading" | "ready" | "forbidden" | "error" | "redirecting";
@@ -65,24 +65,6 @@ export function StoreProfileView() {
   const [newPinConfirmation, setNewPinConfirmation] = useState("");
   const [pinError, setPinError] = useState<string | null>(null);
   const [isSavingPin, setIsSavingPin] = useState(false);
-
-  const loadProfile = useCallback(() => {
-    setViewState("loading");
-    void getStoreProfile()
-      .then((nextProfile) => {
-        setProfile(nextProfile);
-        setViewState("ready");
-      })
-      .catch((error: unknown) => {
-        setProfile(null);
-        if (error instanceof ApiError && error.status === 401) {
-          setViewState("redirecting");
-          router.replace("/store/login?next=/store/profile");
-          return;
-        }
-        setViewState(error instanceof ApiError && error.status === 403 ? "forbidden" : "error");
-      });
-  }, [router]);
 
   const closeModal = useCallback(() => {
     setModalMode(null);
@@ -132,10 +114,28 @@ export function StoreProfileView() {
       .finally(() => setPinStatusLoading(false));
   }, [closeModal, router]);
 
+  const loadProfile = useCallback(() => {
+    setViewState("loading");
+    void getStoreProfile()
+      .then((nextProfile) => {
+        setProfile(nextProfile);
+        setViewState("ready");
+        refreshPinStatus();
+      })
+      .catch((error: unknown) => {
+        setProfile(null);
+        if (error instanceof ApiError && error.status === 401) {
+          setViewState("redirecting");
+          router.replace("/store/login?next=/store/profile");
+          return;
+        }
+        setViewState(error instanceof ApiError && error.status === 403 ? "forbidden" : "error");
+      });
+  }, [refreshPinStatus, router]);
+
   function openDetail(partner: StorePartner) {
     setActivePartner(partner);
     setModalMode("detail");
-    refreshPinStatus();
   }
 
   function openPaymentEditor() {
@@ -162,6 +162,7 @@ export function StoreProfileView() {
   }
 
   function openPinSettings() {
+    if (pinConfigured === null) return;
     setCurrentPin("");
     setAccountPassword("");
     setNewPin("");
@@ -310,7 +311,7 @@ export function StoreProfileView() {
         newPinConfirmation,
       });
       setPinConfigured(true);
-      setModalMode("detail");
+      setModalMode(activePartner ? "detail" : null);
       setCurrentPin("");
       setAccountPassword("");
       setNewPin("");
@@ -338,7 +339,13 @@ export function StoreProfileView() {
   }
 
   useEffect(() => {
-    loadProfile();
+    let isActive = true;
+    void Promise.resolve().then(() => {
+      if (isActive) loadProfile();
+    });
+    return () => {
+      isActive = false;
+    };
   }, [loadProfile]);
 
   if (viewState === "loading") {
@@ -387,14 +394,19 @@ export function StoreProfileView() {
         <StoreProfileOverview
           directoryState={directoryState}
           onOpenDetail={openDetail}
+          onOpenPinSettings={openPinSettings}
           onPartnerKindFilterChange={setPartnerKindFilter}
           onRefreshDirectory={refreshDirectory}
+          onRefreshPinStatus={refreshPinStatus}
+          pinConfigured={pinConfigured}
+          pinStatusError={pinStatusError}
+          pinStatusLoading={pinStatusLoading}
           partnerKindFilter={partnerKindFilter}
           partners={partners}
           profile={profile}
         />
 
-        {activePartner && modalMode ? (
+        {(activePartner || modalMode === "pin-settings") && modalMode ? (
           <dialog
             aria-labelledby={modalMode === "archive-reauth" ? "archive-reauth-title" : "store-partner-dialog-title"}
             aria-modal="true"
@@ -402,25 +414,23 @@ export function StoreProfileView() {
             open
           >
             <div className={styles.dialogCard}>
-              <StorePartnerDetailDialog
-                activePartner={activePartner}
-                isSavingPayment={isSavingPayment}
-                modalMode={modalMode}
-                onClose={closeModal}
-                onOpenArchiveWarning={openArchiveWarning}
-                onOpenPaymentEditor={openPaymentEditor}
-                onOpenPinSettings={openPinSettings}
-                onPaymentCancel={() => setModalMode("detail")}
-                onPaymentTypeChange={setPaymentType}
-                onPrepaidBalanceChange={setPrepaidBalance}
-                onSavePaymentType={savePaymentType}
-                paymentError={paymentError}
-                paymentType={paymentType}
-                pinConfigured={pinConfigured}
-                pinStatusError={pinStatusError}
-                pinStatusLoading={pinStatusLoading}
-                prepaidBalance={prepaidBalance}
-              />
+              {activePartner ? (
+                <StorePartnerDetailDialog
+                  activePartner={activePartner}
+                  isSavingPayment={isSavingPayment}
+                  modalMode={modalMode}
+                  onClose={closeModal}
+                  onOpenArchiveWarning={openArchiveWarning}
+                  onOpenPaymentEditor={openPaymentEditor}
+                  onPaymentCancel={() => setModalMode("detail")}
+                  onPaymentTypeChange={setPaymentType}
+                  onPrepaidBalanceChange={setPrepaidBalance}
+                  onSavePaymentType={savePaymentType}
+                  paymentError={paymentError}
+                  paymentType={paymentType}
+                  prepaidBalance={prepaidBalance}
+                />
+              ) : null}
               <StorePartnerArchiveDialogs
                 accountPassword={accountPassword}
                 activePartner={activePartner}

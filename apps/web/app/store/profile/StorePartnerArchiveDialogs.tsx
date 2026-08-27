@@ -4,7 +4,7 @@ import { storeProfileStyles as styles } from "./StoreProfileView.styles";
 import type { StoreProfileModalMode } from "./StoreProfileView.types";
 
 type StorePartnerArchiveDialogsProps = Readonly<{
-  activePartner: StorePartner;
+  activePartner: StorePartner | null;
   modalMode: StoreProfileModalMode;
   pinConfigured: boolean | null;
   archivePin: string;
@@ -69,6 +69,7 @@ export function StorePartnerArchiveDialogs({
   onSavePinSettings,
 }: StorePartnerArchiveDialogsProps) {
   if (modalMode === "archive-warning") {
+    if (!activePartner) return null;
     return (
       <>
         <h2 className={styles.dialogTitle} id="store-partner-dialog-title">협력사를 삭제할까요?</h2>
@@ -77,8 +78,8 @@ export function StorePartnerArchiveDialogs({
         {archiveError ? <p className={styles.dialogError} role="alert">{archiveError}</p> : null}
         <div className={styles.dialogActions}>
           <button className={styles.dialogCancel} onClick={() => onSetModalMode("detail")} type="button">취소</button>
-          <button className={styles.dialogDangerConfirm} onClick={pinConfigured ? onOpenArchivePin : onOpenPinSettings} type="button">
-            {pinConfigured ? "삭제 PIN 입력" : "삭제 PIN 설정"}
+          <button className={styles.dialogDangerConfirm} disabled={pinConfigured === null} onClick={pinConfigured ? onOpenArchivePin : onOpenPinSettings} type="button">
+            {pinConfigured === null ? "삭제 PIN 확인 중..." : pinConfigured ? "삭제 PIN 입력" : "삭제 PIN 설정"}
           </button>
         </div>
       </>
@@ -86,6 +87,7 @@ export function StorePartnerArchiveDialogs({
   }
 
   if (modalMode === "archive-pin") {
+    if (!activePartner) return null;
     return (
       <>
         <h2 className={styles.dialogTitle} id="store-partner-dialog-title">삭제 PIN 확인</h2>
@@ -202,7 +204,7 @@ export function StorePartnerArchiveDialogs({
       />
       {pinError ? <p className={styles.dialogError} role="alert">{pinError}</p> : null}
       <div className={styles.dialogActions}>
-        <button className={styles.dialogCancel} onClick={() => onSetModalMode("detail")} type="button">취소</button>
+        <button className={styles.dialogCancel} onClick={activePartner ? () => onSetModalMode("detail") : onClose} type="button">취소</button>
         <button className={styles.dialogConfirm} disabled={isSavingPin} onClick={onSavePinSettings} type="button">
           {isSavingPin ? "저장 중..." : "저장"}
         </button>

@@ -8,16 +8,12 @@ import type { StoreProfileModalMode } from "./StoreProfileView.types";
 type StorePartnerDetailDialogProps = Readonly<{
   activePartner: StorePartner;
   modalMode: StoreProfileModalMode;
-  pinConfigured: boolean | null;
-  pinStatusError: string | null;
-  pinStatusLoading: boolean;
   paymentType: StorePartner["paymentType"];
   prepaidBalance: string;
   paymentError: string | null;
   isSavingPayment: boolean;
   onOpenPaymentEditor: () => void;
   onOpenArchiveWarning: () => void;
-  onOpenPinSettings: () => void;
   onClose: () => void;
   onPaymentCancel: () => void;
   onPaymentTypeChange: (paymentType: StorePartner["paymentType"]) => void;
@@ -28,16 +24,12 @@ type StorePartnerDetailDialogProps = Readonly<{
 export function StorePartnerDetailDialog({
   activePartner,
   modalMode,
-  pinConfigured,
-  pinStatusError,
-  pinStatusLoading,
   paymentType,
   prepaidBalance,
   paymentError,
   isSavingPayment,
   onOpenPaymentEditor,
   onOpenArchiveWarning,
-  onOpenPinSettings,
   onClose,
   onPaymentCancel,
   onPaymentTypeChange,
@@ -55,16 +47,10 @@ export function StorePartnerDetailDialog({
           <div><dt>대표자 이메일</dt><dd>{activePartner.representativeEmail ?? "미등록"}</dd></div>
           <div><dt>현재 결제 유형</dt><dd>{paymentLabel(activePartner.paymentType)}</dd></div>
         </dl>
-        {pinStatusError ? <p className={styles.dialogError} role="alert">{pinStatusError}</p> : null}
         <div className={styles.dialogActions}>
           <Link className={styles.dialogLedger} href={ledgerHref(activePartner.mealContractId)}>장부 보기</Link>
           <button className={styles.dialogLedger} disabled={isSavingPayment} onClick={onOpenPaymentEditor} type="button">결제 유형 변경</button>
           <button className={styles.dialogDanger} onClick={onOpenArchiveWarning} type="button">협력사 삭제</button>
-        </div>
-        <div className={styles.dialogActions}>
-          <button className={styles.dialogSecondary} disabled={pinStatusLoading} onClick={onOpenPinSettings} type="button">
-            {pinStatusLoading ? "삭제 PIN 확인 중..." : pinConfigured ? "삭제 PIN 변경" : "삭제 PIN 설정"}
-          </button>
           <button className={styles.dialogCancel} onClick={onClose} type="button">닫기</button>
         </div>
       </>

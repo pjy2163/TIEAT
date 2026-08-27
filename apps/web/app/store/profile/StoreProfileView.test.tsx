@@ -126,6 +126,7 @@ describe("StoreProfileView", () => {
     expect(await screen.findByText("매장 이름 미등록")).toBeInTheDocument();
     expect(screen.getByText("store-hk")).toBeInTheDocument();
     const storeInfo = screen.getByRole("region", { name: "매장 정보" });
+    const pinSettingsButton = await within(storeInfo).findByRole("button", { name: "삭제 PIN 변경" });
     const logoutButton = within(storeInfo).getByRole("button", { name: "로그아웃" });
     const logoutArea = logoutButton.parentElement as HTMLElement;
     const partners = screen.getByRole("region", { name: "협력사 목록" });
@@ -133,14 +134,21 @@ describe("StoreProfileView", () => {
     expect(logoutButton).toBeInTheDocument();
     expect(storeInfo).toHaveClass("lg:flex", "lg:flex-col");
     expect(partners).toHaveClass("lg:flex", "lg:flex-col");
-    expect(logoutArea).toHaveClass("mt-5", "lg:mt-auto");
+    expect(logoutArea).toHaveClass("mt-3");
     expect(logoutArea).not.toHaveClass("border-t", "pt-5");
+    const accountButtons = within(storeInfo).getAllByRole("button");
+    expect(accountButtons.indexOf(pinSettingsButton)).toBeLessThan(accountButtons.indexOf(logoutButton));
     expect(addPartnerLink).toHaveClass("mt-5", "w-full");
     expect(screen.getAllByRole("link", { name: "장부 보기" })).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "상세" })).toHaveLength(2);
-    expect(screen.queryByRole("button", { name: /삭제/ })).not.toBeInTheDocument();
     expect(screen.queryByText("010-1234-5678")).not.toBeInTheDocument();
     expect(screen.queryByText("owner@example.com")).not.toBeInTheDocument();
+
+    await user.click(pinSettingsButton);
+    const pinSettingsDialog = await screen.findByRole("dialog", { name: "삭제 PIN 변경" });
+    expect(pinSettingsDialog).toHaveTextContent("매장 직원이 협력사 archive를 승인할 때 사용하는 공용 PIN입니다.");
+    await user.click(within(pinSettingsDialog).getByRole("button", { name: "취소" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: partnerA.partnerDisplayName }));
     const dialog = await screen.findByRole("dialog", { name: "협력사 상세" });
@@ -155,7 +163,6 @@ describe("StoreProfileView", () => {
       ledgerAction,
       within(dialog).getByRole("button", { name: "결제 유형 변경" }),
       within(dialog).getByRole("button", { name: "협력사 삭제" }),
-      within(dialog).getByRole("button", { name: /삭제 PIN (설정|변경)/ }),
       within(dialog).getByRole("button", { name: "닫기" }),
     ];
     for (const action of modalActions) {
@@ -167,12 +174,8 @@ describe("StoreProfileView", () => {
     ]) {
       expect(action).toHaveClass("bg-[#f4f6ff]", "text-[#244cda]");
     }
-    for (const action of [
-      within(dialog).getByRole("button", { name: /삭제 PIN (설정|변경)/ }),
-      within(dialog).getByRole("button", { name: "닫기" }),
-    ]) {
-      expect(action).toHaveClass("border-[var(--border-strong)]", "bg-white", "text-[var(--text-primary)]");
-    }
+    expect(within(dialog).getByRole("button", { name: "닫기" })).toHaveClass("border-[var(--border-strong)]", "bg-white", "text-[var(--text-primary)]");
+    expect(within(dialog).queryByRole("button", { name: /삭제 PIN/ })).not.toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "협력사 삭제" })).toHaveClass("text-[var(--danger)]");
 
     await user.click(screen.getByRole("button", { name: "닫기" }));
@@ -376,7 +379,7 @@ describe("StoreProfileView", () => {
     await screen.findByText(partnerA.partnerDisplayName);
     await user.click(screen.getAllByRole("button", { name: "상세" })[0]);
     await user.click(screen.getByRole("button", { name: "협력사 삭제" }));
-    await user.click(screen.getByRole("button", { name: "삭제 PIN 설정" }));
+    await user.click(within(screen.getByRole("dialog", { name: "협력사를 삭제할까요?" })).getByRole("button", { name: "삭제 PIN 설정" }));
     fireEvent.change(screen.getByLabelText("계정 비밀번호 재확인"), { target: { value: "  correct-password  " } });
     expect(screen.getByText("가입할 때 사용한 비밀번호를 공백 포함 그대로 입력해 주세요.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("새 삭제 PIN"), { target: { value: "4321" } });
