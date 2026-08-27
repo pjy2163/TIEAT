@@ -1,3 +1,5 @@
+import { storeActionStyles } from "../StoreAction.styles";
+
 export const mealUsageListStyles = {
   page: "min-h-dvh bg-[var(--surface-subtle)] px-5 py-6 sm:px-8 sm:py-10",
   container: "mx-auto w-full max-w-4xl",
@@ -18,7 +20,7 @@ export const mealUsageListStyles = {
   state: "px-5 py-10 text-center sm:px-8",
   stateTitle: "text-base font-semibold text-[var(--text-primary)]",
   stateDescription: "mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--text-secondary)]",
-  stateAction: "mt-5 inline-flex h-11 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-4 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface)]",
+  stateAction: `${storeActionStyles.neutral} mt-5`,
   list: "divide-y divide-[var(--border)]",
   row: "grid min-h-16 w-full grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 px-5 py-4 text-left transition-colors hover:bg-[var(--surface-subtle)] focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-center sm:px-6",
   selectedRow: "bg-[#f4f6ff] hover:bg-[#edf1ff]",
@@ -44,7 +46,7 @@ export const mealUsageListStyles = {
   rejectIconAction: "inline-flex size-11 shrink-0 items-center justify-center rounded-lg border border-[#efbbc2] bg-white text-[var(--danger)] transition-colors hover:bg-[#fff7f8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--danger)] disabled:cursor-not-allowed disabled:text-[#d9a2aa]",
   terminalActionIcon: "size-5 stroke-current stroke-[2] [stroke-linecap:round] [stroke-linejoin:round]",
   confirmationError: "mt-3 text-sm leading-5 text-[var(--danger)]",
-  confirm: "mt-4 inline-flex h-11 w-full items-center justify-center rounded-lg bg-[var(--accent)] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#244cda] disabled:cursor-not-allowed disabled:bg-[#98abef]",
-  reconcile: "mt-4 inline-flex h-11 w-full items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-4 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface)] disabled:cursor-not-allowed disabled:text-[var(--text-muted)]",
+  confirm: `${storeActionStyles.primary} mt-4 h-11 w-full`,
+  reconcile: `${storeActionStyles.neutral} mt-4 h-11 w-full`,
   skeleton: "animate-pulse bg-[var(--surface-subtle)]",
 };

@@ -1,3 +1,5 @@
+import { storeActionStyles } from "./StoreAction.styles";
+
 export const storeWorkspaceShellStyles = {
   workspace: "grid min-h-dvh bg-[var(--surface-subtle)] lg:grid-cols-[14rem_minmax(0,1fr)]",
   desktopSidebar: "sticky top-0 z-30 hidden h-dvh min-h-0 overflow-y-auto border-r border-[var(--border)] bg-white lg:block",
@@ -18,19 +20,19 @@ export const storeWorkspaceShellStyles = {
   directoryName: "min-w-0 truncate",
   directoryStatus: "px-3 py-2 text-xs leading-5 text-[var(--text-muted)]",
   directoryError: "grid gap-2 px-3 py-2 text-xs leading-5 text-[var(--danger)]",
-  retryButton: "inline-flex min-h-9 w-fit items-center rounded-md border border-[var(--border-strong)] bg-white px-2.5 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
+  retryButton: `${storeActionStyles.compactNeutral} w-fit`,
   footerLinks: "mt-auto flex flex-col gap-2 pt-7 pb-3 lg:pb-0",
   pageBack: "bg-[var(--surface-subtle)] px-5 pt-6 sm:px-8 sm:pt-10",
-  addLink: "flex min-h-11 items-center justify-center rounded-lg border border-[#b9c8ff] bg-[#f4f6ff] px-3 text-sm font-semibold text-[#244cda] transition-colors hover:border-[#8ea8ff] hover:bg-[#e9eeff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
-  qrLink: "mt-2 flex min-h-11 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-3 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
+  addLink: `${storeActionStyles.base} min-h-11 px-3 ${storeActionStyles.ledgerSurface}`,
+  qrLink: `${storeActionStyles.base} mt-2 min-h-11 px-3 ${storeActionStyles.neutralSurface}`,
   content: "min-w-0",
   mobileHeader: "sticky top-0 z-40 flex h-14 items-center justify-between border-b border-[var(--border)] bg-white/95 px-4 shadow-[0_4px_18px_rgba(17,24,39,0.05)] backdrop-blur supports-[backdrop-filter]:bg-white/85 lg:hidden",
   mobileBrand: "flex min-w-0 items-center gap-2 text-sm font-semibold tracking-[0.06em] text-[var(--text-primary)]",
   mobileWordmark: "h-auto w-[5.75rem] shrink-0",
-  menuButton: "inline-flex h-10 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-3 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
+  menuButton: `${storeActionStyles.compactNeutral} h-10`,
   drawer: "m-0 h-dvh max-h-none w-[min(20rem,88vw)] max-w-none border-0 bg-white p-0 text-[var(--text-primary)] shadow-[8px_0_28px_rgba(17,24,39,0.18)] backdrop:bg-black/35 lg:hidden",
   drawerPanel: "flex h-full min-h-0 flex-col overflow-y-auto px-4 py-5",
   drawerHeader: "flex items-center justify-between gap-3 border-b border-[var(--border)] pb-4",
   drawerTitle: "text-base font-semibold text-[var(--text-primary)]",
-  closeButton: "inline-flex h-10 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-3 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
+  closeButton: storeActionStyles.neutral,
 } as const;

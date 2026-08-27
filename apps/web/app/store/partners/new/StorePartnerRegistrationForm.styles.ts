@@ -1,3 +1,5 @@
+import { storeActionStyles } from "../../StoreAction.styles";
+
 export const storePartnerRegistrationStyles = {
   page: "min-h-dvh bg-[var(--surface-subtle)] px-4 py-6 sm:px-8 sm:py-10",
   container: "mx-auto w-full max-w-2xl",
@@ -18,7 +20,7 @@ export const storePartnerRegistrationStyles = {
   deniedTitle: "text-base font-semibold text-[var(--text-primary)]",
   deniedDescription: "mt-2 text-sm leading-6 text-[var(--text-secondary)]",
   actionRow: "flex flex-col-reverse gap-3 sm:flex-row sm:justify-end",
-  secondaryAction: "inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-4 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
-  primaryAction: "inline-flex min-h-11 items-center justify-center rounded-lg bg-[var(--accent)] px-4 text-sm font-semibold text-white hover:bg-[#244cda] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] disabled:cursor-not-allowed disabled:bg-[#9caeea]",
+  secondaryAction: storeActionStyles.neutral,
+  primaryAction: storeActionStyles.primary,
   link: "font-semibold text-[var(--accent)] underline underline-offset-4",
 } as const;

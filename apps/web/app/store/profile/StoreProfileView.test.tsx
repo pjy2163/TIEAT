@@ -159,7 +159,7 @@ describe("StoreProfileView", () => {
       within(dialog).getByRole("button", { name: "닫기" }),
     ];
     for (const action of modalActions) {
-      expect(action).toHaveClass("rounded-lg", "text-sm", "font-semibold", "min-h-11");
+      expect(action).toHaveClass("rounded-lg", "text-sm", "font-semibold", "leading-5", "min-h-11");
     }
     for (const action of [
       ledgerAction,

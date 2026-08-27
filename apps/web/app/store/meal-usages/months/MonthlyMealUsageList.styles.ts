@@ -1,3 +1,5 @@
+import { storeActionStyles } from "../../StoreAction.styles";
+
 export const monthlyMealUsageListStyles = {
   page: "min-h-dvh bg-[var(--surface-subtle)] px-5 py-6 pb-32 sm:px-8 sm:py-10 sm:pb-36",
   container: "mx-auto w-full max-w-5xl",
@@ -15,7 +17,7 @@ export const monthlyMealUsageListStyles = {
   monthInput: "h-11 w-full min-w-0 rounded-lg border border-[var(--border-strong)] bg-white px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[#dbe4ff] sm:w-40",
   refreshPlacement: "w-full sm:w-auto",
   exportGroup: "grid min-w-0 gap-1 sm:max-w-xs",
-  exportButton: "inline-flex min-h-11 w-full min-w-0 items-center justify-center whitespace-normal break-words rounded-lg bg-[var(--accent)] px-3 py-2 text-center text-sm font-semibold leading-5 text-white transition-colors hover:bg-[#244cda] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[#98abef]",
+  exportButton: `${storeActionStyles.base} min-h-11 w-full min-w-0 ${storeActionStyles.primarySurface} whitespace-normal break-words px-3 py-2 text-center`,
   exportHint: "text-xs leading-5 text-[var(--text-secondary)]",
   exportError: "text-xs leading-5 text-[var(--danger)]",
   settlementLink: "inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-[#b9c8ff] bg-[#f4f6ff] px-3 text-sm font-semibold text-[#244cda] transition-colors hover:border-[#8ea8ff] hover:bg-[#e9eeff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2",
@@ -29,7 +31,7 @@ export const monthlyMealUsageListStyles = {
   state: "px-5 py-10 text-center sm:px-8",
   stateTitle: "text-base font-semibold text-[var(--text-primary)]",
   stateDescription: "mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--text-secondary)]",
-  stateAction: "mt-5 inline-flex h-11 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-4 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface)]",
+  stateAction: `${storeActionStyles.neutral} mt-5`,
   list: "divide-y divide-[var(--border)]",
   row: "flex items-stretch gap-x-4 px-5 py-5 sm:px-6",
   selectableRow: "cursor-pointer transition-colors hover:bg-[var(--surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]",
@@ -47,7 +49,7 @@ export const monthlyMealUsageListStyles = {
   settlementCheck: "font-semibold leading-none text-current",
   metadata: "mt-2 min-w-0 break-words",
   pager: "flex items-center justify-between gap-2 border-t border-[var(--border)] px-5 py-4 sm:gap-3 sm:px-6",
-  pagerButton: "inline-flex h-11 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-lg border border-[var(--border-strong)] bg-white px-2 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface)] disabled:cursor-not-allowed disabled:text-[var(--text-muted)] sm:min-w-24 sm:flex-none sm:px-3",
+  pagerButton: `${storeActionStyles.base} h-11 min-w-0 flex-1 ${storeActionStyles.neutralSurface} whitespace-nowrap px-2 sm:min-w-24 sm:flex-none sm:px-3`,
   pageLabel: "shrink-0 text-sm tabular-nums text-[var(--text-secondary)]",
   skeleton: "animate-pulse bg-[var(--surface-subtle)]",
   selectionBar: "fixed inset-x-0 bottom-0 z-30 border-t border-[var(--border-strong)] bg-white/95 shadow-[0_-8px_24px_rgba(17,24,39,0.08)] backdrop-blur supports-[backdrop-filter]:bg-white/85 lg:left-56",
@@ -57,6 +59,6 @@ export const monthlyMealUsageListStyles = {
   selectionActions: "flex w-full gap-2 sm:w-auto",
   pageSelectionControls: "flex flex-wrap items-center justify-end gap-x-4 gap-y-1 border-b border-[var(--border)] bg-white px-5 py-2.5 sm:px-6",
   pageSelectionButton: "inline-flex min-h-9 items-center justify-center whitespace-nowrap rounded-md px-1 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:text-[var(--text-muted)]",
-  clearSelection: "inline-flex min-h-11 flex-1 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-3 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 sm:flex-none",
-  selectionSubmit: "inline-flex min-h-11 flex-[2] items-center justify-center rounded-lg bg-[var(--accent)] px-4 text-center text-sm font-semibold text-white transition-colors hover:bg-[#244cda] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[#98abef] sm:flex-none",
+  clearSelection: `${storeActionStyles.base} min-h-11 flex-1 ${storeActionStyles.neutralSurface} px-3 sm:flex-none`,
+  selectionSubmit: `${storeActionStyles.base} min-h-11 flex-[2] ${storeActionStyles.primarySurface} px-4 text-center sm:flex-none`,
 };

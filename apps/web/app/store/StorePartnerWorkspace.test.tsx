@@ -226,6 +226,7 @@ describe("R-032 store partner workspace", () => {
     await user.click(menuButton);
     const dialog = screen.getByRole("dialog", { name: "매장 작업 공간 메뉴" });
     expect(dialog).toHaveAttribute("open");
+    expect(screen.getByRole("button", { name: "닫기" })).toHaveClass("text-sm", "font-semibold", "leading-5", "min-h-11");
     const paymentHistoryLinks = screen.getAllByRole("link", { name: "결제 내역" });
     expect(paymentHistoryLinks).toHaveLength(2);
     expect(paymentHistoryLinks.every((link) => link.getAttribute("href") === "/store/pos-settlements")).toBe(true);
