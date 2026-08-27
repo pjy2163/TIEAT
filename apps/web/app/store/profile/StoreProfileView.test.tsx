@@ -163,22 +163,26 @@ describe("StoreProfileView", () => {
       ledgerAction,
       within(dialog).getByRole("button", { name: "결제 유형 변경" }),
       within(dialog).getByRole("button", { name: "협력사 삭제" }),
-      within(dialog).getByRole("button", { name: "닫기" }),
     ];
     for (const action of modalActions) {
       expect(action).toHaveClass("rounded-lg", "text-sm", "font-semibold", "leading-5", "min-h-11");
     }
+    expect(ledgerAction.parentElement).toHaveClass("grid", "grid-cols-3");
     for (const action of [
       ledgerAction,
       within(dialog).getByRole("button", { name: "결제 유형 변경" }),
     ]) {
       expect(action).toHaveClass("bg-[#f4f6ff]", "text-[#244cda]");
     }
-    expect(within(dialog).getByRole("button", { name: "닫기" })).toHaveClass("border-[var(--border-strong)]", "bg-white", "text-[var(--text-primary)]");
+    const closeButton = within(dialog).getByRole("button", { name: "닫기" });
+    expect(closeButton).toHaveAttribute("aria-label", "닫기");
+    expect(closeButton).toHaveTextContent("×");
+    expect(closeButton).toHaveClass("absolute", "right-4", "top-4", "h-10", "w-10");
+    expect(within(dialog).queryByText("닫기")).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: /삭제 PIN/ })).not.toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "협력사 삭제" })).toHaveClass("text-[var(--danger)]");
 
-    await user.click(screen.getByRole("button", { name: "닫기" }));
+    await user.click(closeButton);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await user.click(screen.getAllByRole("button", { name: "상세" })[1]);
     const secondDialog = await screen.findByRole("dialog", { name: "협력사 상세" });

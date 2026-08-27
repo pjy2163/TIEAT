@@ -39,7 +39,12 @@ export function StorePartnerDetailDialog({
   if (modalMode === "detail") {
     return (
       <>
-        <h2 className={styles.dialogTitle} id="store-partner-dialog-title">협력사 상세</h2>
+        <div className={styles.dialogHeader}>
+          <h2 className={styles.dialogTitle} id="store-partner-dialog-title">협력사 상세</h2>
+          <button aria-label="닫기" className={styles.dialogClose} onClick={onClose} type="button">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
         <p className={styles.dialogName}>{activePartner.partnerDisplayName}</p>
         <dl className={styles.dialogDetails}>
           <div><dt>협력사 유형</dt><dd>{partnerKindLabel(activePartner.partnerKind)}</dd></div>
@@ -47,11 +52,10 @@ export function StorePartnerDetailDialog({
           <div><dt>대표자 이메일</dt><dd>{activePartner.representativeEmail ?? "미등록"}</dd></div>
           <div><dt>현재 결제 유형</dt><dd>{paymentLabel(activePartner.paymentType)}</dd></div>
         </dl>
-        <div className={styles.dialogActions}>
+        <div className={styles.dialogDetailActions}>
           <Link className={styles.dialogLedger} href={ledgerHref(activePartner.mealContractId)}>장부 보기</Link>
           <button className={styles.dialogLedger} disabled={isSavingPayment} onClick={onOpenPaymentEditor} type="button">결제 유형 변경</button>
           <button className={styles.dialogDanger} onClick={onOpenArchiveWarning} type="button">협력사 삭제</button>
-          <button className={styles.dialogCancel} onClick={onClose} type="button">닫기</button>
         </div>
       </>
     );
