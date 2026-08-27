@@ -125,6 +125,8 @@ describe("StoreProfileView", () => {
 
     expect(await screen.findByText("매장 이름 미등록")).toBeInTheDocument();
     expect(screen.getByText("store-hk")).toBeInTheDocument();
+    const storeInfo = screen.getByRole("region", { name: "매장 정보" });
+    expect(within(storeInfo).getByRole("button", { name: "로그아웃" })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "장부 보기" })).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "상세" })).toHaveLength(2);
     expect(screen.queryByRole("button", { name: /삭제/ })).not.toBeInTheDocument();

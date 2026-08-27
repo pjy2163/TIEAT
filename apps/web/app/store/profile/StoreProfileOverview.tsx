@@ -5,6 +5,7 @@ import type { StorePartnerDirectoryState } from "../StorePartnerContext";
 import { StorePartnerKindFilter } from "../StorePartnerKindFilter";
 import { storeProfileStyles as styles } from "./StoreProfileView.styles";
 import { ledgerHref } from "./StoreProfileView.helpers";
+import { StoreLogoutButton } from "./StoreLogoutButton";
 
 type StoreProfileOverviewProps = Readonly<{
   profile: StoreProfile;
@@ -46,6 +47,7 @@ export function StoreProfileOverview({
               <dd className={styles.detailValue}>{profile.loginId}</dd>
             </div>
           </dl>
+          <StoreLogoutButton />
         </section>
 
         <section className={styles.card} aria-labelledby="store-partners-title">
