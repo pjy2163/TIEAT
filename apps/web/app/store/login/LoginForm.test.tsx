@@ -100,11 +100,11 @@ describe("LoginForm", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/store/meal-usages/months"));
   });
 
-  it("guides a redirected visitor to log in before returning to the requested screen", () => {
+  it("does not expose redirect guidance copy to the visitor", () => {
     nextValue = "/store/pos-settlements";
     render(<LoginForm />);
 
-    expect(screen.getByRole("status")).toHaveTextContent("이 화면은 로그인이 필요합니다. 로그인해 주세요.");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("resumes first-partner registration before an otherwise safe next destination", async () => {

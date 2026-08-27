@@ -18,10 +18,6 @@ export function safeStoreNext(value: string | null): string {
   return value !== null && isStoreAuthenticatedPath(value) ? value : "/store/meal-usages";
 }
 
-export function hasSafeStoreNext(value: string | null): boolean {
-  return value !== null && isStoreAuthenticatedPath(value);
-}
-
 export function storeLoginRedirect(pathname: string | null): string {
   return `/store/login?next=${safeStoreNext(pathname)}`;
 }
