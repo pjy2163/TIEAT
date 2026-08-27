@@ -180,7 +180,8 @@ describe("R-032 store partner workspace", () => {
     expect(await screen.findByText("가나다 협력사 장부")).toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText("협력사 선택"), partnerB.mealContractId);
-    expect(await screen.findByText(`선택: ${partnerB.partnerDisplayName}`)).toHaveAttribute("role", "status");
+    await waitFor(() => expect(screen.getByLabelText("협력사 선택")).toHaveValue(partnerB.mealContractId));
+    expect(screen.queryByText(`선택: ${partnerB.partnerDisplayName}`)).not.toBeInTheDocument();
     expect(screen.queryByText(`선택: ${partnerB.partnerDisplayName} · 계약 1`)).not.toBeInTheDocument();
 
     const resolveStale = releaseStale as ((value: ConfirmedMealUsagePage) => void) | null;

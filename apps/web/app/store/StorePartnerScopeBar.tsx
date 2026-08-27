@@ -63,12 +63,6 @@ export function StorePartnerScopeBar() {
   const visiblePartners = filterPartnersByKind(partners, partnerKindFilter);
   const partnerGroups = groupStorePartners(visiblePartners);
   const selectedPartner = partners.find((partner) => partner.mealContractId === selectedMealContractId);
-  const selectedGroup = selectedPartner
-    ? partnerGroups.find((group) => group.partners.some((partner) => partner.mealContractId === selectedPartner.mealContractId))
-    : null;
-  const selectedContractIndex = selectedGroup
-    ? selectedGroup.partners.findIndex((partner) => partner.mealContractId === selectedPartner?.mealContractId)
-    : -1;
 
   if (!isMonthlyLedgerRoute) return null;
 
@@ -127,11 +121,6 @@ export function StorePartnerScopeBar() {
             ))}
           </select>
         </div>
-        {selectedPartner && selectedGroup && selectedContractIndex >= 0 ? (
-          <span className={styles.status} role="status">
-            선택: {getPartnerOptionAriaLabel(selectedGroup, selectedContractIndex)}
-          </span>
-        ) : null}
         {directoryState === "loading" ? <span className={styles.status} role="status">협력사 목록을 불러오는 중입니다.</span> : null}
         {directoryState === "error" ? <span className={styles.error} role="alert">협력사 목록을 불러오지 못했습니다. 전체 장부는 계속 볼 수 있습니다.</span> : null}
       </div>
