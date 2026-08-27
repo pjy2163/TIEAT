@@ -48,7 +48,7 @@ export const storeProfileStyles = {
   dialogCard: "relative w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(17,24,39,0.2)]",
   dialogHeader: "pr-12",
   dialogTitle: "text-lg font-semibold text-[var(--text-primary)]",
-  dialogClose: `${storeActionStyles.base} absolute right-4 top-4 h-10 w-10 border border-[var(--border-strong)] bg-white px-0 text-2xl font-normal leading-none text-[var(--text-primary)] hover:bg-[var(--surface-subtle)]`,
+  dialogClose: "absolute right-4 top-4",
   dialogName: "mt-4 break-words text-base font-semibold text-[var(--text-primary)]",
   dialogDescription: "mt-2 text-sm leading-6 text-[var(--text-secondary)]",
   dialogError: "mt-4 rounded-lg border border-[#f1c7cd] bg-[#fff7f8] px-3 py-3 text-sm leading-5 text-[var(--danger)]",

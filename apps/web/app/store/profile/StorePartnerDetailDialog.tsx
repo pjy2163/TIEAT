@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { partnerKindLabel } from "@/lib/partner-kind";
 import type { StorePartner } from "@/lib/store-partner-api";
+import { StoreCloseButton } from "../StoreCloseButton";
 import { storeProfileStyles as styles } from "./StoreProfileView.styles";
 import { ledgerHref, formatAmount, paymentLabel } from "./StoreProfileView.helpers";
 import type { StoreProfileModalMode } from "./StoreProfileView.types";
@@ -41,9 +42,7 @@ export function StorePartnerDetailDialog({
       <>
         <div className={styles.dialogHeader}>
           <h2 className={styles.dialogTitle} id="store-partner-dialog-title">협력사 상세</h2>
-          <button aria-label="닫기" className={styles.dialogClose} onClick={onClose} type="button">
-            <span aria-hidden="true">×</span>
-          </button>
+          <StoreCloseButton className={styles.dialogClose} onClick={onClose} />
         </div>
         <p className={styles.dialogName}>{activePartner.partnerDisplayName}</p>
         <dl className={styles.dialogDetails}>

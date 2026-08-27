@@ -34,5 +34,4 @@ export const storeWorkspaceShellStyles = {
   drawerPanel: "flex h-full min-h-0 flex-col overflow-y-auto px-4 py-5",
   drawerHeader: "flex items-center justify-between gap-3 border-b border-[var(--border)] pb-4",
   drawerTitle: "text-base font-semibold text-[var(--text-primary)]",
-  closeButton: storeActionStyles.neutral,
 } as const;

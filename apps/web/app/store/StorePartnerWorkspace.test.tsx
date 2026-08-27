@@ -226,7 +226,11 @@ describe("R-032 store partner workspace", () => {
     await user.click(menuButton);
     const dialog = screen.getByRole("dialog", { name: "매장 작업 공간 메뉴" });
     expect(dialog).toHaveAttribute("open");
-    expect(screen.getByRole("button", { name: "닫기" })).toHaveClass("text-sm", "font-semibold", "leading-5", "min-h-11");
+    const closeButton = within(dialog).getByRole("button", { name: "닫기" });
+    expect(closeButton).toHaveAttribute("aria-label", "닫기");
+    expect(closeButton).toHaveTextContent("×");
+    expect(closeButton).toHaveClass("h-10", "w-10", "text-2xl", "font-normal", "leading-none");
+    expect(within(dialog).queryByText("닫기")).not.toBeInTheDocument();
     const paymentHistoryLinks = screen.getAllByRole("link", { name: "결제 내역" });
     expect(paymentHistoryLinks).toHaveLength(2);
     expect(paymentHistoryLinks.every((link) => link.getAttribute("href") === "/store/pos-settlements")).toBe(true);
@@ -245,7 +249,7 @@ describe("R-032 store partner workspace", () => {
     })).toBe(true);
     expect(screen.getAllByText("등록한 가게").every((element) => element.classList.contains("text-lg") && element.classList.contains("text-left") && element.classList.contains("px-2"))).toBe(true);
     expect(within(screen.getByRole("complementary", { name: "매장 작업 공간" })).getByText("자동으로 기록이 쌓이는 장부")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("button", { name: "닫기" })).toHaveFocus());
+    await waitFor(() => expect(closeButton).toHaveFocus());
 
     await user.keyboard("{Escape}");
     await waitFor(() => expect(dialog).not.toHaveAttribute("open"));

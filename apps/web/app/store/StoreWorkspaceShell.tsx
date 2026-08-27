@@ -8,6 +8,7 @@ import { filterPartnersByKind, type PartnerKindFilter } from "@/lib/partner-kind
 import { useStorePartnerContext } from "./StorePartnerContext";
 import { StorePartnerKindFilter } from "./StorePartnerKindFilter";
 import { StoreBackLink } from "./StoreBackLink";
+import { StoreCloseButton } from "./StoreCloseButton";
 import { storeWorkspaceShellStyles as styles } from "./StoreWorkspaceShell.styles";
 
 const ledgerPath = "/store/meal-usages/months";
@@ -204,7 +205,7 @@ export function StoreWorkspaceShell({ children }: Readonly<{ children: React.Rea
           <div className={styles.drawerPanel} onClick={(event) => event.stopPropagation()}>
             <div className={styles.drawerHeader}>
               <p className={styles.drawerTitle}>매장 메뉴</p>
-              <button className={styles.closeButton} onClick={closeDrawer} ref={closeButtonRef} type="button">닫기</button>
+              <StoreCloseButton onClick={closeDrawer} ref={closeButtonRef} />
             </div>
             <div className="mt-6 flex min-h-0 flex-1 flex-col">
               <Navigation onNavigate={closeDrawer} storeDisplayName={storeDisplayName} />

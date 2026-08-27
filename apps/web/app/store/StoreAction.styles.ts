@@ -18,6 +18,7 @@ export const storeActionStyles = {
   compactLedger: `${actionBase} ${compactSize} ${ledgerSurface}`,
   danger: `${actionBase} ${standardSize} ${dangerSurface}`,
   compactDanger: `${actionBase} ${compactSize} ${dangerSurface}`,
+  close: `${actionBase} h-10 w-10 shrink-0 border border-[var(--border-strong)] bg-white px-0 text-2xl font-normal leading-none text-[var(--text-primary)] hover:bg-[var(--surface-subtle)]`,
   dangerConfirm: `${actionBase} ${standardSize} ${dangerConfirmSurface}`,
   neutralSurface,
   primarySurface,
