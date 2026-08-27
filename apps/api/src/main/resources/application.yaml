@@ -34,6 +34,7 @@ tieat:
     cookie:
       secure: ${TIEAT_SESSION_COOKIE_SECURE:}
   qr:
+    token-encryption-required: false
     token-encryption-keys: ${TIEAT_QR_TOKEN_ENCRYPTION_KEYS:}
     token-encryption-key: ${TIEAT_QR_TOKEN_ENCRYPTION_KEY:}
     token-encryption-key-version: ${TIEAT_QR_TOKEN_ENCRYPTION_KEY_VERSION:1}

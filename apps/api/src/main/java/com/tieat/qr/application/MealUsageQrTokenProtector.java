@@ -35,17 +35,27 @@ public final class MealUsageQrTokenProtector {
     public MealUsageQrTokenProtector(
         @Value("${tieat.qr.token-encryption-keys:}") String configuredKeys,
         @Value("${tieat.qr.token-encryption-key:}") String configuredKey,
-        @Value("${tieat.qr.token-encryption-key-version:1}") int activeKeyVersion
+        @Value("${tieat.qr.token-encryption-key-version:1}") int activeKeyVersion,
+        @Value("${tieat.qr.token-encryption-required:false}") boolean tokenEncryptionRequired
     ) {
         if (activeKeyVersion <= 0) {
             throw new IllegalStateException("QR token encryption key version must be positive");
         }
         this.keysByVersion = parseKeys(configuredKeys, configuredKey, activeKeyVersion);
+        if (tokenEncryptionRequired && this.keysByVersion.isEmpty()) {
+            throw new IllegalStateException(
+                "QR token encryption is required but no valid key or key ring is configured"
+            );
+        }
         this.activeKeyVersion = activeKeyVersion;
     }
 
+    public MealUsageQrTokenProtector(String configuredKeys, String configuredKey, int activeKeyVersion) {
+        this(configuredKeys, configuredKey, activeKeyVersion, false);
+    }
+
     public MealUsageQrTokenProtector(String configuredKey, int activeKeyVersion) {
-        this("", configuredKey, activeKeyVersion);
+        this("", configuredKey, activeKeyVersion, false);
     }
 
     public MealUsageQrContext.ProtectedToken protect(

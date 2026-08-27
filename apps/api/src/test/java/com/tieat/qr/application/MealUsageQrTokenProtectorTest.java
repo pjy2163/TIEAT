@@ -23,6 +23,23 @@ class MealUsageQrTokenProtectorTest {
     );
 
     @Test
+    void rejectsRequiredEncryptionWithoutAConfiguredKey() {
+        assertThatThrownBy(() -> new MealUsageQrTokenProtector("", "", 1, true))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("QR token encryption is required but no valid key or key ring is configured");
+    }
+
+    @Test
+    void protectsAndRevealsWithRequiredValidKey() {
+        MealUsageQrTokenProtector protector = new MealUsageQrTokenProtector("", KEY, 1, true);
+        String rawToken = MealUsageQrToken.generate();
+
+        MealUsageQrContext.ProtectedToken protectedToken = protector.protect(rawToken, CONTEXT_ID, STORE_ID);
+
+        assertThat(protector.reveal(context(protectedToken))).isEqualTo(rawToken);
+    }
+
+    @Test
     void encryptsWithRandomNonceAndRevealsOnlyWithTheSameContextAndStore() {
         MealUsageQrTokenProtector protector = new MealUsageQrTokenProtector(KEY, 1);
         String rawToken = MealUsageQrToken.generate();

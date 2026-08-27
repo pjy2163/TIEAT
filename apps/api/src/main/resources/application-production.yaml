@@ -1,0 +1,17 @@
+spring:
+  config:
+    activate:
+      on-profile: production
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+tieat:
+  session:
+    cookie:
+      secure: true
+  qr:
+    token-encryption-required: true
+    token-encryption-keys: ${TIEAT_QR_TOKEN_ENCRYPTION_KEYS}
+    token-encryption-key-version: ${TIEAT_QR_TOKEN_ENCRYPTION_KEY_VERSION}
