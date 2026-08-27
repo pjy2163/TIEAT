@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tieat.TieatApiApplication;
+import com.tieat.identity.application.SessionReauthenticationService;
 import com.tieat.partnership.domain.MealContract;
 import com.tieat.partnership.domain.MealContractId;
 import com.tieat.partnership.domain.MealContractPaymentType;
@@ -29,7 +30,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -96,6 +100,10 @@ class MealUsageQrOperationsCliAndMigrationIntegrationTest {
                 "--tieat.qr-operations.store-id=" + STORE_ID.value()
             )) {
             assertThat(cliContext).isNotInstanceOf(WebServerApplicationContext.class);
+            assertThat(cliContext.getBeansOfType(PasswordEncoder.class)).hasSize(1);
+            assertThat(cliContext.getBean(SessionReauthenticationService.class)).isNotNull();
+            assertThat(cliContext.getBeansOfType(SessionAuthenticationStrategy.class)).hasSize(1);
+            assertThat(cliContext.getBeansOfType(SecurityContextRepository.class)).hasSize(1);
             assertThat(cliContext.getBeansOfType(SecurityFilterChain.class)).isEmpty();
         }
     }
