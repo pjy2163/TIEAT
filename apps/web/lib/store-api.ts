@@ -285,6 +285,22 @@ export async function login(loginId: string, password: string, remember = false)
   }
 }
 
+export async function logoutStoreSession(): Promise<void> {
+  const csrf = await getCsrfToken();
+  const response = await fetch(`${API_PATH}/sessions/logout`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: {
+      [csrf.headerName]: csrf.token,
+    },
+  });
+  if (response.status !== 204) {
+    if (response.ok) throw new InvalidApiResponseError();
+    throw await apiError(response);
+  }
+}
+
 export async function reauthenticateStoreSession(password: string): Promise<void> {
   const csrf = await getCsrfToken();
   const response = await fetch(`${API_PATH}/session-reauthentications`, {

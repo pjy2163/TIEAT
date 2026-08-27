@@ -5,6 +5,7 @@ import {
   getStoreOnboardingStatus,
   getPendingMealUsages,
   login,
+  logoutStoreSession,
   reauthenticateStoreSession,
   registerFirstPartner,
   rejectMealUsage,
@@ -62,6 +63,34 @@ describe("store API", () => {
 
     const body = fetchMock.mock.calls[1][1].body as URLSearchParams;
     expect(body.toString()).toBe("loginId=store-hk&password=correct-password&rememberLogin=true");
+  });
+
+  it("gets a fresh CSRF token and accepts only the 204 logout response", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "logout-csrf", headerName: "X-LOGOUT-CSRF", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(204));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await logoutStoreSession();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/v1/csrf", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/v1/sessions/logout", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { "X-LOGOUT-CSRF": "logout-csrf" },
+    });
+
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "logout-csrf", headerName: "X-CSRF-TOKEN", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(200)));
+    await expect(logoutStoreSession()).rejects.toMatchObject({
+      status: 0,
+      errorCode: "INVALID_API_RESPONSE",
+    });
   });
 
   it("gets fresh CSRF and accepts only the 204 reauthentication response", async () => {
