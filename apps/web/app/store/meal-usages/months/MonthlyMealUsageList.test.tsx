@@ -99,6 +99,7 @@ describe("MonthlyMealUsageList", () => {
 
     const ledgerTitle = await screen.findByText("전체 장부");
     expect(ledgerTitle).toBeVisible();
+    expect(screen.queryByText("TIEAT STORE")).not.toBeInTheDocument();
     expect(screen.queryByText("월별 장부는 사용 이력입니다. 결제할 금액은 월과 관계없이 따로 확인하세요.")).not.toBeInTheDocument();
     expect(screen.getByText("확인자 HK")).toBeVisible();
     expect(screen.getByText("결제 전")).toBeVisible();

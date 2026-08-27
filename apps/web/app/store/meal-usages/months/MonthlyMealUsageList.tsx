@@ -453,8 +453,7 @@ export function MonthlyMealUsageList() {
       <main className={monthlyMealUsageListStyles.page} aria-busy="true">
         <StorePartnerScopeBar />
         <section className={monthlyMealUsageListStyles.container} aria-label="전체 장부 불러오는 중">
-          <div className="h-4 w-24 rounded-sm bg-[var(--surface)]" />
-          <div className="mt-3 h-9 w-52 rounded-sm bg-[var(--surface)]" />
+          <div className="h-9 w-52 rounded-sm bg-[var(--surface)]" />
           <div className={`${monthlyMealUsageListStyles.card} p-5`}>
             {[0, 1, 2].map((item) => <div className={`${monthlyMealUsageListStyles.skeleton} mb-3 h-28 rounded-lg last:mb-0`} key={item} />)}
           </div>
@@ -488,7 +487,6 @@ export function MonthlyMealUsageList() {
       <section className={monthlyMealUsageListStyles.container} aria-labelledby="ledger-title">
         <header className={monthlyMealUsageListStyles.header}>
           <div className={monthlyMealUsageListStyles.titleGroup}>
-            <p className={monthlyMealUsageListStyles.eyebrow}>TIEAT STORE</p>
             <div className={monthlyMealUsageListStyles.titleLine}>
               <div className={monthlyMealUsageListStyles.titleRow}>
                 <h1 id="ledger-title" className={monthlyMealUsageListStyles.title}>전체 장부</h1>

@@ -319,7 +319,6 @@ export function PosSettlementForm() {
       <section className={posSettlementFormStyles.container} aria-labelledby="pos-settlement-title">
         <header className={posSettlementFormStyles.header}>
           <div>
-            <p className={posSettlementFormStyles.eyebrow}>TIEAT STORE</p>
             <h1 className={posSettlementFormStyles.title} id="pos-settlement-title">결제 내역</h1>
             <p className={posSettlementFormStyles.description}>
               POS에서 실제 결제한 뒤 저장한 기록을 날짜와 금액으로 다시 확인합니다.

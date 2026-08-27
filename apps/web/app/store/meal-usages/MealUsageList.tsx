@@ -705,8 +705,7 @@ export function MealUsageList() {
     return (
       <main className={mealUsageListStyles.page} aria-busy="true">
         <section className={mealUsageListStyles.container} aria-label="확인 대기 불러오는 중">
-          <div className="h-4 w-24 rounded-sm bg-[var(--surface)]" />
-          <div className="mt-3 h-9 w-52 rounded-sm bg-[var(--surface)]" />
+          <div className="h-9 w-52 rounded-sm bg-[var(--surface)]" />
           <div className={`${mealUsageListStyles.card} p-5`}>
             {[0, 1, 2].map((item) => <div className={`${mealUsageListStyles.skeleton} mb-3 h-16 rounded-lg last:mb-0`} key={item} />)}
           </div>
@@ -729,7 +728,6 @@ export function MealUsageList() {
     <main className={mealUsageListStyles.page}>
       <section className={mealUsageListStyles.container} aria-labelledby="pending-title">
         <header className={mealUsageListStyles.header}>
-          <p className={mealUsageListStyles.eyebrow}>TIEAT STORE</p>
           <div className={mealUsageListStyles.headerLine}>
             <div className={mealUsageListStyles.titleRow}>
               <h1 id="pending-title" className={mealUsageListStyles.title}>확인 대기</h1>

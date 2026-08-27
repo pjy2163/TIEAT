@@ -81,6 +81,7 @@ describe("MealUsageList", () => {
     render(<MealUsageList />);
 
     expect(await screen.findByText("매장 태블릿 입력")).toBeVisible();
+    expect(screen.queryByText("TIEAT STORE")).not.toBeInTheDocument();
     expect(screen.getByText("모바일 QR 입력")).toBeVisible();
     expect(screen.getAllByText("확인 대기", { selector: "span" })).toHaveLength(2);
     expect(screen.getByText("₩12,000")).toBeVisible();

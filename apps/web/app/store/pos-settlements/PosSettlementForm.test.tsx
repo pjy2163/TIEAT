@@ -111,6 +111,7 @@ describe("PosSettlementForm history view", () => {
     render(<PosSettlementForm />);
 
     expect(await screen.findByRole("heading", { name: "결제 내역", level: 1 })).toBeVisible();
+    expect(screen.queryByText("TIEAT STORE")).not.toBeInTheDocument();
     expect(screen.getByRole("list", { name: "결제 내역 목록" })).toHaveTextContent("결제일 2026-08-11");
     expect(screen.queryByText("결제할 금액")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /기록하기/ })).not.toBeInTheDocument();
