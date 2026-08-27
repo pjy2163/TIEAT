@@ -19,7 +19,7 @@ export const storeWorkspaceShellStyles = {
   directoryStatus: "px-3 py-2 text-xs leading-5 text-[var(--text-muted)]",
   directoryError: "grid gap-2 px-3 py-2 text-xs leading-5 text-[var(--danger)]",
   retryButton: "inline-flex min-h-9 w-fit items-center rounded-md border border-[var(--border-strong)] bg-white px-2.5 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
-  footerLinks: "mt-auto flex flex-col gap-2 pt-7",
+  footerLinks: "mt-auto flex flex-col gap-2 pt-7 pb-3 lg:pb-0",
   pageBack: "bg-[var(--surface-subtle)] px-5 pt-6 sm:px-8 sm:pt-10",
   addLink: "flex min-h-11 items-center justify-center rounded-lg border border-[#b9c8ff] bg-[#f4f6ff] px-3 text-sm font-semibold text-[#244cda] transition-colors hover:border-[#8ea8ff] hover:bg-[#e9eeff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
   qrLink: "mt-2 flex min-h-11 items-center justify-center rounded-lg border border-[var(--border-strong)] bg-white px-3 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",

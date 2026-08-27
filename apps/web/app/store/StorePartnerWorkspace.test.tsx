@@ -239,6 +239,9 @@ describe("R-032 store partner workspace", () => {
       const links = navigationElement.querySelectorAll("a");
       return links[links.length - 1]?.textContent;
     })).toEqual(["QR코드 보기", "QR코드 보기"]);
+    expect(screen.getAllByRole("link", { name: "QR코드 보기" }).every((link) => {
+      return link.parentElement?.classList.contains("pb-3") && link.parentElement?.classList.contains("lg:pb-0");
+    })).toBe(true);
     expect(screen.getAllByText("등록한 가게").every((element) => element.classList.contains("text-lg") && element.classList.contains("text-left") && element.classList.contains("px-2"))).toBe(true);
     expect(within(screen.getByRole("complementary", { name: "매장 작업 공간" })).getByText("자동으로 기록이 쌓이는 장부")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "닫기" })).toHaveFocus());
