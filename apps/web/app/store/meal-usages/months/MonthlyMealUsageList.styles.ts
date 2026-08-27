@@ -18,7 +18,6 @@ export const monthlyMealUsageListStyles = {
   refreshPlacement: "w-full sm:w-auto",
   exportGroup: "grid min-w-0 gap-1 sm:max-w-xs",
   exportButton: `${storeActionStyles.base} min-h-11 w-full min-w-0 ${storeActionStyles.primarySurface} whitespace-normal break-words px-3 py-2 text-center`,
-  exportHint: "text-xs leading-5 text-[var(--text-secondary)]",
   exportError: "text-xs leading-5 text-[var(--danger)]",
   settlementLink: "inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-[#b9c8ff] bg-[#f4f6ff] px-3 text-sm font-semibold text-[#244cda] transition-colors hover:border-[#8ea8ff] hover:bg-[#e9eeff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)] focus-visible:ring-offset-2",
   pendingLink: "inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-2 text-sm font-semibold text-[#244cda] underline decoration-[#b9c8ff] underline-offset-4 hover:text-[var(--accent)]",

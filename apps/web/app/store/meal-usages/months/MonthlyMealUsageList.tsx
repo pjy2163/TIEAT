@@ -524,9 +524,6 @@ export function MonthlyMealUsageList() {
               >
                 {isExporting ? "XLSX 내보내는 중…" : "현재 범위 XLSX 다운로드"}
               </button>
-              <p className={monthlyMealUsageListStyles.exportHint}>
-                조회 기간: {rangeLabel(fromDate, toDate)} · {selectedMealContractId === null ? "전체 협력사·계약" : "선택한 협력사·계약"}
-              </p>
               {exportError ? <p className={monthlyMealUsageListStyles.exportError} role="alert">{exportError}</p> : null}
             </div>
           </div>

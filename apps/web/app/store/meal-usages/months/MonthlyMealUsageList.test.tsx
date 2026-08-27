@@ -105,6 +105,7 @@ describe("MonthlyMealUsageList", () => {
     expect(screen.getByText("협력사 A")).toBeVisible();
     expect(screen.getByText("조회 기간 합계")).toBeVisible();
     expect(screen.getByLabelText("조회 기간 합계")).toHaveTextContent("₩12,000");
+    expect(screen.queryByText(/조회 기간:/)).not.toBeInTheDocument();
     expect(screen.getByText("이름 미입력")).toBeVisible();
     const pageSelectionControls = screen.getByLabelText("현재 페이지 선택 도구");
     expect(pageSelectionControls).toHaveClass("justify-end", "gap-x-4", "py-2.5");
@@ -125,6 +126,10 @@ describe("MonthlyMealUsageList", () => {
     expect(screen.queryByText("매장 태블릿 입력")).not.toBeInTheDocument();
     expect(screen.queryByText("거절")).not.toBeInTheDocument();
     expect(pendingLink).toHaveAttribute("href", "/store/meal-usages");
+    const exportButton = screen.getByRole("button", { name: "현재 범위 XLSX 다운로드" });
+    const toolbar = exportButton.parentElement?.parentElement;
+    expect(toolbar).toHaveClass("flex", "sm:flex-row", "sm:items-end", "sm:justify-between");
+    expect(exportButton.parentElement).toHaveClass("grid", "sm:max-w-xs");
     expect(getConfirmedMealUsagesMock).toHaveBeenCalledTimes(1);
     expect(getConfirmedMealUsagesMock).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/), expect.stringMatching(/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/), 0, 20);
 
@@ -240,7 +245,7 @@ describe("MonthlyMealUsageList", () => {
     render(<MonthlyMealUsageList />);
 
     await screen.findByText("협력사 A");
-    expect(screen.getByText(/조회 기간: .* · 전체 협력사·계약/)).toBeVisible();
+    expect(screen.queryByText(/조회 기간:/)).not.toBeInTheDocument();
     const exportButton = screen.getByRole("button", { name: "현재 범위 XLSX 다운로드" });
     await userEvent.setup().click(exportButton);
     expect(screen.getByRole("button", { name: "XLSX 내보내는 중…" })).toBeDisabled();
