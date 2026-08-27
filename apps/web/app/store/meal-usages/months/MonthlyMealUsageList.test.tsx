@@ -162,12 +162,12 @@ describe("MonthlyMealUsageList", () => {
     expect(scopedRow.queryByText("입력자", { exact: true })).not.toBeInTheDocument();
     expect(scopedRow.queryByText("입력 시각", { exact: true })).not.toBeInTheDocument();
     expect(row).toHaveClass("flex", "items-stretch", "gap-x-4", "px-5", "py-5", "sm:px-6");
-    expect(customerRow).toHaveClass("mt-2", "flex", "min-w-0", "items-center", "gap-3");
-    expect(paymentMeta).toHaveClass("grid", "min-w-0", "flex-1", "grid-cols-[4.5rem_4rem_max-content]", "items-center", "justify-end", "gap-x-4");
+    expect(customerRow).toHaveClass("mt-2", "flex", "min-w-0", "flex-col", "items-stretch", "gap-1", "sm:flex-row", "sm:items-center", "sm:gap-3");
+    expect(paymentMeta).toHaveClass("grid", "min-w-0", "grid-cols-[minmax(0,1fr)_auto_auto]", "items-center", "justify-end", "gap-x-2", "sm:flex-1", "sm:grid-cols-[4.5rem_4rem_max-content]", "sm:gap-x-4");
     expect(Array.from(customerRow.children)).toEqual([inputter, paymentMeta]);
     expect(Array.from(paymentMeta.children)).toEqual([amount, confirmer, settlementStatus]);
-    expect(amount).toHaveClass("w-[4.5rem]", "text-right", "whitespace-nowrap");
-    expect(confirmer).toHaveClass("inline-flex", "w-16", "items-center", "justify-self-end", "whitespace-nowrap", "text-right");
+    expect(amount).toHaveClass("min-w-0", "text-right", "whitespace-nowrap", "sm:w-[4.5rem]");
+    expect(confirmer).toHaveClass("inline-flex", "min-w-0", "items-center", "justify-self-end", "whitespace-nowrap", "text-right", "sm:w-16");
     expect(settlementStatus).toHaveClass("inline-flex", "shrink-0", "items-center", "justify-self-end", "gap-1", "whitespace-nowrap");
     expect(confirmer.parentElement).toBe(paymentMeta);
     expect(settlementStatus.parentElement).toBe(paymentMeta);
