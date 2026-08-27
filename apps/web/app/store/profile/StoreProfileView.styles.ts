@@ -3,8 +3,7 @@ import { storeActionStyles } from "../StoreAction.styles";
 export const storeProfileStyles = {
   page: "min-h-dvh bg-[var(--surface-subtle)] px-5 py-6 sm:px-8 sm:py-10",
   container: "mx-auto w-full max-w-4xl",
-  eyebrow: "text-xs font-semibold tracking-[0.08em] text-[var(--accent)]",
-  title: "mt-2 text-2xl font-semibold tracking-[0.01em] text-[var(--text-primary)] sm:text-3xl",
+  title: "text-2xl font-semibold tracking-[0.01em] text-[var(--text-primary)] sm:text-3xl",
   description: "mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]",
   grid: "mt-8 grid gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]",
   card: "rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[0_8px_30px_rgba(17,24,39,0.04)] sm:p-6 lg:flex lg:flex-col",

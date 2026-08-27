@@ -352,8 +352,7 @@ export function StoreProfileView() {
     return (
       <main className={styles.page} aria-busy="true">
         <section className={styles.container} aria-label="마이페이지 불러오는 중">
-          <div className="h-3 w-24 animate-pulse rounded-sm bg-[var(--surface)]" />
-          <div className="mt-3 h-9 w-44 animate-pulse rounded-sm bg-[var(--surface)]" />
+          <div className="h-9 w-44 animate-pulse rounded-sm bg-[var(--surface)]" />
           <div className="mt-8 grid gap-5 lg:grid-cols-2">
             <div className={`${styles.card} h-48 animate-pulse bg-[var(--surface)]`} />
             <div className={`${styles.card} h-64 animate-pulse bg-[var(--surface)]`} />

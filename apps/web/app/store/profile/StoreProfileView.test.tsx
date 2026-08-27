@@ -124,6 +124,7 @@ describe("StoreProfileView", () => {
     render(<Workspace><StoreProfileView /></Workspace>);
 
     expect(await screen.findByText("매장 이름 미등록")).toBeInTheDocument();
+    expect(screen.queryByText("TIEAT STORE")).not.toBeInTheDocument();
     expect(screen.getByText("store-hk")).toBeInTheDocument();
     const storeInfo = screen.getByRole("region", { name: "매장 정보" });
     const pinSettingsButton = await within(storeInfo).findByRole("button", { name: "삭제 PIN 변경" });

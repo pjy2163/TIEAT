@@ -40,7 +40,6 @@ export function StoreProfileOverview({
 
   return (
     <>
-      <p className={styles.eyebrow}>TIEAT STORE</p>
       <h1 className={styles.title} id="store-profile-title">마이페이지</h1>
       <p className={styles.description}>매장 정보와 현재 연결된 협력사를 확인할 수 있습니다.</p>
 
