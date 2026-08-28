@@ -6,3 +6,4 @@
 **/node_modules
 docs/NOTION.local.md
 *.log
+**/.env*
