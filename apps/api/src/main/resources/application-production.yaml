@@ -12,3 +12,8 @@ tieat:
     token-encryption-required: true
     token-encryption-keys: ${TIEAT_QR_TOKEN_ENCRYPTION_KEYS}
     token-encryption-key-version: ${TIEAT_QR_TOKEN_ENCRYPTION_KEY_VERSION}
+  receipts:
+    provider: ${TIEAT_RECEIPTS_PROVIDER}
+    azure:
+      endpoint: ${TIEAT_RECEIPTS_AZURE_ENDPOINT}
+      container: ${TIEAT_RECEIPTS_AZURE_CONTAINER}
