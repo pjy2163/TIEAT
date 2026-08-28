@@ -2,6 +2,7 @@ package com.tieat.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -564,7 +565,8 @@ class PublicMealUsageQrHttpIntegrationTest {
 
     @Test
     void documentsTheExactUnauthenticatedPublicQrContracts() throws Exception {
-        MvcResult result = mockMvc.perform(get("/v3/api-docs"))
+        MvcResult result = mockMvc.perform(get("/v3/api-docs")
+                .with(user("openapi-contract")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}'].get").exists())
             .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}'].get.security").doesNotExist())

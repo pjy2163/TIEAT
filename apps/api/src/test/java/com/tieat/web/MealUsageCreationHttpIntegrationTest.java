@@ -183,7 +183,8 @@ class MealUsageCreationHttpIntegrationTest {
 
     @Test
     void exposesExactCreationRequestAndProblemResponsesInOpenApiDocument() throws Exception {
-        mockMvc.perform(get("/v3/api-docs"))
+        mockMvc.perform(get("/v3/api-docs")
+                .with(user("openapi-contract")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.paths['/api/v1/meal-usages'].post").exists())
             .andExpect(jsonPath("$.components.schemas.CreationRequest.properties.mealContractId").exists())

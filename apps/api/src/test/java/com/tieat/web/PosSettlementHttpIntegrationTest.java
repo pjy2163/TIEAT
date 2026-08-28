@@ -738,7 +738,8 @@ class PosSettlementHttpIntegrationTest {
 
     @Test
     void exposesSettlementAndReceivableContractsInOpenApi() throws Exception {
-        mockMvc.perform(get("/v3/api-docs"))
+        mockMvc.perform(get("/v3/api-docs")
+                .with(user("openapi-contract")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.paths['/api/v1/pos-settlements'].get").exists())
             .andExpect(jsonPath("$.paths['/api/v1/pos-settlements'].get.parameters[?(@.name == 'page')].schema.minimum").value(0))

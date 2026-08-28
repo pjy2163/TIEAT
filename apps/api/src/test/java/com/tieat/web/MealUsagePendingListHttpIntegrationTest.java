@@ -167,7 +167,8 @@ class MealUsagePendingListHttpIntegrationTest {
 
     @Test
     void exposesExactPendingListContractAndPreservesPostContractInOpenApi() throws Exception {
-        MvcResult result = mockMvc.perform(get("/v3/api-docs"))
+        MvcResult result = mockMvc.perform(get("/v3/api-docs")
+                .with(user("openapi-contract")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.paths['/api/v1/meal-usages'].get").exists())
             .andExpect(jsonPath("$.paths['/api/v1/meal-usages'].get.parameters[?(@.name == 'status')].schema.enum[0]").value("PENDING"))

@@ -1,6 +1,7 @@
 package com.tieat.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -193,6 +194,23 @@ class StoreSessionFoundationHttpIntegrationTest {
         mockMvc.perform(get("/api/v1/store-onboarding").cookie(cookie))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
+    }
+
+    @Test
+    void anonymousRequestsToActuatorAndOpenApiRoutesRequireAuthentication() throws Exception {
+        for (String path : new String[] {"/actuator/health", "/actuator/info", "/v3/api-docs"}) {
+            mockMvc.perform(get(path))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
+        }
+    }
+
+    @Test
+    void authenticatedPrincipalCanReadActuatorAndOpenApiRoutes() throws Exception {
+        for (String path : new String[] {"/actuator/health", "/actuator/info", "/v3/api-docs"}) {
+            mockMvc.perform(get(path).with(user("authenticated-reader")))
+                .andExpect(status().isOk());
+        }
     }
 
     @Test

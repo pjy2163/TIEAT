@@ -206,7 +206,8 @@ class MealUsageConfirmationHttpIntegrationTest {
 
     @Test
     void exposesOnlyApiRoutesAndProblemContractsInOpenApiDocument() throws Exception {
-        mockMvc.perform(get("/v3/api-docs"))
+        mockMvc.perform(get("/v3/api-docs")
+                .with(user("openapi-contract")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.paths['/api/v1/meal-usages/{mealUsageId}/confirmations'].post").exists())
             .andExpect(jsonPath("$.components.schemas.ConfirmationRequest.properties.confirmerInitials").exists())
