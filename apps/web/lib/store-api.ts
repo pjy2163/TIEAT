@@ -163,7 +163,7 @@ function parseStorePlaceSearchResult(value: unknown): StorePlaceSearchResult {
 }
 
 function parseStorePlaceSearch(value: unknown): StorePlaceSearchResult[] {
-  if (!isRecord(value) || value.source !== "KAKAO" || !Array.isArray(value.items) || value.items.length > 10) {
+  if (!isRecord(value) || value.source !== "NAVER" || !Array.isArray(value.items) || value.items.length > 5) {
     throw new InvalidApiResponseError();
   }
   return value.items.map(parseStorePlaceSearchResult);

@@ -31,7 +31,7 @@ async function fillAccountStep(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("SignupForm", () => {
-  it("shows Kakao name, address, and category then registers only the selected name", async () => {
+  it("shows Naver name, address, and category then registers only the selected name", async () => {
     const user = userEvent.setup();
     searchStorePlacesMock.mockResolvedValue([{
       placeId: "26338954",
@@ -86,7 +86,7 @@ describe("SignupForm", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("초대 코드를 확인해 주세요.");
   });
 
-  it("offers direct input when Kakao search is unavailable without exposing a logo path", async () => {
+  it("offers direct input when Naver search is unavailable without exposing a logo path", async () => {
     const user = userEvent.setup();
     searchStorePlacesMock.mockRejectedValue(new ApiError(503, "STORE_PLACE_SEARCH_UNAVAILABLE"));
     render(<SignupForm />);

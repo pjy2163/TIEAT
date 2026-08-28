@@ -175,7 +175,7 @@ export function SignupForm() {
             <StoreAuthField
               label="가게명 검색"
               htmlFor="storePlaceQuery"
-              hint="카카오 장소 검색으로 상호·주소·업종을 확인합니다. 선택한 상호명만 새 TIEAT 매장명으로 등록합니다."
+              hint="네이버 지역 검색으로 상호·주소·업종을 확인합니다. 선택한 상호명만 새 TIEAT 매장명으로 등록합니다."
             >
               <div className={signupStyles.searchRow}>
                 <input

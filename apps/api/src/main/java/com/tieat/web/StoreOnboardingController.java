@@ -58,7 +58,7 @@ class StoreOnboardingController {
             .toList();
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
-            .body(new StorePlaceSearchResponse("KAKAO", entries));
+            .body(new StorePlaceSearchResponse("NAVER", entries));
     }
 
     @PostMapping("/store-signups")

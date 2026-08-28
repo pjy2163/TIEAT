@@ -152,11 +152,11 @@ describe("store API", () => {
     expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("storeId");
   });
 
-  it("uses CSRF for a Kakao store-place projection and checks onboarding before partner recovery", async () => {
+  it("uses CSRF for a Naver store-place projection and checks onboarding before partner recovery", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response(200, { token: "place-csrf", headerName: "X-PLACE-CSRF", parameterName: "_csrf" }))
       .mockResolvedValueOnce(response(200, {
-        source: "KAKAO",
+        source: "NAVER",
         items: [{
           placeId: "26338954",
           storeDisplayName: "TIEAT 강남점",
@@ -192,6 +192,26 @@ describe("store API", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/v1/store-onboarding", {
       cache: "no-store",
       credentials: "same-origin",
+    });
+  });
+
+  it("rejects more than five Naver place results at the browser contract boundary", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(200, { token: "place-csrf", headerName: "X-PLACE-CSRF", parameterName: "_csrf" }))
+      .mockResolvedValueOnce(response(200, {
+        source: "NAVER",
+        items: Array.from({ length: 6 }, (_, index) => ({
+          placeId: `naver-${index}`,
+          storeDisplayName: `TIEAT ${index + 1}`,
+          address: null,
+          category: null,
+        })),
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchStorePlaces({ inviteCode: "pilot-code", query: "TIEAT" })).rejects.toMatchObject({
+      status: 0,
+      errorCode: "INVALID_API_RESPONSE",
     });
   });
 

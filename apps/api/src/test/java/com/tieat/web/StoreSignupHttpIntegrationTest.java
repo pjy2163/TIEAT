@@ -188,7 +188,7 @@ class StoreSignupHttpIntegrationTest {
     }
 
     @Test
-    void searchesOnlyForAValidInviteProjectsKakaoDisplayDataAndKeepsItOutOfStorePersistence() throws Exception {
+    void searchesOnlyForAValidInviteProjectsNaverDisplayDataAndKeepsItOutOfStorePersistence() throws Exception {
         SessionHandle session = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
         String csrfToken = StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
 
@@ -205,7 +205,7 @@ class StoreSignupHttpIntegrationTest {
         mockMvc.perform(placeSearchRequest(session, csrfToken, StoreOnboardingHttpIntegrationSupport.INVITE_CODE, "TIEAT"))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
-            .andExpect(jsonPath("$.source").value("KAKAO"))
+            .andExpect(jsonPath("$.source").value("NAVER"))
             .andExpect(jsonPath("$.items.length()").value(2))
             .andExpect(jsonPath("$.items[0].placeId").value("26338954"))
             .andExpect(jsonPath("$.items[0].storeDisplayName").value("TIEAT 강남점"))
