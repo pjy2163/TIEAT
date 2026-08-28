@@ -1,4 +1,4 @@
-FROM bellsoft/liberica-openjdk-debian:25 AS build
+FROM bellsoft/liberica-openjdk-debian:25@sha256:213512c11989ebdcf464c475603f6381af2a447338a2a04381c14b6e786d8c94 AS build
 
 WORKDIR /workspace
 
@@ -12,7 +12,7 @@ COPY apps/api/src ./apps/api/src
 
 RUN ./gradlew :apps:api:bootJar --no-daemon
 
-FROM bellsoft/liberica-openjre-debian:25
+FROM bellsoft/liberica-openjre-debian:25@sha256:3e00b4d7db5abbd993709b316d1c23a2055c9a79b94f3e7532f361e6da6f3a7f
 
 WORKDIR /app
 
