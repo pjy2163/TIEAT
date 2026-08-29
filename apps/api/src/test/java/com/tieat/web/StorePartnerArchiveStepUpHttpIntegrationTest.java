@@ -49,6 +49,7 @@ import tools.jackson.databind.ObjectMapper;
 @Testcontainers
 class StorePartnerArchiveStepUpHttpIntegrationTest {
 
+    private static final String QR_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
     private static final String PASSWORD = "correct-password";
     private static final String PIN = "1234";
     private static final Instant BASE_TIME = Instant.parse("2026-08-24T00:00:00Z");
@@ -81,6 +82,7 @@ class StorePartnerArchiveStepUpHttpIntegrationTest {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("tieat.onboarding.invite-code", () -> StoreOnboardingHttpIntegrationSupport.INVITE_CODE);
+        registry.add("tieat.qr.token-encryption-key", () -> QR_KEY);
     }
 
     @BeforeEach
@@ -90,7 +92,8 @@ class StorePartnerArchiveStepUpHttpIntegrationTest {
             truncate table spring_session_attributes, spring_session, store_archive_pin_security,
                 meal_contract_payment_term_audits, store_partner_registrations, stores,
                 store_catalog_entries, store_accounts, partner_organizations, meal_contracts,
-                meal_usages, meal_usage_qr_contexts, pos_settlement_allocations, pos_settlements
+                meal_usages, meal_usage_qr_operation_audits, meal_usage_qr_contexts,
+                pos_settlement_allocations, pos_settlements
             restart identity cascade
             """);
     }

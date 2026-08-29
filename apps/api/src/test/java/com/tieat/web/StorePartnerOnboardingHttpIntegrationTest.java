@@ -35,6 +35,8 @@ import tools.jackson.databind.ObjectMapper;
 @Testcontainers
 class StorePartnerOnboardingHttpIntegrationTest {
 
+    private static final String QR_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
         .withDatabaseName("tieat")
@@ -59,12 +61,15 @@ class StorePartnerOnboardingHttpIntegrationTest {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("tieat.onboarding.invite-code", () -> StoreOnboardingHttpIntegrationSupport.INVITE_CODE);
+        registry.add("tieat.qr.token-encryption-key", () -> QR_KEY);
     }
 
     @BeforeEach
     void clearDatabase() {
         jdbcTemplate.execute("""
-            truncate table store_partner_registrations, stores, store_catalog_entries, store_accounts, partner_organizations, meal_contracts, meal_usages
+            truncate table meal_usage_qr_operation_audits, meal_usage_qr_contexts,
+                store_partner_registrations, stores, store_catalog_entries, store_accounts,
+                partner_organizations, meal_contracts, meal_usages
             restart identity cascade
             """);
     }
@@ -100,6 +105,17 @@ class StorePartnerOnboardingHttpIntegrationTest {
             .isZero();
         assertThat(jdbcTemplate.queryForObject("select qr_selectable from meal_contracts where store_id = ?", Boolean.class, storeId))
             .isTrue();
+        mockMvc.perform(get("/api/v1/store-meal-usage-qr").cookie(session.cookie()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("AVAILABLE"))
+            .andExpect(jsonPath("$.publicPath").isString());
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from meal_usage_qr_contexts where store_id = ?", Long.class, storeId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from meal_usage_qr_operation_audits where store_id = ? and action = 'QR_ISSUED'",
+            Long.class, storeId
+        )).isEqualTo(1);
         mockMvc.perform(get("/api/v1/store-onboarding").cookie(session.cookie()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.onboardingStatus").value("COMPLETE"));

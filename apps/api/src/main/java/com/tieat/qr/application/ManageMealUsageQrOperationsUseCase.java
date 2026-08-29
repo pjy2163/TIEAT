@@ -20,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ManageMealUsageQrOperationsUseCase {
 
+    private static final String PARTNER_REGISTRATION_OPERATOR = "system:partner-registration";
+
     private final MealUsageQrOperationsRepository repository;
     private final Clock clock;
     private final MealUsageQrTokenProtector tokenProtector;
@@ -44,6 +46,21 @@ public class ManageMealUsageQrOperationsUseCase {
         }
         ensureQrSelectablePartnerExists(command.storeId());
         return issueNewContext(command.storeId(), command.storeDisplayName(), command.operatorId(), Instant.now(clock));
+    }
+
+    @Transactional
+    public void ensureIssuedIfMissing(StoreId storeId, String storeDisplayName) {
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        storeDisplayName = requireNonBlank(storeDisplayName, "Store display name");
+        ensureEnabledStoreAccount(storeId);
+        repository.lockStoreForOperations(storeId);
+        if (repository.findCurrentByStoreIdForUpdate(storeId).isPresent()) {
+            return;
+        }
+        if (repository.findPartnerSelectionsByStoreId(storeId).stream().noneMatch(QrPartnerSelection::qrSelectable)) {
+            return;
+        }
+        issueNewContext(storeId, storeDisplayName, PARTNER_REGISTRATION_OPERATOR, Instant.now(clock));
     }
 
     @Transactional

@@ -11,6 +11,7 @@ import com.tieat.partnership.domain.PartnerOrganization;
 import com.tieat.partnership.domain.PartnerOrganizationId;
 import com.tieat.partnership.domain.PartnerOrganizationRepository;
 import com.tieat.partnership.domain.PartnerKind;
+import com.tieat.qr.application.ManageMealUsageQrOperationsUseCase;
 import com.tieat.store.domain.Store;
 import com.tieat.store.domain.StoreId;
 import com.tieat.store.domain.StoreOnboardingStatus;
@@ -37,6 +38,7 @@ public class StoreOnboardingUseCase {
     private final MealContractRepository mealContractRepository;
     private final InviteCodeVerifier inviteCodeVerifier;
     private final StorePlaceSearchGateway storePlaceSearchGateway;
+    private final ManageMealUsageQrOperationsUseCase manageMealUsageQrOperationsUseCase;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
 
@@ -47,6 +49,7 @@ public class StoreOnboardingUseCase {
         MealContractRepository mealContractRepository,
         InviteCodeVerifier inviteCodeVerifier,
         StorePlaceSearchGateway storePlaceSearchGateway,
+        ManageMealUsageQrOperationsUseCase manageMealUsageQrOperationsUseCase,
         PasswordEncoder passwordEncoder,
         Clock clock
     ) {
@@ -56,6 +59,7 @@ public class StoreOnboardingUseCase {
         this.mealContractRepository = Objects.requireNonNull(mealContractRepository);
         this.inviteCodeVerifier = Objects.requireNonNull(inviteCodeVerifier);
         this.storePlaceSearchGateway = Objects.requireNonNull(storePlaceSearchGateway);
+        this.manageMealUsageQrOperationsUseCase = Objects.requireNonNull(manageMealUsageQrOperationsUseCase);
         this.passwordEncoder = Objects.requireNonNull(passwordEncoder);
         this.clock = Objects.requireNonNull(clock);
     }
@@ -141,6 +145,7 @@ public class StoreOnboardingUseCase {
             qrSelectable
         ));
         storeRepository.save(store.completeOnboarding());
+        manageMealUsageQrOperationsUseCase.ensureIssuedIfMissing(store.id(), store.displayName());
         return PartnerRegistrationResult.created(
             partnerOrganization.displayName(),
             partnerOrganization.partnerKind(),

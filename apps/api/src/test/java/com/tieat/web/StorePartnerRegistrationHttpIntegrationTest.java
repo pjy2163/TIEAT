@@ -17,6 +17,39 @@ import tools.jackson.databind.JsonNode;
 class StorePartnerRegistrationHttpIntegrationTest extends StorePartnerContextHttpIntegrationSupport {
 
     @Test
+    void provisionsQrWhenAddingFirstQrSelectablePartnerToAStoreWithoutCurrentQr() throws Exception {
+        var session = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
+            mockMvc, objectMapper, "qr-on-add-store", "correct-password", "QR 추가 가게"
+        );
+        String onboardingCsrf = StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
+        mockMvc.perform(StoreOnboardingHttpIntegrationSupport.partnerRequest(
+                session,
+                onboardingCsrf,
+                partnerBody("QR 비활성 협력사", "POSTPAID", "0", "false")
+            ))
+            .andExpect(status().isCreated());
+
+        UUID storeId = jdbcTemplate.queryForObject(
+            "select store_id from store_accounts where login_id = ?", UUID.class, "qr-on-add-store"
+        );
+        mockMvc.perform(storePartnerRequest(
+                session,
+                StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session),
+                UUID.randomUUID(),
+                partnerBody("QR 활성 협력사", "POSTPAID", "0", "true")
+            ))
+            .andExpect(status().isCreated());
+
+        JsonNode qr = json(mockMvc.perform(get("/api/v1/store-meal-usage-qr").cookie(session.cookie()))
+            .andExpect(status().isOk()).andReturn()).body();
+        assertThat(qr.get("status").asText()).isEqualTo("AVAILABLE");
+        assertThat(qr.get("publicPath").asText()).startsWith("/qr/");
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from meal_usage_qr_contexts where store_id = ?", Long.class, storeId
+        )).isEqualTo(1);
+    }
+
+    @Test
     void generalRegistrationCannotBypassFirstPartnerOnboarding() throws Exception {
         var session = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
             mockMvc, objectMapper, "partner-required-store", "correct-password", "파트너 대기 가게"

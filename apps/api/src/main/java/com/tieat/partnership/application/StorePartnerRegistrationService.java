@@ -10,6 +10,8 @@ import com.tieat.partnership.domain.PartnerOrganizationRepository;
 import com.tieat.partnership.domain.StorePartnerDirectoryEntry;
 import com.tieat.partnership.domain.StorePartnerRegistration;
 import com.tieat.partnership.domain.StorePartnerRegistrationRepository;
+import com.tieat.qr.application.ManageMealUsageQrOperationsUseCase;
+import com.tieat.store.domain.Store;
 import com.tieat.store.domain.StoreId;
 import com.tieat.store.domain.StoreOnboardingStatus;
 import com.tieat.store.domain.StoreRepository;
@@ -29,25 +31,27 @@ class StorePartnerRegistrationService {
     private final PartnerOrganizationRepository partnerOrganizationRepository;
     private final StorePartnerRegistrationRepository registrationRepository;
     private final StoreRepository storeRepository;
+    private final ManageMealUsageQrOperationsUseCase manageMealUsageQrOperationsUseCase;
 
     StorePartnerRegistrationService(
         MealContractRepository mealContractRepository,
         PartnerOrganizationRepository partnerOrganizationRepository,
         StorePartnerRegistrationRepository registrationRepository,
-        StoreRepository storeRepository
+        StoreRepository storeRepository,
+        ManageMealUsageQrOperationsUseCase manageMealUsageQrOperationsUseCase
     ) {
         this.mealContractRepository = Objects.requireNonNull(mealContractRepository);
         this.partnerOrganizationRepository = Objects.requireNonNull(partnerOrganizationRepository);
         this.registrationRepository = Objects.requireNonNull(registrationRepository);
         this.storeRepository = Objects.requireNonNull(storeRepository);
+        this.manageMealUsageQrOperationsUseCase = Objects.requireNonNull(manageMealUsageQrOperationsUseCase);
     }
 
     @Transactional
     StorePartnerDirectoryEntry create(CreateCommand command) {
         Objects.requireNonNull(command, "Store partner command must be supplied");
-        if (storeRepository.findById(command.actorStoreId())
-            .map(store -> store.onboardingStatus() == StoreOnboardingStatus.PARTNER_REQUIRED)
-            .orElse(false)) {
+        Store store = storeRepository.findById(command.actorStoreId()).orElse(null);
+        if (store != null && store.onboardingStatus() == StoreOnboardingStatus.PARTNER_REQUIRED) {
             throw new StorePartnerValidationException();
         }
         String partnerDisplayName = normalizePartnerDisplayName(command.partnerName());
@@ -79,10 +83,12 @@ class StorePartnerRegistrationService {
                 || !Objects.equals(existingPartnerOrganization.representativeEmail(), representativeEmail)) {
                 throw new StorePartnerConflictException();
             }
-            return mealContractRepository.findPartnerDirectoryEntryByIdAndStoreId(
+            StorePartnerDirectoryEntry entry = mealContractRepository.findPartnerDirectoryEntryByIdAndStoreId(
                     registration.mealContractId(), command.actorStoreId()
                 )
                 .orElseThrow(StorePartnerConflictException::new);
+            ensureQrIssued(store);
+            return entry;
         }
 
         PartnerOrganization partnerOrganization = partnerOrganizationRepository.save(new PartnerOrganization(
@@ -111,7 +117,7 @@ class StorePartnerRegistrationService {
             initialPrepaidBalanceMinor,
             mealContract.isQrSelectable()
         ));
-        return new StorePartnerDirectoryEntry(
+        StorePartnerDirectoryEntry entry = new StorePartnerDirectoryEntry(
             mealContract.id(),
             partnerOrganization.id(),
             partnerOrganization.displayName(),
@@ -121,6 +127,14 @@ class StorePartnerRegistrationService {
             partnerOrganization.representativePhone(),
             partnerOrganization.representativeEmail()
         );
+        ensureQrIssued(store);
+        return entry;
+    }
+
+    private void ensureQrIssued(Store store) {
+        if (store != null) {
+            manageMealUsageQrOperationsUseCase.ensureIssuedIfMissing(store.id(), store.displayName());
+        }
     }
 
     private String normalizePartnerDisplayName(String rawPartnerName) {
