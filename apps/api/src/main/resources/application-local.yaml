@@ -1,0 +1,28 @@
+spring:
+  config:
+    import: optional:file:.env[.properties],optional:file:../../.env[.properties]
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/tieat}
+    username: ${DB_USERNAME:tieat}
+    password: ${DB_PASSWORD:tieat_local}
+
+tieat:
+  session:
+    cookie:
+      secure: ${TIEAT_SESSION_COOKIE_SECURE:false}
+  qr:
+    token-encryption-required: ${TIEAT_QR_TOKEN_ENCRYPTION_REQUIRED:false}
+    token-encryption-keys: ${TIEAT_QR_TOKEN_ENCRYPTION_KEYS:}
+    token-encryption-key: ${TIEAT_QR_TOKEN_ENCRYPTION_KEY:}
+    token-encryption-key-version: ${TIEAT_QR_TOKEN_ENCRYPTION_KEY_VERSION:1}
+  onboarding:
+    invite-code: ${TIEAT_ONBOARDING_INVITE_CODE:}
+  receipts:
+    provider: ${TIEAT_RECEIPTS_PROVIDER:local}
+    local-root: ${TIEAT_RECEIPTS_LOCAL_ROOT:${java.io.tmpdir}/tieat-receipts-private}
+    azure:
+      endpoint: ${TIEAT_RECEIPTS_AZURE_ENDPOINT:}
+      managed-identity-client-id: ${TIEAT_RECEIPTS_AZURE_MANAGED_IDENTITY_CLIENT_ID:}
+      container: ${TIEAT_RECEIPTS_AZURE_CONTAINER:tieat-receipts-private}
+      scan-timeout: ${TIEAT_RECEIPTS_AZURE_SCAN_TIMEOUT:PT30S}
+      scan-poll-interval: ${TIEAT_RECEIPTS_AZURE_SCAN_POLL_INTERVAL:PT1S}

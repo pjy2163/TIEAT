@@ -5,6 +5,7 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
+      SPRING_PROFILES_ACTIVE: local
       DB_URL: jdbc:postgresql://postgres:5432/tieat
       DB_USERNAME: tieat
       DB_PASSWORD: tieat_local

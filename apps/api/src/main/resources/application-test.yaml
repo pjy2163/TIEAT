@@ -1,0 +1,14 @@
+tieat:
+  session:
+    cookie:
+      secure: false
+  qr:
+    token-encryption-required: false
+    token-encryption-keys: 1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    token-encryption-key: ""
+    token-encryption-key-version: 1
+  onboarding:
+    invite-code: test-invite-code
+  receipts:
+    provider: local
+    local-root: ${java.io.tmpdir}/tieat-receipts-test

@@ -58,7 +58,7 @@ SDKMAN을 사용하는 경우 프로젝트 SDK를 적용합니다.
 ```bash
 sdk env
 docker compose up -d postgres
-./gradlew :apps:api:bootRun
+./gradlew :apps:api:bootRun --args='--spring.profiles.active=local'
 ```
 
 기본 API 주소는 `http://localhost:8080`이며 health endpoint는 다음과 같습니다.
@@ -66,6 +66,16 @@ docker compose up -d postgres
 ```text
 GET /actuator/health
 ```
+
+### Retention worker
+
+고객 이름 익명화 worker는 retention profile의 non-web 프로세스로 실행합니다.
+
+```bash
+./gradlew :apps:api:bootRun --args='--spring.profiles.active=retention'
+```
+
+기본 실행 시각은 매일 03:00(Asia/Seoul)이며 `TIEAT_CUSTOMER_NAME_ANONYMIZATION_CRON`으로 override할 수 있습니다. 단일 worker와 로그 실패·success count alert는 외부 플랫폼에서 연결해야 하며, 현재 저장소에는 그 증거가 없습니다.
 
 ## Verify
 

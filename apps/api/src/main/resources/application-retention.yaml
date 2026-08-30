@@ -1,0 +1,7 @@
+spring:
+  main:
+    web-application-type: none
+
+tieat:
+  customer-name-anonymization:
+    cron: "${TIEAT_CUSTOMER_NAME_ANONYMIZATION_CRON:0 0 3 * * *}"

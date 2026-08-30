@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 
 /** Development-only private storage; the root is never served by the web application. */
 @Component
-@ConditionalOnProperty(name = "tieat.receipts.provider", havingValue = "local", matchIfMissing = true)
+@ConditionalOnProperty(name = "tieat.receipts.provider", havingValue = "local")
 public final class LocalPrivateReceiptStorageAdapter implements ReceiptStorage {
 
     private static final Set<PosixFilePermission> PRIVATE_DIRECTORY_PERMISSIONS = EnumSet.of(
@@ -29,7 +29,7 @@ public final class LocalPrivateReceiptStorageAdapter implements ReceiptStorage {
 
     @Autowired
     public LocalPrivateReceiptStorageAdapter(
-        @Value("${tieat.receipts.local-root:${java.io.tmpdir}/tieat-receipts-private}") String root
+        @Value("${tieat.receipts.local-root}") String root
     ) {
         this(Path.of(root));
     }

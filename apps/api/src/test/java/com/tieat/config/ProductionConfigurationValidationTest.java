@@ -49,12 +49,12 @@ class ProductionConfigurationValidationTest {
     }
 
     @Test
-    void productionProfileLoadsProductionConfigDataAndResolvesEnvironmentBindings() {
+    void noExplicitProfileUsesProductionConfigDataAndResolvesExplicitEnvironmentBindings() {
         new ApplicationContextRunner()
             .withInitializer(new ConfigDataApplicationContextInitializer())
             .withUserConfiguration(ValidatorTestConfiguration.class)
-            .withPropertyValues("spring.profiles.active=production")
             .withSystemProperties(
+                "spring.profiles.active=",
                 "DB_URL=jdbc:postgresql://config-data.example:5432/tieat",
                 "DB_USERNAME=tieat-config-data",
                 "DB_PASSWORD=fake-config-data-password",
@@ -69,7 +69,8 @@ class ProductionConfigurationValidationTest {
                 assertThat(context).hasSingleBean(ProductionConfigurationValidator.class);
 
                 Environment environment = context.getEnvironment();
-                assertThat(environment.getActiveProfiles()).containsExactly("production");
+                assertThat(environment.getActiveProfiles()).isEmpty();
+                assertThat(environment.getDefaultProfiles()).containsExactly("production");
                 assertThat(environment.getProperty(DATASOURCE_URL))
                     .isEqualTo("jdbc:postgresql://config-data.example:5432/tieat");
                 assertThat(environment.getProperty(DATASOURCE_USERNAME)).isEqualTo("tieat-config-data");
@@ -81,6 +82,29 @@ class ProductionConfigurationValidationTest {
                 assertThat(environment.getProperty(RECEIPTS_AZURE_ENDPOINT))
                     .isEqualTo("https://config-data-receipts.invalid");
                 assertThat(environment.getProperty(RECEIPTS_AZURE_CONTAINER)).isEqualTo("config-data-receipts");
+            });
+    }
+
+    @Test
+    void noExplicitProfileRejectsMissingRequiredProductionBinding() {
+        new ApplicationContextRunner()
+            .withInitializer(new ConfigDataApplicationContextInitializer())
+            .withUserConfiguration(ValidatorTestConfiguration.class)
+            .withSystemProperties(
+                "spring.profiles.active=",
+                "DB_URL=jdbc:postgresql://config-data.example:5432/tieat",
+                "DB_USERNAME=tieat-config-data",
+                "DB_PASSWORD=",
+                "TIEAT_QR_TOKEN_ENCRYPTION_KEYS=" + QR_KEY_RING,
+                "TIEAT_QR_TOKEN_ENCRYPTION_KEY_VERSION=1",
+                "TIEAT_RECEIPTS_PROVIDER=azure",
+                "TIEAT_RECEIPTS_AZURE_ENDPOINT=https://config-data-receipts.invalid",
+                "TIEAT_RECEIPTS_AZURE_CONTAINER=config-data-receipts"
+            )
+            .run(context -> {
+                Throwable startupFailure = context.getStartupFailure();
+                assertThat(startupFailure).isNotNull();
+                assertThat(rootCause(startupFailure).getMessage()).contains(DATASOURCE_PASSWORD);
             });
     }
 
@@ -103,6 +127,7 @@ class ProductionConfigurationValidationTest {
     void noProfileAndTestProfileKeepValidatorInactiveWithLocalConfiguration() {
         new ApplicationContextRunner()
             .withUserConfiguration(ValidatorTestConfiguration.class)
+            .withSystemProperties("spring.profiles.active=")
             .withPropertyValues(propertyValues(null, localProperties()))
             .run(context -> {
                 assertThat(context.getStartupFailure()).isNull();
