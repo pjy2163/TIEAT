@@ -5,6 +5,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import {
   getStoreMealUsageQr,
+  renewStoreMealUsageQr,
   type StoreMealUsageQrView as StoreMealUsageQrApiView,
 } from "@/lib/store-meal-usage-qr-api";
 import { useStorePartnerContext } from "../StorePartnerContext";
@@ -36,6 +37,8 @@ export function StoreMealUsageQrView() {
   const [view, setView] = useState<StoreMealUsageQrApiView | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [renewalErrorMessage, setRenewalErrorMessage] = useState<string | null>(null);
+  const [renewalState, setRenewalState] = useState<"idle" | "loading">("idle");
   const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
@@ -44,6 +47,8 @@ export function StoreMealUsageQrView() {
     setView(null);
     setQrDataUrl(null);
     setErrorMessage(null);
+    setRenewalErrorMessage(null);
+    setRenewalState("idle");
 
     void getStoreMealUsageQr()
       .then((nextView) => {
@@ -61,6 +66,18 @@ export function StoreMealUsageQrView() {
       active = false;
     };
   }, [retryKey]);
+
+  async function renewExpiredQr() {
+    setRenewalState("loading");
+    setRenewalErrorMessage(null);
+    try {
+      setView(await renewStoreMealUsageQr());
+    } catch {
+      setRenewalErrorMessage("QR코드를 연장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setRenewalState("idle");
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -155,6 +172,21 @@ export function StoreMealUsageQrView() {
         <div className={styles.state}>
           <h2 className={styles.stateTitle}>{statusCopy.title}</h2>
           <p className={styles.stateDescription}>{statusCopy.description}</p>
+          {view?.status === "EXPIRED" && (
+            <>
+              <button
+                className={styles.stateAction}
+                disabled={renewalState === "loading"}
+                onClick={() => void renewExpiredQr()}
+                type="button"
+              >
+                {renewalState === "loading" ? "연장하는 중..." : "90일 연장하기"}
+              </button>
+              {renewalErrorMessage !== null && (
+                <p className={styles.stateDescription} role="alert">{renewalErrorMessage}</p>
+              )}
+            </>
+          )}
           <Link className={styles.stateAction} href="/store/meal-usages/months">장부로 돌아가기</Link>
         </div>
       </section>
@@ -167,7 +199,7 @@ function statusMessage(status: StoreMealUsageQrApiView["status"] | undefined): {
     case "EXPIRED":
       return {
         title: "QR코드가 만료되었습니다",
-        description: "이 QR코드는 더 이상 사용할 수 없습니다. 관리자에게 새 QR코드 발급을 요청해 주세요.",
+        description: "기존 QR은 즉시 사용할 수 없습니다. 매장 담당자가 아래 버튼으로 90일 새 QR을 발급해 주세요.",
       };
     case "REISSUE_REQUIRED":
       return {

@@ -9,6 +9,12 @@ export type StoreMealUsageQrView = {
   expiresAt: string | null;
 };
 
+type CsrfToken = {
+  token: string;
+  headerName: string;
+  parameterName: string;
+};
+
 const API_PATH = "/api/v1/store-meal-usage-qr";
 const PUBLIC_PATH_PATTERN = /^\/qr\/[A-Za-z0-9_-]{43}$/;
 const ISO_INSTANT_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -17,6 +23,23 @@ async function apiError(response: Response): Promise<ApiError> {
   const body: unknown = await response.json().catch(() => null);
   const errorCode = isRecord(body) && typeof body.errorCode === "string" ? body.errorCode : undefined;
   return new ApiError(response.status, errorCode);
+}
+
+function parseCsrfToken(value: unknown): CsrfToken {
+  if (!isRecord(value)
+    || typeof value.token !== "string"
+    || value.token.trim().length === 0
+    || typeof value.headerName !== "string"
+    || value.headerName.trim().length === 0
+    || typeof value.parameterName !== "string"
+    || value.parameterName.trim().length === 0) {
+    throw new InvalidApiResponseError();
+  }
+  return {
+    token: value.token,
+    headerName: value.headerName,
+    parameterName: value.parameterName,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -76,6 +99,26 @@ export async function getStoreMealUsageQr(): Promise<StoreMealUsageQrView> {
   const response = await fetch(API_PATH, {
     cache: "no-store",
     credentials: "same-origin",
+  });
+  if (!response.ok) throw await apiError(response);
+  return parseView(await response.json() as unknown);
+}
+
+export async function renewStoreMealUsageQr(): Promise<StoreMealUsageQrView> {
+  const csrfResponse = await fetch("/api/v1/csrf", {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  if (!csrfResponse.ok) throw await apiError(csrfResponse);
+  const csrf = parseCsrfToken(await csrfResponse.json() as unknown);
+
+  const response = await fetch(`${API_PATH}/renewals`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: {
+      [csrf.headerName]: csrf.token,
+    },
   });
   if (!response.ok) throw await apiError(response);
   return parseView(await response.json() as unknown);

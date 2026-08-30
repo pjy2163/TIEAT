@@ -1,16 +1,18 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getStoreMealUsageQr } from "@/lib/store-meal-usage-qr-api";
+import { getStoreMealUsageQr, renewStoreMealUsageQr } from "@/lib/store-meal-usage-qr-api";
 import { StoreMealUsageQrView } from "./StoreMealUsageQrView";
 
 const qrMocks = vi.hoisted(() => ({
   getStoreMealUsageQr: vi.fn(),
+  renewStoreMealUsageQr: vi.fn(),
   toDataURL: vi.fn(),
 }));
 
 vi.mock("@/lib/store-meal-usage-qr-api", () => ({
   getStoreMealUsageQr: qrMocks.getStoreMealUsageQr,
+  renewStoreMealUsageQr: qrMocks.renewStoreMealUsageQr,
 }));
 
 vi.mock("qrcode", () => ({
@@ -33,6 +35,7 @@ const availableView = {
 beforeEach(() => {
   vi.clearAllMocks();
   qrMocks.getStoreMealUsageQr.mockResolvedValue(availableView);
+  qrMocks.renewStoreMealUsageQr.mockResolvedValue(availableView);
   qrMocks.toDataURL.mockResolvedValue("data:image/png;base64,local-qr");
 });
 
@@ -60,7 +63,6 @@ describe("StoreMealUsageQrView", () => {
 
   it.each([
     ["NOT_AVAILABLE", "QR코드가 아직 없습니다"],
-    ["EXPIRED", "QR코드가 만료되었습니다"],
     ["REISSUE_REQUIRED", "QR코드를 다시 발급해 주세요"],
   ] as const)("shows the %s status without mutation controls", async (status, title) => {
     qrMocks.getStoreMealUsageQr.mockResolvedValue({
@@ -75,6 +77,33 @@ describe("StoreMealUsageQrView", () => {
     expect(await screen.findByRole("heading", { name: title })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /발급|재발급|폐기|철회/ })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "장부로 돌아가기" })).toHaveAttribute("href", "/store/meal-usages/months");
+  });
+
+  it("renews an expired QR and renders the newly issued QR", async () => {
+    const user = userEvent.setup();
+    const renewedView = {
+      status: "AVAILABLE" as const,
+      publicPath: `/qr/${"b".repeat(43)}`,
+      issuedAt: "2026-11-18T00:00:00Z",
+      expiresAt: "2027-02-16T00:00:00Z",
+    };
+    qrMocks.getStoreMealUsageQr.mockResolvedValue({
+      status: "EXPIRED",
+      publicPath: null,
+      issuedAt: "2026-08-20T00:00:00Z",
+      expiresAt: "2026-11-18T00:00:00Z",
+    });
+    qrMocks.renewStoreMealUsageQr.mockResolvedValue(renewedView);
+
+    render(<StoreMealUsageQrView />);
+
+    await user.click(await screen.findByRole("button", { name: "90일 연장하기" }));
+    await waitFor(() => expect(renewStoreMealUsageQr).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("img", { name: "써브웨이 숙명여대점 QR코드" })).toBeInTheDocument();
+    expect(qrMocks.toDataURL).toHaveBeenLastCalledWith(
+      `${window.location.origin}${renewedView.publicPath}`,
+      expect.objectContaining({ errorCorrectionLevel: "M" }),
+    );
   });
 
   it("recovers from an API error with one explicit retry", async () => {

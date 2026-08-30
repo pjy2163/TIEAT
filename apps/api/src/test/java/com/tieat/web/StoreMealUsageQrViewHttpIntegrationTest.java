@@ -3,7 +3,9 @@ package com.tieat.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tieat.partnership.domain.MealContract;
@@ -14,6 +16,7 @@ import com.tieat.partnership.domain.PartnerOrganization;
 import com.tieat.partnership.domain.PartnerOrganizationId;
 import com.tieat.partnership.domain.PartnerOrganizationRepository;
 import com.tieat.qr.application.ManageMealUsageQrOperationsUseCase;
+import com.tieat.qr.domain.MealUsageQrContext;
 import com.tieat.qr.domain.MealUsageQrToken;
 import com.tieat.store.domain.StoreId;
 import com.tieat.web.StoreOnboardingHttpIntegrationSupport.SessionHandle;
@@ -192,6 +195,125 @@ class StoreMealUsageQrViewHttpIntegrationTest {
         JsonNode missing = json(mockMvc.perform(get("/api/v1/store-meal-usage-qr").cookie(session.cookie()))
             .andExpect(status().isOk()).andReturn()).body();
         assertThat(missing.get("status").asText()).isEqualTo("NOT_AVAILABLE");
+    }
+
+    @Test
+    void protectsQrRenewalWithAuthenticationAndCsrfWithoutCaching() throws Exception {
+        Fixture fixture = activeFixture("qr-view-renew-security", STORE_A, "매장 A");
+
+        mockMvc.perform(post("/api/v1/store-meal-usage-qr/renewals"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
+            .andExpect(jsonPath("$.errorCode").value("AUTHENTICATION_REQUIRED"));
+        mockMvc.perform(post("/api/v1/store-meal-usage-qr/renewals").cookie(fixture.session.cookie()))
+            .andExpect(status().isForbidden())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
+            .andExpect(jsonPath("$.errorCode").value("CSRF_TOKEN_INVALID"));
+        mockMvc.perform(post("/api/v1/store-meal-usage-qr/renewals")
+                .cookie(fixture.session.cookie())
+                .header("X-CSRF-TOKEN", "invalid-csrf-token"))
+            .andExpect(status().isForbidden())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
+            .andExpect(jsonPath("$.errorCode").value("CSRF_TOKEN_INVALID"));
+    }
+
+    @Test
+    void renewsExpiredQrWithAuthenticatedCsrfAndRejectsNonExpiredRenewal() throws Exception {
+        Fixture fixture = activeFixture("qr-view-renew-expired", STORE_A, "매장 A");
+        Fixture otherStore = activeFixture("qr-view-renew-other", STORE_B, "매장 B");
+        UUID oldContextId = fixture.issued.context().id().value();
+        jdbcTemplate.update(
+            "update meal_usage_qr_contexts set created_at = ?, expires_at = ? where id = ?",
+            Timestamp.from(Instant.now().minusSeconds(2)),
+            Timestamp.from(Instant.now().minusSeconds(1)),
+            oldContextId
+        );
+
+        MvcResult renewedResult = mockMvc.perform(post("/api/v1/store-meal-usage-qr/renewals")
+                .cookie(fixture.session.cookie())
+                .header("X-CSRF-TOKEN", fixture.session.csrfToken()))
+            .andExpect(status().isOk())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
+            .andExpect(jsonPath("$.status").value("AVAILABLE"))
+            .andExpect(jsonPath("$.publicPath").value(org.hamcrest.Matchers.startsWith("/qr/")))
+            .andExpect(jsonPath("$.issuedAt").isNotEmpty())
+            .andExpect(jsonPath("$.expiresAt").isNotEmpty())
+            .andReturn();
+        JsonNode renewed = json(renewedResult).body();
+        String newPath = renewed.get("publicPath").asText();
+        String newToken = newPath.substring("/qr/".length());
+        Instant issuedAt = Instant.parse(renewed.get("issuedAt").asText());
+        Instant expiresAt = Instant.parse(renewed.get("expiresAt").asText());
+
+        assertThat(MealUsageQrToken.isValid(newToken)).isTrue();
+        assertThat(expiresAt).isEqualTo(issuedAt.plus(MealUsageQrContext.DEFAULT_LIFETIME));
+        assertThat(jdbcTemplate.queryForObject(
+            "select revoked_at is not null from meal_usage_qr_contexts where id = ?",
+            Boolean.class,
+            oldContextId
+        )).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+            "select revoked_at is null from meal_usage_qr_contexts where id = ?",
+            Boolean.class,
+            otherStore.issued.context().id().value()
+        )).isTrue();
+
+        mockMvc.perform(get("/api/v1/public/meal-usage-qr/" + fixture.issued.rawToken()))
+            .andExpect(status().isNotFound())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
+            .andExpect(jsonPath("$.errorCode").value("PUBLIC_MEAL_USAGE_QR_NOT_FOUND"));
+        mockMvc.perform(get("/api/v1/public/meal-usage-qr/" + newToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.storeDisplayName").value("매장 A"))
+            .andExpect(jsonPath("$.qrExpiresAt").value(expiresAt.toString()));
+
+        mockMvc.perform(post("/api/v1/store-meal-usage-qr/renewals")
+                .cookie(fixture.session.cookie())
+                .header("X-CSRF-TOKEN", fixture.session.csrfToken()))
+            .andExpect(status().isConflict())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
+            .andExpect(jsonPath("$.errorCode").value("STORE_MEAL_USAGE_QR_RENEWAL_NOT_ALLOWED"));
+    }
+
+    @Test
+    void rejectsExpiredQrRenewalWithoutSelectableContractWithoutChangingContextOrAudit() throws Exception {
+        Fixture fixture = activeFixture("qr-view-renew-no-partner", STORE_A, "매장 A");
+        UUID contextId = fixture.issued.context().id().value();
+        String tokenHash = jdbcTemplate.queryForObject(
+            "select token_hash from meal_usage_qr_contexts where id = ?", String.class, contextId
+        );
+        long contextCount = jdbcTemplate.queryForObject("select count(*) from meal_usage_qr_contexts", Long.class);
+        long auditCount = jdbcTemplate.queryForObject("select count(*) from meal_usage_qr_operation_audits", Long.class);
+        Timestamp createdAt = Timestamp.from(Instant.now().minusSeconds(2));
+        Timestamp expiredAt = Timestamp.from(Instant.now().minusSeconds(1));
+        jdbcTemplate.update(
+            "update meal_usage_qr_contexts set created_at = ?, expires_at = ? where id = ?",
+            createdAt,
+            expiredAt,
+            contextId
+        );
+        jdbcTemplate.update("update meal_contracts set qr_selectable = false where id = ?", fixture.contract.id().value());
+
+        mockMvc.perform(post("/api/v1/store-meal-usage-qr/renewals")
+                .cookie(fixture.session.cookie())
+                .header("X-CSRF-TOKEN", fixture.session.csrfToken()))
+            .andExpect(status().isConflict())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
+            .andExpect(jsonPath("$.errorCode").value("STORE_MEAL_USAGE_QR_RENEWAL_NOT_ALLOWED"));
+
+        assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usage_qr_contexts", Long.class))
+            .isEqualTo(contextCount);
+        assertThat(jdbcTemplate.queryForObject(
+            "select token_hash from meal_usage_qr_contexts where id = ?", String.class, contextId
+        )).isEqualTo(tokenHash);
+        assertThat(jdbcTemplate.queryForObject(
+            "select revoked_at from meal_usage_qr_contexts where id = ?", Timestamp.class, contextId
+        )).isNull();
+        assertThat(jdbcTemplate.queryForObject(
+            "select expires_at from meal_usage_qr_contexts where id = ?", Timestamp.class, contextId
+        )).isEqualTo(expiredAt);
+        assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usage_qr_operation_audits", Long.class))
+            .isEqualTo(auditCount);
     }
 
     @Test
