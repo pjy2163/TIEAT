@@ -26,4 +26,22 @@ class TieatApiApplicationTest {
         })).isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("command");
     }
+
+    @Test
+    void entersNonWebModeForCustomerNameAnonymizationAndRejectsAmbiguousInvocations() {
+        assertThat(TieatApiApplication.isNonWebCommandInvocation(new String[] {
+            "--tieat.customer-name-anonymization.command=anonymize"
+        })).isTrue();
+
+        assertThatThrownBy(() -> TieatApiApplication.isNonWebCommandInvocation(new String[] {
+            "--tieat.customer-name-anonymization.retention-days=30"
+        })).isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("customer-name-anonymization.command");
+
+        assertThatThrownBy(() -> TieatApiApplication.isNonWebCommandInvocation(new String[] {
+            "--tieat.qr-operations.command=status",
+            "--tieat.customer-name-anonymization.command=anonymize"
+        })).isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("cannot be combined");
+    }
 }

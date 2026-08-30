@@ -10,15 +10,39 @@ import org.springframework.context.ConfigurableApplicationContext;
 public class TieatApiApplication {
 
     public static void main(String[] args) {
-        boolean qrOperationsInvocation = isQrOperationsInvocation(args);
+        boolean nonWebCommandInvocation = isNonWebCommandInvocation(args);
         SpringApplication application = new SpringApplication(TieatApiApplication.class);
-        if (qrOperationsInvocation) {
+        if (nonWebCommandInvocation) {
             application.setWebApplicationType(WebApplicationType.NONE);
         }
         ConfigurableApplicationContext context = application.run(args);
-        if (qrOperationsInvocation) {
+        if (nonWebCommandInvocation) {
             SpringApplication.exit(context);
         }
+    }
+
+    static boolean isNonWebCommandInvocation(String[] args) {
+        boolean qrCommandFound = isQrOperationsInvocation(args);
+        boolean customerNameAnonymizationOptionFound = false;
+        boolean customerNameAnonymizationCommandFound = false;
+        for (String arg : args) {
+            if (arg.startsWith("--tieat.customer-name-anonymization.")) {
+                customerNameAnonymizationOptionFound = true;
+                customerNameAnonymizationCommandFound |=
+                    arg.startsWith("--tieat.customer-name-anonymization.command=");
+            }
+        }
+        if (customerNameAnonymizationOptionFound && !customerNameAnonymizationCommandFound) {
+            throw new IllegalArgumentException(
+                "Customer name anonymization requires --tieat.customer-name-anonymization.command=<command>"
+            );
+        }
+        if (qrCommandFound && customerNameAnonymizationCommandFound) {
+            throw new IllegalArgumentException(
+                "QR operations and customer name anonymization commands cannot be combined"
+            );
+        }
+        return qrCommandFound || customerNameAnonymizationCommandFound;
     }
 
     static boolean isQrOperationsInvocation(String[] args) {
