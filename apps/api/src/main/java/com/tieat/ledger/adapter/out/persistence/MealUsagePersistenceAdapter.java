@@ -18,8 +18,10 @@ import java.time.Instant;
 import java.util.Set;
 import java.util.Objects;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -27,6 +29,18 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
 
     private final MealUsageJpaRepository repository;
     private final CustomerNameAnonymizationAuditJpaRepository anonymizationAuditRepository;
+    private final JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    public MealUsagePersistenceAdapter(
+        MealUsageJpaRepository repository,
+        CustomerNameAnonymizationAuditJpaRepository anonymizationAuditRepository,
+        JdbcTemplate jdbcTemplate
+    ) {
+        this.repository = Objects.requireNonNull(repository);
+        this.anonymizationAuditRepository = Objects.requireNonNull(anonymizationAuditRepository);
+        this.jdbcTemplate = Objects.requireNonNull(jdbcTemplate);
+    }
 
     public MealUsagePersistenceAdapter(
         MealUsageJpaRepository repository,
@@ -34,6 +48,26 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
     ) {
         this.repository = Objects.requireNonNull(repository);
         this.anonymizationAuditRepository = Objects.requireNonNull(anonymizationAuditRepository);
+        this.jdbcTemplate = null;
+    }
+
+    @Override
+    public void lockStoreForPendingCreation(StoreId storeId) {
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        if (jdbcTemplate == null) {
+            throw new IllegalStateException("Store pending creation lock requires a database connection");
+        }
+        jdbcTemplate.query(
+            "select pg_advisory_xact_lock(?)",
+            statement -> statement.setLong(1, lockKey(storeId)),
+            resultSet -> null
+        );
+    }
+
+    @Override
+    public long countPendingByStoreId(StoreId storeId) {
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        return repository.countByStoreIdAndStatus(storeId.value(), MealUsageStatus.PENDING);
     }
 
     @Override
@@ -277,6 +311,11 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
             );
         }
         throw new IllegalStateException("Unsupported meal usage status: " + entity.status());
+    }
+
+    private long lockKey(StoreId storeId) {
+        java.util.UUID value = storeId.value();
+        return value.getMostSignificantBits() ^ value.getLeastSignificantBits();
     }
 
     private long requiredAllocationValue(Long value, String fieldName) {

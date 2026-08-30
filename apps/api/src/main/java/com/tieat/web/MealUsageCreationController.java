@@ -46,6 +46,7 @@ class MealUsageCreationController {
         @ApiResponse(responseCode = "401", description = "Authentication required", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "403", description = "Access denied or invalid CSRF token", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "404", description = "Meal contract not found", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
+        @ApiResponse(responseCode = "429", description = "Store pending meal usage capacity reached", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "500", description = "Internal error", content = @Content(schema = @Schema(implementation = ProblemResponse.class)))
     })
     @PostMapping

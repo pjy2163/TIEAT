@@ -340,6 +340,18 @@ class MealUsageUseCaseTest {
         private int saveCount;
 
         @Override
+        public void lockStoreForPendingCreation(StoreId storeId) {
+        }
+
+        @Override
+        public long countPendingByStoreId(StoreId storeId) {
+            return mealUsages.values().stream()
+                .filter(usage -> usage.storeId().equals(storeId))
+                .filter(usage -> usage.status() == MealUsageStatus.PENDING)
+                .count();
+        }
+
+        @Override
         public MealUsage save(MealUsage mealUsage) {
             mealUsages.put(mealUsage.id(), mealUsage);
             saveCount++;

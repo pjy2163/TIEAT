@@ -5,6 +5,7 @@ import com.tieat.ledger.application.MealUsageNotPendingException;
 import com.tieat.ledger.application.MealContractNotFoundException;
 import com.tieat.ledger.application.PublicMealUsageIdempotencyConflictException;
 import com.tieat.ledger.application.PublicMealUsageRateLimitExceededException;
+import com.tieat.ledger.application.MealUsagePendingLimitReachedException;
 import com.tieat.ledger.application.PublicQrMealContractNotFoundException;
 import com.tieat.ledger.application.MealUsageNotFoundException;
 import com.tieat.ledger.application.InvalidPendingMealUsageQueryException;
@@ -18,6 +19,7 @@ import com.tieat.identity.application.PasswordReauthenticationRequiredException;
 import com.tieat.settlement.application.InvalidPosSettlementHistoryQueryException;
 import com.tieat.ledger.domain.PublicMealUsageIdempotency.InvalidPublicRequestKeyException;
 import com.tieat.qr.application.PublicMealUsageQrNotFoundException;
+import com.tieat.qr.application.StoreMealUsageQrRenewalConflictException;
 import com.tieat.settlement.application.PosSettlementConflictException;
 import com.tieat.partnership.application.StorePartnerConflictException;
 import com.tieat.partnership.application.StorePartnerArchiveConflictException;
@@ -289,6 +291,32 @@ public class ApiExceptionHandler {
         return problem(request, HttpStatus.TOO_MANY_REQUESTS, "PUBLIC_QR_RATE_LIMITED", "Public QR request rate limit was exceeded");
     }
 
+    @ExceptionHandler(MealUsagePendingLimitReachedException.class)
+    ResponseEntity<ProblemDetail> handlePendingLimit(
+        MealUsagePendingLimitReachedException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.TOO_MANY_REQUESTS,
+            "MEAL_USAGE_PENDING_LIMIT_REACHED",
+            "Store pending meal usage capacity has been reached"
+        );
+    }
+
+    @ExceptionHandler(StoreMealUsageQrRenewalConflictException.class)
+    ResponseEntity<ProblemDetail> handleStoreMealUsageQrRenewalConflict(
+        StoreMealUsageQrRenewalConflictException exception,
+        HttpServletRequest request
+    ) {
+        return problem(
+            request,
+            HttpStatus.CONFLICT,
+            "STORE_MEAL_USAGE_QR_RENEWAL_NOT_ALLOWED",
+            "Store meal usage QR renewal is not available"
+        );
+    }
+
     @ExceptionHandler(PosSettlementConflictException.class)
     ResponseEntity<ProblemDetail> handlePosSettlementConflict(
         PosSettlementConflictException exception,
@@ -428,6 +456,8 @@ public class ApiExceptionHandler {
             || problemDetailFactory.isConfirmedMealUsageRequest(request)
             || problemDetailFactory.isPosSettlementRequest(request)
             || problemDetailFactory.isStoreOnboardingRequest(request)
+            || problemDetailFactory.isStoreMealUsageQrRequest(request)
+            || problemDetailFactory.isMealUsageCreationRequest(request)
             || problemDetailFactory.isSessionReauthenticationRequest(request)) {
             response.cacheControl(CacheControl.noStore());
         }

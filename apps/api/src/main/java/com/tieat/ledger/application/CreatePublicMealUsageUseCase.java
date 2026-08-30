@@ -46,10 +46,19 @@ public class CreatePublicMealUsageUseCase {
     @Transactional
     public MealUsage create(CreatePublicMealUsageCommand command) {
         Objects.requireNonNull(command, "Public create command must be supplied");
-        Instant now = Instant.now(clock);
+        if (!MealUsageQrToken.isValid(command.rawQrToken())) {
+            throw new PublicMealUsageQrNotFoundException();
+        }
+        final Instant initialNow = Instant.now(clock);
         String requestKeyHash = command.requestKeyHash();
+        String tokenHash = MealUsageQrToken.sha256Hash(command.rawQrToken());
+        MealUsageQrContext contextHint = mealUsageQrContextRepository.findByTokenHash(tokenHash)
+            .filter(candidate -> candidate.isActiveAt(initialNow))
+            .orElseThrow(PublicMealUsageQrNotFoundException::new);
+        mealUsageRepository.lockStoreForPendingCreation(contextHint.storeId());
+        final Instant now = Instant.now(clock);
         MealUsageQrContext context = mealUsageQrContextRepository.findByTokenHashForUpdate(
-            MealUsageQrToken.sha256Hash(command.rawQrToken())
+            tokenHash
         )
             .filter(candidate -> candidate.isActiveAt(now))
             .orElseThrow(PublicMealUsageQrNotFoundException::new);
@@ -68,10 +77,6 @@ public class CreatePublicMealUsageUseCase {
             return existing;
         }
 
-        if (mealUsageRepository.countPublicQrCreatedSince(context.id(), now.minusSeconds(60)) >= MAX_SUCCESSES_PER_MINUTE) {
-            throw new PublicMealUsageRateLimitExceededException();
-        }
-
         MealContract lockedContract = mealContractRepository.findByIdForUpdate(command.mealContractId())
             .filter(contract -> contract.storeId().equals(context.storeId())
                 && contract.isQrSelectable()
@@ -81,6 +86,12 @@ public class CreatePublicMealUsageUseCase {
             .filter(contract -> contract.mealContractId().equals(command.mealContractId()))
             .findFirst()
             .orElseThrow(PublicQrMealContractNotFoundException::new);
+        if (mealUsageRepository.countPendingByStoreId(context.storeId()) >= MealUsageRepository.MAX_PENDING_PER_STORE) {
+            throw new MealUsagePendingLimitReachedException();
+        }
+        if (mealUsageRepository.countPublicQrCreatedSince(context.id(), now.minusSeconds(60)) >= MAX_SUCCESSES_PER_MINUTE) {
+            throw new PublicMealUsageRateLimitExceededException();
+        }
         MealUsage created = mealUsageRepository.save(MealUsage.pendingFromPublicQr(
             MealUsageId.newId(),
             context.storeId(),

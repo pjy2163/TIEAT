@@ -16,6 +16,8 @@ import com.tieat.partnership.domain.MealContractPaymentType;
 import com.tieat.partnership.domain.MealContractRepository;
 import com.tieat.partnership.domain.PartnerOrganization;
 import com.tieat.partnership.domain.PartnerOrganizationId;
+import com.tieat.ledger.domain.MealUsage;
+import com.tieat.ledger.domain.MealUsageRepository;
 import com.tieat.ledger.domain.PublicMealUsageIdempotency;
 import com.tieat.partnership.domain.PartnerOrganizationRepository;
 import com.tieat.ledger.application.ConfirmMealUsageCommand;
@@ -23,9 +25,11 @@ import com.tieat.ledger.application.ConfirmMealUsageUseCase;
 import com.tieat.ledger.application.MealUsageNotPendingException;
 import com.tieat.ledger.application.PublicMealUsageRequestUseCase;
 import com.tieat.ledger.domain.MealUsageId;
+import com.tieat.qr.domain.MealUsageQrContextId;
 import com.tieat.qr.domain.MealUsageQrToken;
 import com.tieat.qr.application.PublicMealUsageQrNotFoundException;
 import com.tieat.store.domain.StoreId;
+import com.tieat.web.StoreOnboardingHttpIntegrationSupport.SessionHandle;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -48,6 +52,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -68,6 +73,8 @@ class PublicMealUsageQrHttpIntegrationTest {
     private static final StoreId OTHER_STORE_ID = new StoreId(UUID.fromString("6142be7d-0dc9-4f77-a17d-07e1e5c6e9a1"));
     private static final String PUBLIC_REQUEST_KEY = MealUsageQrToken.generate();
     private static final String CUSTOMER_NAME = "홍길동";
+    private static final String STORE_TABLET_LOGIN_ID = "public-cross-store-tablet";
+    private static final String STORE_TABLET_PASSWORD = "correct-password";
 
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
@@ -83,6 +90,12 @@ class PublicMealUsageQrHttpIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private MealUsageRepository mealUsageRepository;
 
     @Autowired
     private PartnerOrganizationRepository partnerOrganizationRepository;
@@ -180,6 +193,10 @@ class PublicMealUsageQrHttpIntegrationTest {
             mockMvc.perform(publicCreate(token, UUID.randomUUID(), fixture.contract.id().value(), 1_000))
                 .andExpect(publicProblem(HttpStatus.NOT_FOUND.value(), "PUBLIC_MEAL_USAGE_QR_NOT_FOUND", token));
         }
+        mockMvc.perform(publicStatus(malformedToken, UUID.randomUUID(), UUID.randomUUID(), PUBLIC_REQUEST_KEY))
+            .andExpect(publicProblem(
+                HttpStatus.NOT_FOUND.value(), "PUBLIC_MEAL_USAGE_QR_NOT_FOUND", malformedToken, PUBLIC_REQUEST_KEY
+            ));
         assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usages", Long.class)).isZero();
     }
 
@@ -250,15 +267,27 @@ class PublicMealUsageQrHttpIntegrationTest {
         MvcResult first = mockMvc.perform(publicCreate(fixture.token, idempotencyKey, fixture.contract.id().value(), 8_500))
             .andExpect(status().isCreated())
             .andReturn();
+        seedPendingUsages(fixture, MealUsageRepository.MAX_PENDING_PER_STORE - 1);
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from meal_usages where store_id = ? and status = 'PENDING'", Long.class, STORE_ID.value()
+        )).isEqualTo((long) MealUsageRepository.MAX_PENDING_PER_STORE);
+
         MvcResult replay = mockMvc.perform(publicCreate(fixture.token, idempotencyKey, fixture.contract.id().value(), 8_500))
             .andExpect(status().isCreated())
             .andExpect(header().doesNotExist(HttpHeaders.LOCATION))
             .andReturn();
         assertThat(replay.getResponse().getContentAsString()).isEqualTo(first.getResponse().getContentAsString());
-        assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usages", Long.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usages", Long.class)).isEqualTo(30);
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from public_meal_usage_idempotency_keys where qr_context_id = ? and idempotency_key = ?",
+            Long.class,
+            fixture.qrContextId,
+            idempotencyKey
+        )).isEqualTo(1);
 
         mockMvc.perform(publicCreate(fixture.token, idempotencyKey, fixture.contract.id().value(), 8_501))
             .andExpect(publicProblem(HttpStatus.CONFLICT.value(), "IDEMPOTENCY_KEY_REUSED", fixture.token));
+        assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usages", Long.class)).isEqualTo(30);
         mockMvc.perform(publicCreate(fixture.token, idempotencyKey, UUID.randomUUID(), 8_500))
             .andExpect(publicProblem(HttpStatus.CONFLICT.value(), "IDEMPOTENCY_KEY_REUSED", fixture.token));
         mockMvc.perform(publicCreate(
@@ -267,7 +296,8 @@ class PublicMealUsageQrHttpIntegrationTest {
         mockMvc.perform(publicCreate(
             fixture.token, idempotencyKey, fixture.contract.id().value(), 8_500, MealUsageQrToken.generate()
         )).andExpect(publicProblem(HttpStatus.CONFLICT.value(), "IDEMPOTENCY_KEY_REUSED", fixture.token));
-        assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usages", Long.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usages", Long.class))
+            .isEqualTo((long) MealUsageRepository.MAX_PENDING_PER_STORE);
 
         UUID mealUsageId = UUID.fromString(objectMapper.readTree(first.getResponse().getContentAsString()).get("mealUsageId").asText());
         jdbcTemplate.update(
@@ -278,6 +308,49 @@ class PublicMealUsageQrHttpIntegrationTest {
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.status").value("PENDING"))
             .andExpect(content().string(first.getResponse().getContentAsString()));
+    }
+
+    @Test
+    void serializesPublicAndStoreTabletCreatesAtStorePendingCapacityBoundary() throws Exception {
+        Fixture fixture = activeFixture();
+        seedPendingUsages(fixture, MealUsageRepository.MAX_PENDING_PER_STORE - 1);
+        SessionHandle tabletSession = authenticatedStoreTabletSession();
+        UUID publicIdempotencyKey = UUID.randomUUID();
+
+        List<MvcResult> results = performConcurrently(2, index -> index == 0
+            ? publicCreate(fixture.token, publicIdempotencyKey, fixture.contract.id().value(), 8_500)
+            : storeTabletCreate(tabletSession, fixture.contract.id().value(), 8_500));
+
+        MvcResult publicResult = results.get(0);
+        MvcResult tabletResult = results.get(1);
+        List<Integer> statuses = results.stream().map(result -> result.getResponse().getStatus()).toList();
+        assertThat(statuses).containsOnly(HttpStatus.CREATED.value(), HttpStatus.TOO_MANY_REQUESTS.value());
+        assertThat(statuses.stream().filter(status -> status == HttpStatus.CREATED.value()).count()).isEqualTo(1);
+        assertThat(statuses.stream().filter(status -> status == HttpStatus.TOO_MANY_REQUESTS.value()).count()).isEqualTo(1);
+
+        MvcResult limitedResult = publicResult.getResponse().getStatus() == HttpStatus.TOO_MANY_REQUESTS.value()
+            ? publicResult
+            : tabletResult;
+        problem(HttpStatus.TOO_MANY_REQUESTS.value(), "MEAL_USAGE_PENDING_LIMIT_REACHED").match(limitedResult);
+        header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")).match(limitedResult);
+        if (publicResult.getResponse().getStatus() == HttpStatus.TOO_MANY_REQUESTS.value()) {
+            publicProblem(
+                HttpStatus.TOO_MANY_REQUESTS.value(),
+                "MEAL_USAGE_PENDING_LIMIT_REACHED",
+                fixture.token,
+                PUBLIC_REQUEST_KEY
+            ).match(publicResult);
+            assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from public_meal_usage_idempotency_keys where qr_context_id = ? and idempotency_key = ?",
+                Long.class,
+                fixture.qrContextId,
+                publicIdempotencyKey
+            )).isZero();
+        }
+
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from meal_usages where store_id = ? and status = 'PENDING'", Long.class, STORE_ID.value()
+        )).isEqualTo((long) MealUsageRepository.MAX_PENDING_PER_STORE);
     }
 
     @Test
@@ -491,6 +564,36 @@ class PublicMealUsageQrHttpIntegrationTest {
     }
 
     @Test
+    void rejectsPublicCreateWhenStorePendingCapacityIsReachedWithoutAddingUsage() throws Exception {
+        Fixture fixture = activeFixture();
+        Instant createdAt = Instant.now().minusSeconds(60);
+        MealUsageQrContextId qrContextId = new MealUsageQrContextId(fixture.qrContextId);
+        for (int index = 0; index < MealUsageRepository.MAX_PENDING_PER_STORE; index++) {
+            mealUsageRepository.save(MealUsage.pendingFromPublicQr(
+                MealUsageId.newId(),
+                STORE_ID,
+                fixture.contract.id(),
+                qrContextId,
+                "협력사 A",
+                "고객 " + index,
+                1_000,
+                createdAt
+            ));
+        }
+
+        assertThat(mealUsageRepository.countPendingByStoreId(STORE_ID))
+            .isEqualTo(MealUsageRepository.MAX_PENDING_PER_STORE);
+
+        mockMvc.perform(publicCreate(fixture.token, UUID.randomUUID(), fixture.contract.id().value(), 1_000))
+            .andExpect(publicProblem(
+                HttpStatus.TOO_MANY_REQUESTS.value(), "MEAL_USAGE_PENDING_LIMIT_REACHED", fixture.token
+            ));
+
+        assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usages", Long.class))
+            .isEqualTo((long) MealUsageRepository.MAX_PENDING_PER_STORE);
+    }
+
+    @Test
     void serializesConcurrentRequestsWithTheSameQrContextAndIdempotencyKey() throws Exception {
         Fixture fixture = activeFixture();
         UUID idempotencyKey = UUID.randomUUID();
@@ -617,6 +720,35 @@ class PublicMealUsageQrHttpIntegrationTest {
         return partnerOrganizationRepository.save(new PartnerOrganization(new PartnerOrganizationId(UUID.randomUUID()), displayName));
     }
 
+    private void seedPendingUsages(Fixture fixture, int count) {
+        Instant createdAt = Instant.now().minusSeconds(60);
+        MealUsageQrContextId qrContextId = new MealUsageQrContextId(fixture.qrContextId);
+        for (int index = 0; index < count; index++) {
+            mealUsageRepository.save(MealUsage.pendingFromPublicQr(
+                MealUsageId.newId(),
+                STORE_ID,
+                fixture.contract.id(),
+                qrContextId,
+                "협력사 A",
+                "고객 " + index,
+                1_000,
+                createdAt
+            ));
+        }
+    }
+
+    private SessionHandle authenticatedStoreTabletSession() throws Exception {
+        jdbcTemplate.update(
+            "insert into store_accounts (login_id, password_hash, store_id, enabled) values (?, ?, ?, true)",
+            STORE_TABLET_LOGIN_ID,
+            passwordEncoder.encode(STORE_TABLET_PASSWORD),
+            STORE_ID.value()
+        );
+        return StoreOnboardingHttpIntegrationSupport.authenticatedSession(
+            mockMvc, objectMapper, STORE_TABLET_LOGIN_ID, STORE_TABLET_PASSWORD
+        );
+    }
+
     private UUID seedQrContext(String token, StoreId storeId, Instant expiresAt, Instant revokedAt) {
         UUID qrContextId = UUID.randomUUID();
         jdbcTemplate.update(
@@ -690,6 +822,18 @@ class PublicMealUsageQrHttpIntegrationTest {
             .header("Public-Request-Key", publicRequestKey)
             .contentType(MediaType.APPLICATION_JSON)
             .content(body);
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder storeTabletCreate(
+        SessionHandle session,
+        UUID mealContractId,
+        long amountMinor
+    ) {
+        return post("/api/v1/meal-usages")
+            .cookie(session.cookie())
+            .header("X-CSRF-TOKEN", session.csrfToken())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"mealContractId\":\"" + mealContractId + "\",\"amountMinor\":" + amountMinor + "}");
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder publicStatus(

@@ -48,6 +48,7 @@ public class ProblemDetailFactory {
             || isPosSettlementRequest(request)
             || isStoreOnboardingRequest(request)
             || isStoreMealUsageQrRequest(request)
+            || isMealUsageCreationRequest(request)
             || isSessionReauthenticationRequest(request)) {
             response.setHeader(HttpHeaders.CACHE_CONTROL, CacheControl.noStore().getHeaderValue());
         }
@@ -81,7 +82,12 @@ public class ProblemDetailFactory {
 
     boolean isStoreMealUsageQrRequest(HttpServletRequest request) {
         String qrPath = request.getContextPath() + "/api/v1/store-meal-usage-qr";
-        return request.getRequestURI().equals(qrPath);
+        String requestUri = request.getRequestURI();
+        return requestUri.equals(qrPath) || requestUri.startsWith(qrPath + "/");
+    }
+
+    boolean isMealUsageCreationRequest(HttpServletRequest request) {
+        return request.getRequestURI().equals(request.getContextPath() + "/api/v1/meal-usages");
     }
 
     boolean isSessionReauthenticationRequest(HttpServletRequest request) {

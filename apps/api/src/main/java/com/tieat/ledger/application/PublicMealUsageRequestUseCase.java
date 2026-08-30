@@ -59,6 +59,9 @@ public class PublicMealUsageRequestUseCase {
     }
 
     private MealUsage loadAuthorizedUsage(RequestCommand command, Instant now, boolean lockUsage) {
+        if (!MealUsageQrToken.isValid(command.rawQrToken())) {
+            throw new PublicMealUsageQrNotFoundException();
+        }
         MealUsageQrContext context = mealUsageQrContextRepository.findByTokenHashForUpdate(
             MealUsageQrToken.sha256Hash(command.rawQrToken())
         )

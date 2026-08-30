@@ -30,10 +30,14 @@ public class CreateMealUsageUseCase {
     @Transactional
     public MealUsage create(CreateMealUsageCommand command) {
         Objects.requireNonNull(command, "Create command must be supplied");
+        mealUsageRepository.lockStoreForPendingCreation(command.storeId());
         var mealContract = mealContractRepository.findByIdForUpdate(command.mealContractId())
             .orElseThrow(() -> new MealContractNotFoundException(command.mealContractId()));
         if (!mealContract.storeId().equals(command.storeId()) || mealContract.isArchived()) {
             throw new MealContractNotFoundException(command.mealContractId());
+        }
+        if (mealUsageRepository.countPendingByStoreId(command.storeId()) >= MealUsageRepository.MAX_PENDING_PER_STORE) {
+            throw new MealUsagePendingLimitReachedException();
         }
         MealUsage mealUsage = MealUsage.pending(
             MealUsageId.newId(),

@@ -21,6 +21,8 @@ interface MealUsageJpaRepository extends JpaRepository<MealUsageJpaEntity, UUID>
     @Query("select mealUsage from MealUsageJpaEntity mealUsage where mealUsage.id = :id")
     Optional<MealUsageJpaEntity> findByIdForUpdate(@Param("id") UUID id);
 
+    long countByStoreIdAndStatus(UUID storeId, MealUsageStatus status);
+
     Slice<MealUsageJpaEntity> findByStoreIdAndStatus(UUID storeId, MealUsageStatus status, Pageable pageable);
 
     @Query("""

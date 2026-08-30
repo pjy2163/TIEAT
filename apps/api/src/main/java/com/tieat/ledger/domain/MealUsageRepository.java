@@ -8,6 +8,12 @@ import java.time.Instant;
 
 public interface MealUsageRepository {
 
+    int MAX_PENDING_PER_STORE = 30;
+
+    void lockStoreForPendingCreation(StoreId storeId);
+
+    long countPendingByStoreId(StoreId storeId);
+
     MealUsage save(MealUsage mealUsage);
 
     Optional<MealUsage> findById(MealUsageId id);
