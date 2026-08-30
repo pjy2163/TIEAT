@@ -174,9 +174,11 @@ export default function Home() {
             <div>
               <p className={landingStyles.eyebrow}>도입 문의</p>
               <h2 id="contact-title" className={landingStyles.contactTitle}>매장에 맞는 시작 방법을 준비하고 있습니다.</h2>
-              <p className={landingStyles.contactDescription}>도입 문의 채널을 준비 중입니다.</p>
+              <p className={landingStyles.contactDescription}>
+                <a href="mailto:parangofsky@gmail.com">parangofsky@gmail.com</a>
+              </p>
             </div>
-            <p className={landingStyles.contactStatus} role="status">채널이 열리면 이곳에서 안내해 드리겠습니다.</p>
+            <p className={landingStyles.contactStatus} role="status">이메일로 문의해 주세요.</p>
           </div>
         </section>
       </main>

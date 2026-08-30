@@ -272,7 +272,9 @@ describe("public landing page", () => {
     expect(screen.getByText("QR로 입력")).toBeVisible();
     expect(screen.getByText("매장에서 확인")).toBeVisible();
     expect(screen.getByText("장부에서 결제 확인")).toBeVisible();
-    expect(screen.getByText("도입 문의 채널을 준비 중입니다.")).toBeVisible();
+    const contactEmail = screen.getByRole("link", { name: "parangofsky@gmail.com" });
+    expect(contactEmail).toHaveAttribute("href", "mailto:parangofsky@gmail.com");
+    expect(screen.getByText("이메일로 문의해 주세요.")).toBeVisible();
 
     const footer = screen.getByRole("contentinfo");
     const footerBrand = within(footer).getByRole("link", { name: "TIEAT 홈" });
