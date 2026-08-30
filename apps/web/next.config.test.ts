@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import nextConfig, { resolveApiOrigin } from "./next.config";
+import nextConfig, { buildSecurityHeaders, resolveApiOrigin } from "./next.config";
 
 describe("Next web configuration", () => {
   it("keeps the localhost API fallback outside production", () => {
@@ -40,22 +40,53 @@ describe("Next web configuration", () => {
     );
   });
 
-  it("limits privacy headers to the public QR route", async () => {
-    await expect(nextConfig.headers?.()).resolves.toEqual([
+  it("keeps CSP report-only and omits HSTS outside production", () => {
+    for (const nodeEnv of ["development", "test"]) {
+      const headers = buildSecurityHeaders(nodeEnv);
+      expect(headers[0]).toMatchObject({ source: "/:path*" });
+      expect(headers[0].headers).toEqual([
+        {
+          key: "Content-Security-Policy-Report-Only",
+          value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+        },
+        { key: "Referrer-Policy", value: "no-referrer" },
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "X-Frame-Options", value: "DENY" },
+        {
+          key: "Permissions-Policy",
+          value: "camera=(), microphone=(), geolocation=()",
+        },
+      ]);
+      expect(headers[0].headers).not.toContainEqual({ key: "Strict-Transport-Security", value: "max-age=31536000" });
+    }
+  });
+
+  it("adds HSTS only to production global headers", () => {
+    const headers = buildSecurityHeaders("production")[0].headers;
+    expect(headers).toContainEqual({ key: "Strict-Transport-Security", value: "max-age=31536000" });
+    expect(headers).toContainEqual(expect.objectContaining({ key: "Content-Security-Policy" }));
+    expect(headers).not.toContainEqual(expect.objectContaining({ key: "Content-Security-Policy-Report-Only" }));
+    expect(headers).toContainEqual({ key: "Referrer-Policy", value: "no-referrer" });
+    expect(headers).toContainEqual({ key: "X-Content-Type-Options", value: "nosniff" });
+    expect(headers).toContainEqual({ key: "X-Frame-Options", value: "DENY" });
+    expect(headers).toContainEqual({
+      key: "Permissions-Policy",
+      value: "camera=(), microphone=(), geolocation=()",
+    });
+  });
+
+  it("keeps QR-only cache and robots boundaries without duplicating global headers", async () => {
+    expect(buildSecurityHeaders("test")).toEqual([
+      expect.any(Object),
       {
         source: "/qr/:token",
         headers: [
           { key: "Cache-Control", value: "no-store, max-age=0" },
-          { key: "Referrer-Policy", value: "no-referrer" },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
-          {
-            key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
-          },
         ],
       },
     ]);
+
+    await expect(nextConfig.headers?.()).resolves.toEqual(buildSecurityHeaders("test"));
   });
 });
