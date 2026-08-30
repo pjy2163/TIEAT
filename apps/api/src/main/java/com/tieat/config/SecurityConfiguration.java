@@ -1,38 +1,41 @@
 package com.tieat.config;
 
 import com.tieat.security.application.RateLimiter;
+import com.tieat.security.web.PublicQrCreateProtectionFilter;
 import com.tieat.security.web.RateLimitFilter;
 import com.tieat.security.web.RateLimitKeys;
 import com.tieat.web.ProblemDetailFactory;
 import java.time.Clock;
 import java.util.List;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.authentication.logout.CookieClearingLogoutHandler;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.authentication.logout.CookieClearingLogoutHandler;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
+import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.security.web.csrf.InvalidCsrfTokenException;
 import org.springframework.security.web.csrf.MissingCsrfTokenException;
-import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 
 @Configuration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+@EnableConfigurationProperties(PublicQrCreateProtectionProperties.class)
 public class SecurityConfiguration {
 
     @Bean
@@ -43,12 +46,19 @@ public class SecurityConfiguration {
         SecurityContextRepository securityContextRepository,
         Clock clock,
         ProblemDetailFactory problemDetailFactory,
-        RateLimiter rateLimiter
+        RateLimiter rateLimiter,
+        PublicQrCreateProtectionProperties publicQrCreateProtectionProperties
     ) throws Exception {
         return http
             .authenticationProvider(storeAccountAuthenticationProvider)
             .securityContext(securityContext -> securityContext.securityContextRepository(securityContextRepository))
             .addFilterBefore(new RememberedSessionExpiryFilter(clock), SecurityContextHolderFilter.class)
+            .addFilterBefore(
+                new PublicQrCreateProtectionFilter(
+                    rateLimiter, problemDetailFactory, publicQrCreateProtectionProperties
+                ),
+                UsernamePasswordAuthenticationFilter.class
+            )
             .addFilterBefore(new RateLimitFilter(rateLimiter, problemDetailFactory), UsernamePasswordAuthenticationFilter.class)
             .csrf(csrf -> csrf
                 .csrfTokenRepository(new HttpSessionCsrfTokenRepository())

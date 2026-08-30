@@ -10,6 +10,8 @@ public interface RateLimiter {
 
     Decision recordFailure(List<Key> keys);
 
+    Decision consume(Key key, int limit, Duration window);
+
     void clear(List<Key> keys);
 
     record Key(String scope, String value) {

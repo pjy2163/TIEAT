@@ -109,6 +109,53 @@ public class JdbcRateLimiterAdapter implements RateLimiter {
 
     @Override
     @Transactional
+    public Decision consume(Key key, int limit, Duration window) {
+        Objects.requireNonNull(key, "Rate limit key must be supplied");
+        Objects.requireNonNull(window, "Rate limit window must be supplied");
+        if (limit < 1 || window.isNegative() || window.isZero()) {
+            throw new IllegalArgumentException("Rate limit and window must be positive");
+        }
+
+        Instant now = clock.instant();
+        cleanupExpired(now);
+        while (true) {
+            RateRow row = lockCurrent(key, now);
+            if (row == null) {
+                int inserted = jdbcTemplate.update(
+                    "insert into auth_abuse_rate_limits "
+                        + "(scope, key_hash, window_started_at, failed_attempts, available_at, blocked_until) "
+                        + "values (?, ?, ?, 1, ?, null) on conflict (scope, key_hash) do nothing",
+                    key.scope(), hash(key.value()), Timestamp.from(now), Timestamp.from(now)
+                );
+                if (inserted == 1) {
+                    return Decision.permitted();
+                }
+                continue;
+            }
+
+            Instant resetsAt = row.windowStartedAt().plus(window);
+            if (!now.isBefore(resetsAt)) {
+                jdbcTemplate.update(
+                    "update auth_abuse_rate_limits set window_started_at = ?, failed_attempts = 1, "
+                        + "available_at = ?, blocked_until = null where scope = ? and key_hash = ?",
+                    Timestamp.from(now), Timestamp.from(now), key.scope(), hash(key.value())
+                );
+                return Decision.permitted();
+            }
+            if (row.failedAttempts() >= limit) {
+                return Decision.limited(remaining(resetsAt, now));
+            }
+            jdbcTemplate.update(
+                "update auth_abuse_rate_limits set failed_attempts = failed_attempts + 1 "
+                    + "where scope = ? and key_hash = ?",
+                key.scope(), hash(key.value())
+            );
+            return Decision.permitted();
+        }
+    }
+
+    @Override
+    @Transactional
     public void clear(List<Key> keys) {
         for (Key key : keys) {
             jdbcTemplate.update(

@@ -25,6 +25,10 @@ public final class RateLimitKeys {
         return List.of(new Key(scope, ip));
     }
 
+    public static Key publicQrCreateIp(String ip) {
+        return new Key("PUBLIC_QR_CREATE_IP", ip);
+    }
+
     private static List<Key> keys(String ipScope, String ip, String identityScope, String identity) {
         if (identity == null || identity.isBlank()) {
             return List.of(new Key(ipScope, ip));

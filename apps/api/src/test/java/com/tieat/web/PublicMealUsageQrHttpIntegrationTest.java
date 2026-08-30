@@ -114,10 +114,12 @@ class PublicMealUsageQrHttpIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("tieat.security.public-qr-create.trusted-proxy-cidrs", () -> "10.0.0.0/8");
     }
 
     @BeforeEach
     void clearDatabase() {
+        jdbcTemplate.update("delete from auth_abuse_rate_limits");
         jdbcTemplate.update("delete from public_meal_usage_idempotency_keys");
         jdbcTemplate.update("delete from meal_usages");
         jdbcTemplate.update("delete from meal_usage_qr_contexts");
@@ -645,6 +647,64 @@ class PublicMealUsageQrHttpIntegrationTest {
     }
 
     @Test
+    void rateLimitsCreateAttemptsByForwardedClientOnlyFromATrustedProxy() throws Exception {
+        String malformedToken = "malformed-token";
+        List<MvcResult> results = performConcurrently(16, ignored -> withClient(publicCreate(
+            malformedToken, UUID.randomUUID(), UUID.randomUUID(), 1_000
+        ), "10.0.0.5", "198.51.100.20"));
+
+        List<MvcResult> limited = results.stream()
+            .filter(result -> result.getResponse().getStatus() == HttpStatus.TOO_MANY_REQUESTS.value())
+            .toList();
+        assertThat(results.stream().filter(result -> result.getResponse().getStatus() == HttpStatus.NOT_FOUND.value()))
+            .hasSize(15);
+        assertThat(limited).hasSize(1);
+        assertThat(limited.get(0).getResponse().getHeader(HttpHeaders.RETRY_AFTER)).isNotBlank();
+        publicProblem(HttpStatus.TOO_MANY_REQUESTS.value(), "REQUEST_RATE_LIMITED", malformedToken)
+            .match(limited.get(0));
+
+        mockMvc.perform(withClient(publicCreate(
+                malformedToken, UUID.randomUUID(), UUID.randomUUID(), 1_000
+            ), "10.0.0.5", "203.0.113.20"))
+            .andExpect(publicProblem(HttpStatus.NOT_FOUND.value(), "PUBLIC_MEAL_USAGE_QR_NOT_FOUND", malformedToken));
+
+        assertRateLimitRowsAreHashed(2);
+    }
+
+    @Test
+    void ignoresSpoofedForwardedAddressesFromAnUntrustedPeer() throws Exception {
+        String malformedToken = "malformed-token";
+        for (int attempt = 0; attempt < 15; attempt++) {
+            mockMvc.perform(withClient(publicCreate(
+                    malformedToken, UUID.randomUUID(), UUID.randomUUID(), 1_000
+                ), "198.51.100.30", "203.0.113." + (attempt + 1)))
+                .andExpect(publicProblem(HttpStatus.NOT_FOUND.value(), "PUBLIC_MEAL_USAGE_QR_NOT_FOUND", malformedToken));
+        }
+
+        mockMvc.perform(withClient(publicCreate(
+                malformedToken, UUID.randomUUID(), UUID.randomUUID(), 1_000
+            ), "198.51.100.30", "203.0.113.200"))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(publicProblem(HttpStatus.TOO_MANY_REQUESTS.value(), "REQUEST_RATE_LIMITED", malformedToken));
+
+        assertRateLimitRowsAreHashed(1);
+    }
+
+    @Test
+    void rejectsOversizedPublicCreateBodiesBeforeJsonParsing() throws Exception {
+        String malformedToken = "malformed-token";
+        String oversizedBody = "{\"padding\":\"" + "a".repeat(16 * 1024) + "\"}";
+
+        mockMvc.perform(withClient(
+                publicCreate(malformedToken, UUID.randomUUID(), oversizedBody),
+                "198.51.100.40",
+                null
+            ))
+            .andExpect(status().is(HttpStatus.CONTENT_TOO_LARGE.value()))
+            .andExpect(publicProblem(HttpStatus.CONTENT_TOO_LARGE.value(), "REQUEST_BODY_TOO_LARGE", malformedToken));
+    }
+
+    @Test
     void databaseAllowsLegacyContractsButEnforcesOneQrSelectableContractPerStoreAndPartner() {
         Fixture fixture = activeFixture();
         PartnerOrganizationId partnerId = fixture.contract.partnerOrganizationId().orElseThrow();
@@ -822,6 +882,29 @@ class PublicMealUsageQrHttpIntegrationTest {
             .header("Public-Request-Key", publicRequestKey)
             .contentType(MediaType.APPLICATION_JSON)
             .content(body);
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder withClient(
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request,
+        String remoteAddress,
+        String forwardedFor
+    ) {
+        request.with(servletRequest -> {
+            servletRequest.setRemoteAddr(remoteAddress);
+            return servletRequest;
+        });
+        if (forwardedFor != null) {
+            request.header("X-Forwarded-For", forwardedFor);
+        }
+        return request;
+    }
+
+    private void assertRateLimitRowsAreHashed(int expectedCount) {
+        List<String> keyHashes = jdbcTemplate.query(
+            "select key_hash from auth_abuse_rate_limits where scope = 'PUBLIC_QR_CREATE_IP' order by key_hash",
+            (resultSet, rowNum) -> resultSet.getString("key_hash")
+        );
+        assertThat(keyHashes).hasSize(expectedCount).allMatch(hash -> hash.matches("[0-9a-f]{64}"));
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder storeTabletCreate(

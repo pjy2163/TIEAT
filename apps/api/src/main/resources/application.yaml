@@ -37,3 +37,10 @@ management:
     health:
       probes:
         enabled: true
+
+tieat:
+  security:
+    public-qr-create:
+      enabled: true
+      requests-per-minute: 15
+      trusted-proxy-cidrs: []
