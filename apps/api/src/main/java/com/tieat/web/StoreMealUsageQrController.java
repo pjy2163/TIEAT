@@ -3,6 +3,7 @@ package com.tieat.web;
 import com.tieat.identity.adapter.in.security.StoreAccountPrincipal;
 import com.tieat.qr.application.GetStoreMealUsageQrViewUseCase;
 import com.tieat.qr.application.GetStoreMealUsageQrViewUseCase.StoreMealUsageQrView;
+import com.tieat.qr.application.ManageMealUsageQrOperationsUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -14,6 +15,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -22,9 +24,14 @@ import org.springframework.web.bind.annotation.RestController;
 class StoreMealUsageQrController {
 
     private final GetStoreMealUsageQrViewUseCase getStoreMealUsageQrViewUseCase;
+    private final ManageMealUsageQrOperationsUseCase manageMealUsageQrOperationsUseCase;
 
-    StoreMealUsageQrController(GetStoreMealUsageQrViewUseCase getStoreMealUsageQrViewUseCase) {
+    StoreMealUsageQrController(
+        GetStoreMealUsageQrViewUseCase getStoreMealUsageQrViewUseCase,
+        ManageMealUsageQrOperationsUseCase manageMealUsageQrOperationsUseCase
+    ) {
         this.getStoreMealUsageQrViewUseCase = getStoreMealUsageQrViewUseCase;
+        this.manageMealUsageQrOperationsUseCase = manageMealUsageQrOperationsUseCase;
     }
 
     @Operation(summary = "Read the authenticated store's current meal usage QR view")
@@ -42,6 +49,25 @@ class StoreMealUsageQrController {
             .body(StoreMealUsageQrResponse.from(view));
     }
 
+    @Operation(summary = "Renew an expired QR for the authenticated store")
+    @SecurityRequirement(name = "sessionCookie")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Renewed current QR view", content = @Content(schema = @Schema(implementation = StoreMealUsageQrResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Authentication required", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
+        @ApiResponse(responseCode = "403", description = "Access denied or invalid CSRF token", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
+        @ApiResponse(responseCode = "409", description = "QR renewal is not available", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
+        @ApiResponse(responseCode = "500", description = "Internal error", content = @Content(schema = @Schema(implementation = ProblemResponse.class)))
+    })
+    @PostMapping("/renewals")
+    ResponseEntity<StoreMealUsageQrResponse> renew(@AuthenticationPrincipal StoreAccountPrincipal principal) {
+        ManageMealUsageQrOperationsUseCase.IssuedQr renewed = manageMealUsageQrOperationsUseCase.renew(
+            new ManageMealUsageQrOperationsUseCase.RenewalCommand(principal.storeId(), principal.getUsername())
+        );
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .body(StoreMealUsageQrResponse.from(renewed));
+    }
+
     record StoreMealUsageQrResponse(
         StoreMealUsageQrView.Status status,
         String publicPath,
@@ -51,6 +77,15 @@ class StoreMealUsageQrController {
 
         static StoreMealUsageQrResponse from(StoreMealUsageQrView view) {
             return new StoreMealUsageQrResponse(view.status(), view.publicPath(), view.issuedAt(), view.expiresAt());
+        }
+
+        static StoreMealUsageQrResponse from(ManageMealUsageQrOperationsUseCase.IssuedQr issued) {
+            return new StoreMealUsageQrResponse(
+                StoreMealUsageQrView.Status.AVAILABLE,
+                "/qr/" + issued.rawToken(),
+                issued.context().issuedAt(),
+                issued.context().expiresAt()
+            );
         }
     }
 }

@@ -420,6 +420,29 @@ class MealUsageQrOperationsLifecycleIntegrationTest {
         );
     }
 
+    @Test
+    void refusesInitialIssueWhenTheOnlyQrSelectableContractIsArchived() {
+        seedStoreAccount(STORE_ID);
+        PartnerOrganization partner = partner("보관 협력사");
+        mealContractRepository.save(new MealContract(
+            new MealContractId(UUID.randomUUID()),
+            STORE_ID,
+            MealContractPaymentType.POSTPAID,
+            0,
+            partner.id(),
+            true,
+            Instant.parse("2026-08-28T00:00:00Z"),
+            OPERATOR_ID
+        ));
+
+        assertThatThrownBy(() -> operations.issue(new ManageMealUsageQrOperationsUseCase.IssueCommand(
+            STORE_ID, "강남점", OPERATOR_ID
+        ))).isInstanceOf(QrOperationException.class)
+            .hasMessageContaining("At least one QR-selectable partner is required");
+        assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usage_qr_contexts", Long.class)).isZero();
+        assertThat(auditActions()).isEmpty();
+    }
+
     private Fixture activeFixture() {
         seedStoreAccount(STORE_ID);
         PartnerOrganization partner = partner("협력사 A");

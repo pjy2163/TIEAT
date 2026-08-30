@@ -29,6 +29,9 @@ public class GetPublicMealUsageQrContextUseCase {
 
     @Transactional(readOnly = true)
     public PublicMealUsageQrContext get(String rawQrToken) {
+        if (!MealUsageQrToken.isValid(rawQrToken)) {
+            throw new PublicMealUsageQrNotFoundException();
+        }
         Instant now = Instant.now(clock);
         MealUsageQrContext context = mealUsageQrContextRepository.findByTokenHash(MealUsageQrToken.sha256Hash(rawQrToken))
             .filter(candidate -> candidate.isActiveAt(now))

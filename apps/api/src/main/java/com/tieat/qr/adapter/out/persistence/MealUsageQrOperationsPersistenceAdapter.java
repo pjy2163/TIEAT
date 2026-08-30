@@ -124,7 +124,7 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
                 from meal_contracts meal_contract
                 join partner_organizations partner_organization
                     on partner_organization.id = meal_contract.partner_organization_id
-                where meal_contract.store_id = ?
+                where meal_contract.store_id = ? and meal_contract.archived_at is null
                 order by partner_organization.display_name asc, meal_contract.id asc
                 """,
             (resultSet, rowNum) -> toPartnerSelection(resultSet),
@@ -145,7 +145,7 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
                 from meal_contracts meal_contract
                 join partner_organizations partner_organization
                     on partner_organization.id = meal_contract.partner_organization_id
-                where meal_contract.id = ? and meal_contract.store_id = ?
+                where meal_contract.id = ? and meal_contract.store_id = ? and meal_contract.archived_at is null
                 for update of meal_contract
                 """,
             (resultSet, rowNum) -> toPartnerSelection(resultSet),

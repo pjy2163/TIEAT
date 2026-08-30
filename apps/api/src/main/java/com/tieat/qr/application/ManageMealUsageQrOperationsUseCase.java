@@ -77,6 +77,22 @@ public class ManageMealUsageQrOperationsUseCase {
     }
 
     @Transactional
+    public IssuedQr renew(RenewalCommand command) {
+        Objects.requireNonNull(command, "QR renewal command must be supplied");
+        repository.lockStoreForOperations(command.storeId());
+        MealUsageQrContext current = repository.findCurrentByStoreIdForUpdate(command.storeId())
+            .orElseThrow(StoreMealUsageQrRenewalConflictException::new);
+        Instant now = Instant.now(clock);
+        if (current.expiresAt().isAfter(now)
+            || repository.findPartnerSelectionsByStoreId(command.storeId()).stream().noneMatch(QrPartnerSelection::qrSelectable)) {
+            throw new StoreMealUsageQrRenewalConflictException();
+        }
+        repository.revoke(current.id(), now);
+        repository.appendAudit(QrOperationAudit.qrRevoked(command.operatorId(), command.storeId(), current.id(), now));
+        return issueNewContext(command.storeId(), current.storeDisplayName(), command.operatorId(), now);
+    }
+
+    @Transactional
     public void revoke(RevokeCommand command) {
         Objects.requireNonNull(command, "QR revoke command must be supplied");
         repository.lockStoreForOperations(command.storeId());
@@ -167,6 +183,14 @@ public class ManageMealUsageQrOperationsUseCase {
     public record ReissueCommand(StoreId storeId, String operatorId) {
 
         public ReissueCommand {
+            Objects.requireNonNull(storeId, "Store id must be supplied");
+            operatorId = requireNonBlank(operatorId, "QR operator id");
+        }
+    }
+
+    public record RenewalCommand(StoreId storeId, String operatorId) {
+
+        public RenewalCommand {
             Objects.requireNonNull(storeId, "Store id must be supplied");
             operatorId = requireNonBlank(operatorId, "QR operator id");
         }

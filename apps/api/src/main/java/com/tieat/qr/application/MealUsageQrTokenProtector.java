@@ -33,10 +33,10 @@ public final class MealUsageQrTokenProtector {
 
     @Autowired
     public MealUsageQrTokenProtector(
-        @Value("${tieat.qr.token-encryption-keys:}") String configuredKeys,
+        @Value("${tieat.qr.token-encryption-keys}") String configuredKeys,
         @Value("${tieat.qr.token-encryption-key:}") String configuredKey,
-        @Value("${tieat.qr.token-encryption-key-version:1}") int activeKeyVersion,
-        @Value("${tieat.qr.token-encryption-required:false}") boolean tokenEncryptionRequired
+        @Value("${tieat.qr.token-encryption-key-version}") int activeKeyVersion,
+        @Value("${tieat.qr.token-encryption-required}") boolean tokenEncryptionRequired
     ) {
         if (activeKeyVersion <= 0) {
             throw new IllegalStateException("QR token encryption key version must be positive");
