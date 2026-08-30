@@ -82,7 +82,7 @@ class StoreSignupHttpIntegrationTest {
     @BeforeEach
     void clearDatabase() {
         jdbcTemplate.execute("""
-            truncate table store_partner_registrations, stores, store_catalog_entries, store_accounts, partner_organizations, meal_contracts, meal_usages
+            truncate table store_partner_registrations, stores, store_catalog_entries, store_accounts, partner_organizations, meal_contracts, meal_usages, auth_abuse_rate_limits
             restart identity cascade
             """);
         placeSearchGateway.reset();
@@ -220,6 +220,104 @@ class StoreSignupHttpIntegrationTest {
         placeSearchGateway.makeUnavailable();
         mockMvc.perform(placeSearchRequest(session, csrfToken, StoreOnboardingHttpIntegrationSupport.INVITE_CODE, "TIEAT"))
             .andExpect(StoreOnboardingHttpIntegrationSupport.problem(503, "STORE_PLACE_SEARCH_UNAVAILABLE"));
+    }
+
+    @Test
+    void rateLimitsRepeatedInvalidPlaceInvitesWithoutPersistingInviteOrIp() throws Exception {
+        SessionHandle session = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
+        String csrfToken = StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
+
+        mockMvc.perform(placeSearchRequest(session, csrfToken, "wrong-code", "TIEAT"))
+            .andExpect(StoreOnboardingHttpIntegrationSupport.problem(403, "ONBOARDING_INVITE_INVALID"));
+        mockMvc.perform(placeSearchRequest(session, csrfToken, "wrong-code", "TIEAT"))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(header().string(HttpHeaders.RETRY_AFTER, org.hamcrest.Matchers.notNullValue()))
+            .andExpect(jsonPath("$.errorCode").value("REQUEST_RATE_LIMITED"))
+            .andExpect(jsonPath("$.detail").value("Too many requests"))
+            .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("wrong-code"))));
+        List<String> keyHashes = jdbcTemplate.query(
+            "select key_hash from auth_abuse_rate_limits",
+            (resultSet, rowNum) -> resultSet.getString("key_hash")
+        );
+        assertThat(keyHashes).isNotEmpty().allMatch(hash -> hash.matches("[0-9a-f]{64}"));
+
+        jdbcTemplate.update(
+            "update auth_abuse_rate_limits set window_started_at = now() - interval '16 minutes', "
+                + "available_at = now() - interval '1 second', blocked_until = now() - interval '1 second'"
+        );
+        placeSearchGateway.returnResults(List.of(new PlaceSearchResult("1", "TIEAT", "주소", "음식점")));
+        mockMvc.perform(placeSearchRequest(session, csrfToken, StoreOnboardingHttpIntegrationSupport.INVITE_CODE, "TIEAT"))
+            .andExpect(status().isOk());
+        assertThat(jdbcTemplate.queryForObject("select count(*) from auth_abuse_rate_limits", Long.class)).isZero();
+    }
+
+    @Test
+    void rateLimitsLoginByIpAndIdentityAndRecoversAfterWindow() throws Exception {
+        String loginId = "rate-limit-store";
+        String password = "correct-password";
+        jdbcTemplate.update(
+            "insert into store_accounts (login_id, password_hash, store_id, enabled) values (?, ?, ?, true)",
+            loginId, passwordEncoder.encode(password), UUID.randomUUID()
+        );
+        SessionHandle session = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
+        String csrfToken = StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            mockMvc.perform(post("/api/v1/sessions").cookie(session.cookie()).header("X-CSRF-TOKEN", csrfToken)
+                    .with(request -> {
+                        request.setRemoteAddr("198.51.100.10");
+                        return request;
+                    })
+                    .param("loginId", loginId).param("password", "wrong-password"))
+                .andExpect(status().is(attempt == 5 ? 429 : 401));
+            jdbcTemplate.update("update auth_abuse_rate_limits set available_at = now() - interval '1 second'");
+        }
+        mockMvc.perform(post("/api/v1/sessions").cookie(session.cookie()).header("X-CSRF-TOKEN", csrfToken)
+                .with(request -> {
+                    request.setRemoteAddr("203.0.113.10");
+                    return request;
+                })
+                .param("loginId", loginId).param("password", password))
+            .andExpect(status().isTooManyRequests());
+        mockMvc.perform(post("/api/v1/sessions").cookie(session.cookie()).header("X-CSRF-TOKEN", csrfToken)
+                .with(request -> {
+                    request.setRemoteAddr("198.51.100.10");
+                    return request;
+                })
+                .param("loginId", "another-login-id").param("password", "wrong-password"))
+            .andExpect(status().isTooManyRequests());
+
+        jdbcTemplate.update(
+            "update auth_abuse_rate_limits set window_started_at = now() - interval '16 minutes', "
+                + "available_at = now() - interval '1 second', blocked_until = now() - interval '1 second'"
+        );
+        mockMvc.perform(post("/api/v1/sessions").cookie(session.cookie()).header("X-CSRF-TOKEN", csrfToken)
+                .with(request -> {
+                    request.setRemoteAddr("198.51.100.10");
+                    return request;
+                })
+                .param("loginId", loginId).param("password", password))
+            .andExpect(status().isNoContent());
+        assertThat(jdbcTemplate.queryForObject("select count(*) from auth_abuse_rate_limits", Long.class)).isZero();
+    }
+
+    @Test
+    void rateLimitsRepeatedInvalidSignupInvitesBeforeCreatingRows() throws Exception {
+        SessionHandle session = StoreOnboardingHttpIntegrationSupport.csrfSession(mockMvc, objectMapper);
+        String csrfToken = StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
+
+        mockMvc.perform(StoreOnboardingHttpIntegrationSupport.signupRequest(
+                session, csrfToken, signupBodyWithInvite("wrong-code", "rate-limit-signup", "correct-password", "가게")
+            ))
+            .andExpect(StoreOnboardingHttpIntegrationSupport.problem(403, "ONBOARDING_INVITE_INVALID"));
+        mockMvc.perform(StoreOnboardingHttpIntegrationSupport.signupRequest(
+                session, csrfToken, signupBodyWithInvite("wrong-code", "rate-limit-signup", "correct-password", "가게")
+            ))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(jsonPath("$.errorCode").value("REQUEST_RATE_LIMITED"))
+            .andExpect(jsonPath("$.detail").value("Too many requests"));
+
+        assertThat(jdbcTemplate.queryForObject("select count(*) from stores", Long.class)).isZero();
+        assertThat(jdbcTemplate.queryForObject("select count(*) from store_accounts", Long.class)).isZero();
     }
 
     @Test

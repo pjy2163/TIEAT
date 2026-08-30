@@ -49,10 +49,20 @@ public class ProblemDetailFactory {
             || isStoreOnboardingRequest(request)
             || isStoreMealUsageQrRequest(request)
             || isMealUsageCreationRequest(request)
-            || isSessionReauthenticationRequest(request)) {
+            || isSessionReauthenticationRequest(request)
+            || isSessionRequest(request)) {
             response.setHeader(HttpHeaders.CACHE_CONTROL, CacheControl.noStore().getHeaderValue());
         }
         objectMapper.writeValue(response.getOutputStream(), create(request, status, errorCode, detail));
+    }
+
+    public void writeRateLimited(
+        HttpServletRequest request,
+        HttpServletResponse response,
+        long retryAfterSeconds
+    ) throws IOException {
+        response.setHeader(HttpHeaders.RETRY_AFTER, Long.toString(retryAfterSeconds));
+        write(request, response, HttpStatus.TOO_MANY_REQUESTS, "REQUEST_RATE_LIMITED", "Too many requests");
     }
 
     boolean isPublicMealUsageQrRequest(HttpServletRequest request) {
@@ -93,5 +103,9 @@ public class ProblemDetailFactory {
     boolean isSessionReauthenticationRequest(HttpServletRequest request) {
         String reauthenticationPath = request.getContextPath() + "/api/v1/session-reauthentications";
         return request.getRequestURI().equals(reauthenticationPath);
+    }
+
+    boolean isSessionRequest(HttpServletRequest request) {
+        return request.getRequestURI().equals(request.getContextPath() + "/api/v1/sessions");
     }
 }

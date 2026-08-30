@@ -6,6 +6,9 @@ import com.tieat.onboarding.application.StoreOnboardingUseCase;
 import com.tieat.onboarding.application.StorePlaceSearchGateway;
 import com.tieat.partnership.domain.MealContractPaymentType;
 import com.tieat.partnership.domain.PartnerKind;
+import com.tieat.security.application.RateLimitExceededException;
+import com.tieat.security.application.RateLimiter;
+import com.tieat.security.web.RateLimitKeys;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
@@ -36,26 +39,38 @@ class StoreOnboardingController {
     private final StoreAccountUserDetailsService storeAccountUserDetailsService;
     private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
     private final SecurityContextRepository securityContextRepository;
+    private final RateLimiter rateLimiter;
 
     StoreOnboardingController(
         StoreOnboardingUseCase storeOnboardingUseCase,
         StoreAccountUserDetailsService storeAccountUserDetailsService,
         SessionAuthenticationStrategy sessionAuthenticationStrategy,
-        SecurityContextRepository securityContextRepository
+        SecurityContextRepository securityContextRepository,
+        RateLimiter rateLimiter
     ) {
         this.storeOnboardingUseCase = Objects.requireNonNull(storeOnboardingUseCase);
         this.storeAccountUserDetailsService = Objects.requireNonNull(storeAccountUserDetailsService);
         this.sessionAuthenticationStrategy = Objects.requireNonNull(sessionAuthenticationStrategy);
         this.securityContextRepository = Objects.requireNonNull(securityContextRepository);
+        this.rateLimiter = Objects.requireNonNull(rateLimiter);
     }
 
     @PostMapping("/store-place-searches")
-    ResponseEntity<StorePlaceSearchResponse> searchPlaces(@RequestBody StorePlaceSearchRequest request) {
-        List<StorePlaceSearchItemResponse> entries = storeOnboardingUseCase.searchPlaces(
-                request.inviteCode(), request.query()
-            ).stream()
-            .map(StorePlaceSearchItemResponse::from)
-            .toList();
+    ResponseEntity<StorePlaceSearchResponse> searchPlaces(
+        @RequestBody StorePlaceSearchRequest request, HttpServletRequest servletRequest
+    ) {
+        check(RateLimitKeys.invite("PLACE_INVITE_IP", servletRequest.getRemoteAddr()));
+        List<StorePlaceSearchItemResponse> entries;
+        try {
+            entries = storeOnboardingUseCase.searchPlaces(request.inviteCode(), request.query()).stream()
+                .map(StorePlaceSearchItemResponse::from).toList();
+        } catch (com.tieat.onboarding.application.OnboardingException exception) {
+            if (exception.reason() == com.tieat.onboarding.application.OnboardingException.Reason.INVITE_INVALID) {
+                recordFailure(RateLimitKeys.invite("PLACE_INVITE_IP", servletRequest.getRemoteAddr()));
+            }
+            throw exception;
+        }
+        rateLimiter.clear(RateLimitKeys.invite("PLACE_INVITE_IP", servletRequest.getRemoteAddr()));
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
             .body(new StorePlaceSearchResponse("NAVER", entries));
@@ -67,18 +82,37 @@ class StoreOnboardingController {
         HttpServletRequest servletRequest,
         HttpServletResponse servletResponse
     ) {
-        StoreOnboardingUseCase.SignupResult result = storeOnboardingUseCase.signUp(
-            new StoreOnboardingUseCase.StoreSignupCommand(
-                request.inviteCode(),
-                request.loginId(),
-                request.password(),
-                request.manualStoreName()
-            )
-        );
+        check(RateLimitKeys.signup(servletRequest.getRemoteAddr(), request.loginId()));
+        StoreOnboardingUseCase.SignupResult result;
+        try {
+            result = storeOnboardingUseCase.signUp(new StoreOnboardingUseCase.StoreSignupCommand(
+                request.inviteCode(), request.loginId(), request.password(), request.manualStoreName()
+            ));
+        } catch (com.tieat.onboarding.application.OnboardingException exception) {
+            if (exception.reason() == com.tieat.onboarding.application.OnboardingException.Reason.INVITE_INVALID) {
+                recordFailure(RateLimitKeys.signup(servletRequest.getRemoteAddr(), request.loginId()));
+            }
+            throw exception;
+        }
+        rateLimiter.clear(RateLimitKeys.signup(servletRequest.getRemoteAddr(), request.loginId()));
         establishAuthenticatedSession(result.loginId(), servletRequest, servletResponse);
         return ResponseEntity.status(HttpStatus.CREATED)
             .cacheControl(CacheControl.noStore())
             .body(new SignupResponse(result.onboardingStatus().name()));
+    }
+
+    private void check(List<RateLimiter.Key> keys) {
+        RateLimiter.Decision decision = rateLimiter.check(keys);
+        if (!decision.allowed()) {
+            throw new RateLimitExceededException(decision.retryAfter());
+        }
+    }
+
+    private void recordFailure(List<RateLimiter.Key> keys) {
+        RateLimiter.Decision decision = rateLimiter.recordFailure(keys);
+        if (!decision.allowed()) {
+            throw new RateLimitExceededException(decision.retryAfter());
+        }
     }
 
     @GetMapping("/store-onboarding")

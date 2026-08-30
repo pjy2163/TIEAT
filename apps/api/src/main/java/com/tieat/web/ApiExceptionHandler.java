@@ -28,6 +28,7 @@ import com.tieat.partnership.application.StorePartnerNotFoundException;
 import com.tieat.partnership.application.StorePartnerPaymentTermConflictException;
 import com.tieat.partnership.application.StorePartnerValidationException;
 import com.tieat.partnership.application.StoreArchivePinException;
+import com.tieat.security.application.RateLimitExceededException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.CacheControl;
@@ -51,6 +52,16 @@ public class ApiExceptionHandler {
 
     public ApiExceptionHandler(ProblemDetailFactory problemDetailFactory) {
         this.problemDetailFactory = problemDetailFactory;
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    ResponseEntity<ProblemDetail> handleRateLimit(RateLimitExceededException exception, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .header("Retry-After", Long.toString(exception.retryAfter().toSeconds()))
+            .cacheControl(CacheControl.noStore())
+            .body(problemDetailFactory.create(
+                request, HttpStatus.TOO_MANY_REQUESTS, "REQUEST_RATE_LIMITED", "Too many requests"
+            ));
     }
 
     @ExceptionHandler(OnboardingException.class)
@@ -458,7 +469,8 @@ public class ApiExceptionHandler {
             || problemDetailFactory.isStoreOnboardingRequest(request)
             || problemDetailFactory.isStoreMealUsageQrRequest(request)
             || problemDetailFactory.isMealUsageCreationRequest(request)
-            || problemDetailFactory.isSessionReauthenticationRequest(request)) {
+            || problemDetailFactory.isSessionReauthenticationRequest(request)
+            || problemDetailFactory.isSessionRequest(request)) {
             response.cacheControl(CacheControl.noStore());
         }
         return response.body(problemDetailFactory.create(request, status, errorCode, detail));

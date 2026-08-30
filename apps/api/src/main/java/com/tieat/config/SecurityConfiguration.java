@@ -1,7 +1,11 @@
 package com.tieat.config;
 
+import com.tieat.security.application.RateLimiter;
+import com.tieat.security.web.RateLimitFilter;
+import com.tieat.security.web.RateLimitKeys;
 import com.tieat.web.ProblemDetailFactory;
 import java.time.Clock;
+import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -18,6 +22,7 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.CookieClearingLogoutHandler;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
@@ -37,12 +42,14 @@ public class SecurityConfiguration {
         SessionAuthenticationStrategy sessionAuthenticationStrategy,
         SecurityContextRepository securityContextRepository,
         Clock clock,
-        ProblemDetailFactory problemDetailFactory
+        ProblemDetailFactory problemDetailFactory,
+        RateLimiter rateLimiter
     ) throws Exception {
         return http
             .authenticationProvider(storeAccountAuthenticationProvider)
             .securityContext(securityContext -> securityContext.securityContextRepository(securityContextRepository))
             .addFilterBefore(new RememberedSessionExpiryFilter(clock), SecurityContextHolderFilter.class)
+            .addFilterBefore(new RateLimitFilter(rateLimiter, problemDetailFactory), UsernamePasswordAuthenticationFilter.class)
             .csrf(csrf -> csrf
                 .csrfTokenRepository(new HttpSessionCsrfTokenRepository())
                 .ignoringRequestMatchers(PathPatternRequestMatcher.pathPattern(
@@ -89,14 +96,22 @@ public class SecurityConfiguration {
                 .loginProcessingUrl("/api/v1/sessions")
                 .usernameParameter("loginId")
                 .passwordParameter("password")
-                .successHandler((request, response, authentication) -> response.setStatus(HttpStatus.NO_CONTENT.value()))
-                .failureHandler((request, response, exception) -> problemDetailFactory.write(
-                    request,
-                    response,
-                    HttpStatus.UNAUTHORIZED,
-                    "AUTHENTICATION_FAILED",
-                    "Authentication failed"
-                ))
+                .successHandler((request, response, authentication) -> {
+                    rateLimiter.clear(List.of(RateLimitKeys.loginIdentity(authentication.getName())));
+                    response.setStatus(HttpStatus.NO_CONTENT.value());
+                })
+                .failureHandler((request, response, exception) -> {
+                    var decision = rateLimiter.recordFailure(
+                        RateLimitKeys.login(request.getRemoteAddr(), request.getParameter("loginId"))
+                    );
+                    if (!decision.allowed()) {
+                        problemDetailFactory.writeRateLimited(request, response, decision.retryAfter().toSeconds());
+                        return;
+                    }
+                    problemDetailFactory.write(
+                        request, response, HttpStatus.UNAUTHORIZED, "AUTHENTICATION_FAILED", "Authentication failed"
+                    );
+                })
                 .permitAll()
             )
             .logout(logout -> logout
