@@ -165,19 +165,22 @@ class MealUsageConfirmationHttpIntegrationTest {
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
         CountDownLatch firstLockAcquired = new CountDownLatch(1);
-        CountDownLatch secondLookupEntered = new CountDownLatch(1);
+        CountDownLatch secondLookupStarted = new CountDownLatch(1);
+        CountDownLatch secondLookupCompleted = new CountDownLatch(1);
         CountDownLatch releaseFirst = new CountDownLatch(1);
         AtomicBoolean firstLookup = new AtomicBoolean(true);
         doAnswer(invocation -> {
             boolean holdLock = firstLookup.compareAndSet(true, false);
             if (!holdLock) {
-                secondLookupEntered.countDown();
                 await(firstLockAcquired);
+                secondLookupStarted.countDown();
             }
             Object result = invocation.callRealMethod();
             if (holdLock) {
                 firstLockAcquired.countDown();
                 await(releaseFirst);
+            } else {
+                secondLookupCompleted.countDown();
             }
             return result;
         }).when(mealUsageRepository).findByIdForUpdate(usage.id());
@@ -192,9 +195,8 @@ class MealUsageConfirmationHttpIntegrationTest {
             assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
             start.countDown();
             assertThat(firstLockAcquired.await(10, TimeUnit.SECONDS)).isTrue();
-            assertThat(secondLookupEntered.await(10, TimeUnit.SECONDS)).isTrue();
-            assertThat(firstConfirmation.isDone()).isFalse();
-            assertThat(secondConfirmation.isDone()).isFalse();
+            assertThat(secondLookupStarted.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(secondLookupCompleted.await(1, TimeUnit.SECONDS)).isFalse();
             releaseFirst.countDown();
 
             List<MvcResult> confirmations = List.of(
