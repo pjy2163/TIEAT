@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.Mockito.doAnswer;
 
 import com.tieat.ledger.domain.EntrySource;
 import com.tieat.ledger.domain.MealUsage;
@@ -28,6 +29,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +41,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.junit.jupiter.Container;
@@ -73,7 +76,7 @@ class MealUsageConfirmationHttpIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @Autowired
+    @MockitoSpyBean
     private MealUsageRepository mealUsageRepository;
 
     @Autowired
@@ -161,6 +164,23 @@ class MealUsageConfirmationHttpIntegrationTest {
         String secondCsrfToken = csrfToken(secondSession);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch firstLockAcquired = new CountDownLatch(1);
+        CountDownLatch secondLookupEntered = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        AtomicBoolean firstLookup = new AtomicBoolean(true);
+        doAnswer(invocation -> {
+            boolean holdLock = firstLookup.compareAndSet(true, false);
+            if (!holdLock) {
+                secondLookupEntered.countDown();
+                await(firstLockAcquired);
+            }
+            Object result = invocation.callRealMethod();
+            if (holdLock) {
+                firstLockAcquired.countDown();
+                await(releaseFirst);
+            }
+            return result;
+        }).when(mealUsageRepository).findByIdForUpdate(usage.id());
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
             Future<MvcResult> firstConfirmation = executor.submit(() -> confirmAtStart(
@@ -171,6 +191,11 @@ class MealUsageConfirmationHttpIntegrationTest {
             ));
             assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
             start.countDown();
+            assertThat(firstLockAcquired.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(secondLookupEntered.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(firstConfirmation.isDone()).isFalse();
+            assertThat(secondConfirmation.isDone()).isFalse();
+            releaseFirst.countDown();
 
             List<MvcResult> confirmations = List.of(
                 firstConfirmation.get(10, TimeUnit.SECONDS),
@@ -187,10 +212,11 @@ class MealUsageConfirmationHttpIntegrationTest {
             assertThat(conflict.getResponse().getContentAsString())
                 .contains("\"errorCode\":\"MEAL_USAGE_ALREADY_CONFIRMED\"");
         } finally {
+            releaseFirst.countDown();
             start.countDown();
             executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
         }
-        assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
 
         assertThat(jdbcTemplate.queryForObject(
             "select count(*) from meal_usages where id = ? and status = 'CONFIRMED'",
