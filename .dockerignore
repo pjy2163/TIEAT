@@ -4,6 +4,8 @@
 .codex
 **/build
 **/node_modules
+apps/web/.next
+**/*.tsbuildinfo
 docs/NOTION.local.md
 *.log
 **/.env*
