@@ -113,6 +113,38 @@ resource web 'Microsoft.App/containerApps@2025-01-01' = {
             cpu: json(webCpu)
             memory: webMemory
           }
+          probes: [
+            {
+              type: 'Startup'
+              initialDelaySeconds: 1
+              periodSeconds: 5
+              failureThreshold: 10
+              timeoutSeconds: 5
+              tcpSocket: {
+                port: 3000
+              }
+            }
+            {
+              type: 'Readiness'
+              initialDelaySeconds: 5
+              periodSeconds: 5
+              failureThreshold: 3
+              timeoutSeconds: 5
+              tcpSocket: {
+                port: 3000
+              }
+            }
+            {
+              type: 'Liveness'
+              initialDelaySeconds: 15
+              periodSeconds: 10
+              failureThreshold: 3
+              timeoutSeconds: 5
+              tcpSocket: {
+                port: 3000
+              }
+            }
+          ]
         }
       ]
     }
@@ -193,6 +225,38 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
             cpu: json(apiCpu)
             memory: apiMemory
           }
+          probes: [
+            {
+              type: 'Startup'
+              initialDelaySeconds: 1
+              periodSeconds: 10
+              failureThreshold: 10
+              timeoutSeconds: 5
+              tcpSocket: {
+                port: 8080
+              }
+            }
+            {
+              type: 'Readiness'
+              initialDelaySeconds: 10
+              periodSeconds: 10
+              failureThreshold: 3
+              timeoutSeconds: 5
+              tcpSocket: {
+                port: 8080
+              }
+            }
+            {
+              type: 'Liveness'
+              initialDelaySeconds: 30
+              periodSeconds: 15
+              failureThreshold: 3
+              timeoutSeconds: 5
+              tcpSocket: {
+                port: 8080
+              }
+            }
+          ]
           env: concat([
             {
               name: 'SPRING_PROFILES_ACTIVE'
@@ -258,8 +322,7 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
           ])
         }
       ]
-      // The API actuator is protected by SecurityConfiguration and is not an HTTP probe target.
-      // Use ACA's default TCP health probes; no custom HTTP actuator probe is defined here.
+      // Explicit TCP probes avoid probing the protected actuator endpoints.
     }
   }
 }

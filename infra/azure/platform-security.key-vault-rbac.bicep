@@ -7,12 +7,13 @@ param vaultName string
 param principalIds array
 
 var keyVaultSecretsUserRoleDefinitionId = '4633458b-17de-408a-b874-0445c86b69e6'
+var uniquePrincipalIds = union([], principalIds)
 
 resource keyVault 'Microsoft.KeyVault/vaults@2025-05-01' existing = {
   name: vaultName
 }
 
-resource keyVaultSecretsUserRoleAssignments 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for principalId in principalIds: {
+resource keyVaultSecretsUserRoleAssignments 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for principalId in uniquePrincipalIds: {
   name: guid(vaultName, 'key-vault-secrets-user', principalId)
   scope: keyVault
   properties: {

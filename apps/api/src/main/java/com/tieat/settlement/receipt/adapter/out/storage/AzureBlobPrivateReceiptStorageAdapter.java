@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -32,6 +33,7 @@ public final class AzureBlobPrivateReceiptStorageAdapter implements ReceiptStora
     private final Duration scanTimeout;
     private final Duration scanPollInterval;
 
+    @Autowired
     public AzureBlobPrivateReceiptStorageAdapter(
         @Value("${tieat.receipts.azure.endpoint:}") String endpoint,
         @Value("${tieat.receipts.azure.managed-identity-client-id:}") String managedIdentityClientId,

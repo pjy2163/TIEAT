@@ -7,12 +7,13 @@ param acrName string
 param principalIds array
 
 var acrPullRoleDefinitionId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+var uniquePrincipalIds = union([], principalIds)
 
 resource acr 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
   name: acrName
 }
 
-resource acrPullRoleAssignments 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for principalId in principalIds: {
+resource acrPullRoleAssignments 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for principalId in uniquePrincipalIds: {
   name: guid(acrName, 'acr-pull', principalId)
   scope: acr
   properties: {
