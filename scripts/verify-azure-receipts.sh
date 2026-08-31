@@ -85,8 +85,16 @@ else
 fi
 
 if jq -e '
-    (.publicAccess | type == "string")
-    and ((.publicAccess | ascii_downcase) == "none")
+    (
+      (.publicAccess == null)
+      or (
+        (.publicAccess | type) == "string"
+        and (
+          (.publicAccess | ascii_downcase) == "none"
+          or (.publicAccess | ascii_downcase) == "off"
+        )
+      )
+    )
     and (.hasImmutabilityPolicy | type == "boolean")
     and (.hasImmutabilityPolicy == false)
     and (.hasLegalHold | type == "boolean")
