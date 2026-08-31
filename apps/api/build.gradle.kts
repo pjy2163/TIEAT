@@ -15,6 +15,7 @@ java {
 
 dependencies {
     implementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.0"))
+    implementation(enforcedPlatform("io.netty:netty-bom:4.2.16.Final"))
 
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
@@ -31,6 +32,14 @@ dependencies {
     implementation("com.azure:azure-identity:1.18.4")
 
     runtimeOnly("org.postgresql:postgresql")
+
+    constraints {
+        add("runtimeOnly", "org.postgresql:postgresql") {
+            version {
+                strictly("42.7.12")
+            }
+        }
+    }
 
     testImplementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.0"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")

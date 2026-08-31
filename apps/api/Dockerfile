@@ -12,15 +12,13 @@ COPY apps/api/src ./apps/api/src
 
 RUN ./gradlew :apps:api:bootJar --no-daemon
 
-FROM bellsoft/liberica-openjre-debian:25@sha256:3e00b4d7db5abbd993709b316d1c23a2055c9a79b94f3e7532f361e6da6f3a7f
+FROM gcr.io/distroless/java25-debian13:nonroot@sha256:fce4a1d66284e8866c46113d9bdc286c46fb8c3c3f0a098f877034349e88debe
 
 WORKDIR /app
 
-RUN useradd --system --uid 10001 tieat
+COPY --from=build --chown=65532:65532 /workspace/apps/api/build/libs/tieat-api.jar ./tieat-api.jar
 
-COPY --from=build --chown=tieat:tieat /workspace/apps/api/build/libs/tieat-api.jar ./tieat-api.jar
-
-USER tieat
+USER 65532:65532
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "/app/tieat-api.jar"]
+ENTRYPOINT ["/usr/bin/java", "-jar", "/app/tieat-api.jar"]
