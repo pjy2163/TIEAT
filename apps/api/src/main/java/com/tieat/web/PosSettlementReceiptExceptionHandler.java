@@ -11,10 +11,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestControllerAdvice(assignableTypes = PosSettlementReceiptController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 class PosSettlementReceiptExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(PosSettlementReceiptExceptionHandler.class);
 
     private final ProblemDetailFactory problemDetailFactory;
 
@@ -43,6 +47,9 @@ class PosSettlementReceiptExceptionHandler {
         PosSettlementReceiptExceptions.Validation exception,
         HttpServletRequest request
     ) {
+        if (exception.reason() == PosSettlementReceiptExceptions.Validation.Reason.UNSAFE_FILE) {
+            log.warn("operational_event=receipt_scan_failed reason={}", exception.reason());
+        }
         HttpStatus status = exception.reason() == PosSettlementReceiptExceptions.Validation.Reason.UNSAFE_FILE
             ? HttpStatus.UNPROCESSABLE_ENTITY
             : HttpStatus.BAD_REQUEST;
@@ -57,6 +64,10 @@ class PosSettlementReceiptExceptionHandler {
         PosSettlementReceiptExceptions.StorageFailure exception,
         HttpServletRequest request
     ) {
+        log.error(
+            "operational_event=receipt_storage_failed exceptionType={}",
+            exception.getClass().getName()
+        );
         return problem(request, HttpStatus.INTERNAL_SERVER_ERROR, "POS_SETTLEMENT_RECEIPT_STORAGE_FAILED", "Receipt storage is temporarily unavailable");
     }
 

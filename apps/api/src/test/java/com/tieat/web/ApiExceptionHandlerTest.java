@@ -7,8 +7,12 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 import tools.jackson.databind.ObjectMapper;
 
+@ExtendWith(OutputCaptureExtension.class)
 class ApiExceptionHandlerTest {
 
     private final ProblemDetailFactory problemDetailFactory = new ProblemDetailFactory(new ObjectMapper());
@@ -28,15 +32,20 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
-    void mapsUnexpectedExceptionsWithoutLeakingInternalMessage() {
+    void mapsUnexpectedExceptionsWithoutLeakingInternalMessage(CapturedOutput output) {
+        String sensitiveMessage = "internal UUID 019c0f9c-6d58-7d37-b0e3-1af21f7124b9";
         var response = handler.handleUnexpected(
-            new IllegalStateException("internal UUID 019c0f9c-6d58-7d37-b0e3-1af21f7124b9"),
+            new IllegalStateException(sensitiveMessage),
             request()
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(response.getBody().getDetail()).isEqualTo("An internal error occurred");
         assertThat(response.getBody().getProperties()).containsEntry("errorCode", "INTERNAL_SERVER_ERROR");
+        assertThat(output)
+            .contains("operational_event=api_error")
+            .contains("exceptionType=java.lang.IllegalStateException")
+            .doesNotContain(sensitiveMessage);
     }
 
     @Test

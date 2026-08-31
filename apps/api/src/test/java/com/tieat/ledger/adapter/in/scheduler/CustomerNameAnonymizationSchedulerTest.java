@@ -45,7 +45,7 @@ class CustomerNameAnonymizationSchedulerTest {
 
         verify(anonymization).anonymize();
         assertThat(output)
-            .contains("customer_name_anonymization failed")
+            .contains("operational_event=customer_name_anonymization_failed")
             .contains("exceptionType=java.lang.IllegalStateException")
             .doesNotContain(sensitiveMessage)
             .doesNotContain("operation=customer_name_anonymization executedAt=");

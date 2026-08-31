@@ -21,7 +21,13 @@ import com.tieat.partnership.domain.MealContractRepository;
 import com.tieat.store.domain.StoreId;
 import com.tieat.web.StoreOnboardingHttpIntegrationSupport.SessionHandle;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -139,6 +145,83 @@ class MealUsageConfirmationHttpIntegrationTest {
             "{\"confirmerInitials\":\"JS\"}"
         )).andExpect(problem(HttpStatus.CONFLICT.value(), "MEAL_USAGE_ALREADY_CONFIRMED"));
         assertThat(jdbcTemplate.queryForObject("select prepaid_balance from meal_contracts", Long.class)).isZero();
+    }
+
+    @Test
+    void confirmsSamePendingUsageConcurrentlyExactlyOnceAgainstPostgres() throws Exception {
+        seedAccount("store-hk", "correct-password", STORE_ID, true);
+        MealContract contract = prepaidContract(STORE_ID, 10_000);
+        MealUsage usage = pendingUsage(contract.id(), STORE_ID, 12_000);
+        mealContractRepository.save(contract);
+        mealUsageRepository.save(usage);
+
+        SessionHandle firstSession = authenticatedSession("store-hk", "correct-password");
+        SessionHandle secondSession = authenticatedSession("store-hk", "correct-password");
+        String firstCsrfToken = csrfToken(firstSession);
+        String secondCsrfToken = csrfToken(secondSession);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<MvcResult> firstConfirmation = executor.submit(() -> confirmAtStart(
+                ready, start, firstSession, firstCsrfToken, usage.id().value(), "HK"
+            ));
+            Future<MvcResult> secondConfirmation = executor.submit(() -> confirmAtStart(
+                ready, start, secondSession, secondCsrfToken, usage.id().value(), "JS"
+            ));
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            List<MvcResult> confirmations = List.of(
+                firstConfirmation.get(10, TimeUnit.SECONDS),
+                secondConfirmation.get(10, TimeUnit.SECONDS)
+            );
+            assertThat(confirmations).extracting(result -> result.getResponse().getStatus()).containsExactlyInAnyOrder(
+                HttpStatus.CREATED.value(),
+                HttpStatus.CONFLICT.value()
+            );
+            MvcResult conflict = confirmations.stream()
+                .filter(result -> result.getResponse().getStatus() == HttpStatus.CONFLICT.value())
+                .findFirst()
+                .orElseThrow();
+            assertThat(conflict.getResponse().getContentAsString())
+                .contains("\"errorCode\":\"MEAL_USAGE_ALREADY_CONFIRMED\"");
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+        assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from meal_usages where id = ? and status = 'CONFIRMED'",
+            Long.class,
+            usage.id().value()
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+            "select prepaid_balance from meal_contracts where id = ?",
+            Long.class,
+            contract.id().value()
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from meal_usages where meal_contract_id = ? and prepaid_applied is not null",
+            Long.class,
+            contract.id().value()
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+            "select sum(prepaid_applied) from meal_usages where meal_contract_id = ?",
+            Long.class,
+            contract.id().value()
+        )).isEqualTo(10_000);
+        assertThat(jdbcTemplate.queryForObject(
+            "select sum(receivable_created) from meal_usages where meal_contract_id = ?",
+            Long.class,
+            contract.id().value()
+        )).isEqualTo(2_000);
+        assertThat(jdbcTemplate.queryForObject(
+            "select sum(remaining_prepaid) from meal_usages where meal_contract_id = ?",
+            Long.class,
+            contract.id().value()
+        )).isZero();
     }
 
     @Test
@@ -263,6 +346,33 @@ class MealUsageConfirmationHttpIntegrationTest {
             .header("X-CSRF-TOKEN", csrfToken)
             .contentType(MediaType.APPLICATION_JSON)
             .content(body);
+    }
+
+    private MvcResult confirmAtStart(
+        CountDownLatch ready,
+        CountDownLatch start,
+        SessionHandle session,
+        String csrfToken,
+        UUID mealUsageId,
+        String confirmerInitials
+    ) throws Exception {
+        ready.countDown();
+        await(start);
+        return mockMvc.perform(confirmRequest(
+            session,
+            csrfToken,
+            mealUsageId,
+            "{\"confirmerInitials\":\"" + confirmerInitials + "\"}"
+        )).andReturn();
+    }
+
+    private void await(CountDownLatch latch) {
+        try {
+            assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted while waiting for concurrent confirmation", exception);
+        }
     }
 
     private org.springframework.test.web.servlet.ResultMatcher problem(int expectedStatus, String errorCode) {

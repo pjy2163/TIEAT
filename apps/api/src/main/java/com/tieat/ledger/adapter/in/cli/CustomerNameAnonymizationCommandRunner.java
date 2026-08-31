@@ -7,6 +7,8 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnNotWebApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -16,6 +18,7 @@ public class CustomerNameAnonymizationCommandRunner implements ApplicationRunner
 
     private static final String PREFIX = "tieat.customer-name-anonymization.";
     private static final String COMMAND = PREFIX + "command";
+    private static final Logger log = LoggerFactory.getLogger(CustomerNameAnonymizationCommandRunner.class);
     private final AnonymizeExpiredCustomerNamesUseCase anonymization;
 
     public CustomerNameAnonymizationCommandRunner(AnonymizeExpiredCustomerNamesUseCase anonymization) {
@@ -34,7 +37,16 @@ public class CustomerNameAnonymizationCommandRunner implements ApplicationRunner
         if (values == null || values.size() != 1 || !"anonymize".equals(values.getFirst())) {
             throw new IllegalArgumentException("Customer name anonymization command must be anonymize");
         }
-        AnonymizeExpiredCustomerNamesUseCase.Result result = anonymization.anonymize();
+        AnonymizeExpiredCustomerNamesUseCase.Result result;
+        try {
+            result = anonymization.anonymize();
+        } catch (RuntimeException exception) {
+            log.error(
+                "operational_event=customer_name_anonymization_failed exceptionType={}",
+                exception.getClass().getName()
+            );
+            throw new IllegalStateException("Customer name anonymization failed");
+        }
         System.out.println(
             "CUSTOMER_NAME_ANONYMIZATION_EXECUTED_AT=" + result.executedAt()
                 + "\tCUTOFF_EXCLUSIVE=" + result.cutoffExclusive()

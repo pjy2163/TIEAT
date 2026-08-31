@@ -35,7 +35,7 @@ public class CustomerNameAnonymizationScheduler {
             );
         } catch (Exception exception) {
             log.error(
-                "customer_name_anonymization failed exceptionType={}",
+                "operational_event=customer_name_anonymization_failed exceptionType={}",
                 exception.getClass().getName()
             );
         }
