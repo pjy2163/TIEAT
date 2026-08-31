@@ -79,12 +79,12 @@ describe("StoreMealUsageQrView", () => {
     expect(screen.getByRole("link", { name: "장부로 돌아가기" })).toHaveAttribute("href", "/store/meal-usages/months");
   });
 
-  it("renews an expired QR and renders the newly issued QR", async () => {
+  it("renews an expired QR and renders the same QR with an extended expiry", async () => {
     const user = userEvent.setup();
     const renewedView = {
       status: "AVAILABLE" as const,
-      publicPath: `/qr/${"b".repeat(43)}`,
-      issuedAt: "2026-11-18T00:00:00Z",
+      publicPath: availableView.publicPath,
+      issuedAt: "2026-08-20T00:00:00Z",
       expiresAt: "2027-02-16T00:00:00Z",
     };
     qrMocks.getStoreMealUsageQr.mockResolvedValue({

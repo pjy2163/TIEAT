@@ -199,7 +199,7 @@ function statusMessage(status: StoreMealUsageQrApiView["status"] | undefined): {
     case "EXPIRED":
       return {
         title: "QR코드가 만료되었습니다",
-        description: "기존 QR은 즉시 사용할 수 없습니다. 매장 담당자가 아래 버튼으로 90일 새 QR을 발급해 주세요.",
+        description: "기존 QR은 즉시 사용할 수 없습니다. 매장 담당자가 아래 버튼으로 같은 QR을 90일 연장해 주세요.",
       };
     case "REISSUE_REQUIRED":
       return {

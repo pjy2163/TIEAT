@@ -28,7 +28,7 @@ public record QrOperationAudit(
         Objects.requireNonNull(storeId, "Store id must be supplied");
         Objects.requireNonNull(occurredAt, "QR operation time must be supplied");
 
-        if (action == Action.QR_ISSUED || action == Action.QR_REVOKED) {
+        if (action == Action.QR_ISSUED || action == Action.QR_REVOKED || action == Action.QR_RENEWED) {
             if (qrContextId == null || mealContractId != null || qrSelectableBefore != null || qrSelectableAfter != null) {
                 throw new IllegalArgumentException("QR context audit must only identify a QR context");
             }
@@ -56,6 +56,15 @@ public record QrOperationAudit(
         return new QrOperationAudit(UUID.randomUUID(), Action.QR_REVOKED, operatorId, storeId, contextId, null, null, null, occurredAt);
     }
 
+    public static QrOperationAudit qrRenewed(
+        String operatorId,
+        StoreId storeId,
+        MealUsageQrContextId contextId,
+        Instant occurredAt
+    ) {
+        return new QrOperationAudit(UUID.randomUUID(), Action.QR_RENEWED, operatorId, storeId, contextId, null, null, null, occurredAt);
+    }
+
     public static QrOperationAudit partnerSelectionChanged(
         String operatorId,
         StoreId storeId,
@@ -73,6 +82,7 @@ public record QrOperationAudit(
     public enum Action {
         QR_ISSUED,
         QR_REVOKED,
+        QR_RENEWED,
         PARTNER_QR_ENABLED,
         PARTNER_QR_DISABLED
     }

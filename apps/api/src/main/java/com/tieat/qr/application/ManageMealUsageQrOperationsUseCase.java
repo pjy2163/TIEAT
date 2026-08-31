@@ -84,12 +84,21 @@ public class ManageMealUsageQrOperationsUseCase {
             .orElseThrow(StoreMealUsageQrRenewalConflictException::new);
         Instant now = Instant.now(clock);
         if (current.expiresAt().isAfter(now)
+            || current.protectedToken().isEmpty()
             || repository.findPartnerSelectionsByStoreId(command.storeId()).stream().noneMatch(QrPartnerSelection::qrSelectable)) {
             throw new StoreMealUsageQrRenewalConflictException();
         }
-        repository.revoke(current.id(), now);
-        repository.appendAudit(QrOperationAudit.qrRevoked(command.operatorId(), command.storeId(), current.id(), now));
-        return issueNewContext(command.storeId(), current.storeDisplayName(), command.operatorId(), now);
+        String rawToken;
+        try {
+            rawToken = tokenProtector.reveal(current);
+        } catch (QrTokenProtectionException exception) {
+            throw new StoreMealUsageQrRenewalConflictException();
+        }
+        Instant renewedExpiresAt = now.plus(MealUsageQrContext.DEFAULT_LIFETIME);
+        MealUsageQrContext renewed = current.renewUntil(renewedExpiresAt);
+        repository.renew(current.id(), renewedExpiresAt);
+        repository.appendAudit(QrOperationAudit.qrRenewed(command.operatorId(), command.storeId(), current.id(), now));
+        return new IssuedQr(renewed, rawToken);
     }
 
     @Transactional

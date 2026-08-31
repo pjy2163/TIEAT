@@ -116,6 +116,20 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
     }
 
     @Override
+    public void renew(MealUsageQrContextId contextId, Instant renewedExpiresAt) {
+        Objects.requireNonNull(contextId, "Meal usage QR context id must be supplied");
+        Objects.requireNonNull(renewedExpiresAt, "QR renewal expiry must be supplied");
+        int updated = jdbcTemplate.update(
+            "update meal_usage_qr_contexts set expires_at = ? where id = ? and revoked_at is null",
+            Timestamp.from(renewedExpiresAt),
+            contextId.value()
+        );
+        if (updated != 1) {
+            throw new IllegalStateException("Current meal usage QR context was not renewed");
+        }
+    }
+
+    @Override
     public List<QrPartnerSelection> findPartnerSelectionsByStoreId(StoreId storeId) {
         Objects.requireNonNull(storeId, "Store id must be supplied");
         return jdbcTemplate.query(

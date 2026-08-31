@@ -36,11 +36,11 @@ public class GetStoreMealUsageQrViewUseCase {
         }
 
         Instant now = Instant.now(clock);
-        if (!context.expiresAt().isAfter(now)) {
-            return StoreMealUsageQrView.expired(context);
-        }
         if (context.protectedToken().isEmpty()) {
             return StoreMealUsageQrView.reissueRequired(context);
+        }
+        if (!context.expiresAt().isAfter(now)) {
+            return StoreMealUsageQrView.expired(context);
         }
         try {
             String rawToken = tokenProtector.reveal(context);

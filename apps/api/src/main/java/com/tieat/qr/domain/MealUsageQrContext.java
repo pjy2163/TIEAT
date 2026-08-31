@@ -97,6 +97,26 @@ public final class MealUsageQrContext {
         return revokedAt == null && expiresAt.isAfter(instant);
     }
 
+    public MealUsageQrContext renewUntil(Instant renewedExpiresAt) {
+        Objects.requireNonNull(renewedExpiresAt, "QR renewal expiry must be supplied");
+        if (revokedAt != null) {
+            throw new IllegalStateException("Revoked QR context cannot be renewed");
+        }
+        if (!renewedExpiresAt.isAfter(expiresAt)) {
+            throw new IllegalArgumentException("QR renewal expiry must be after the current expiry");
+        }
+        return new MealUsageQrContext(
+            id,
+            storeId,
+            storeDisplayName,
+            tokenHash,
+            issuedAt,
+            renewedExpiresAt,
+            null,
+            protectedToken
+        );
+    }
+
     public MealUsageQrContextId id() {
         return id;
     }

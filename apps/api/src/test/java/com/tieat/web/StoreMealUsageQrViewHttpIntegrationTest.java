@@ -188,7 +188,7 @@ class StoreMealUsageQrViewHttpIntegrationTest {
         );
         JsonNode expired = json(mockMvc.perform(get("/api/v1/store-meal-usage-qr").cookie(session.cookie()))
             .andExpect(status().isOk()).andReturn()).body();
-        assertThat(expired.get("status").asText()).isEqualTo("EXPIRED");
+        assertThat(expired.get("status").asText()).isEqualTo("REISSUE_REQUIRED");
         assertThat(expired.get("publicPath").isNull()).isTrue();
 
         jdbcTemplate.update("delete from meal_usage_qr_contexts where id = ?", contextId);
@@ -246,12 +246,25 @@ class StoreMealUsageQrViewHttpIntegrationTest {
         Instant expiresAt = Instant.parse(renewed.get("expiresAt").asText());
 
         assertThat(MealUsageQrToken.isValid(newToken)).isTrue();
-        assertThat(expiresAt).isEqualTo(issuedAt.plus(MealUsageQrContext.DEFAULT_LIFETIME));
+        assertThat(newToken).isEqualTo(fixture.issued.rawToken());
+        assertThat(newPath).isEqualTo("/qr/" + fixture.issued.rawToken());
+        assertThat(expiresAt).isAfter(Instant.now().plus(MealUsageQrContext.DEFAULT_LIFETIME.minusSeconds(60)));
+        assertThat(issuedAt).isBefore(expiresAt);
         assertThat(jdbcTemplate.queryForObject(
-            "select revoked_at is not null from meal_usage_qr_contexts where id = ?",
+            "select revoked_at is null from meal_usage_qr_contexts where id = ?",
             Boolean.class,
             oldContextId
         )).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from meal_usage_qr_contexts where store_id = ? and revoked_at is null",
+            Long.class,
+            STORE_A.value()
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from meal_usage_qr_operation_audits where action = 'QR_RENEWED' and qr_context_id = ?",
+            Long.class,
+            oldContextId
+        )).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
             "select revoked_at is null from meal_usage_qr_contexts where id = ?",
             Boolean.class,
@@ -259,9 +272,10 @@ class StoreMealUsageQrViewHttpIntegrationTest {
         )).isTrue();
 
         mockMvc.perform(get("/api/v1/public/meal-usage-qr/" + fixture.issued.rawToken()))
-            .andExpect(status().isNotFound())
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.qrExpiresAt").value(expiresAt.toString()))
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
-            .andExpect(jsonPath("$.errorCode").value("PUBLIC_MEAL_USAGE_QR_NOT_FOUND"));
+            .andExpect(jsonPath("$.storeDisplayName").value("매장 A"));
         mockMvc.perform(get("/api/v1/public/meal-usage-qr/" + newToken))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.storeDisplayName").value("매장 A"))
@@ -371,6 +385,35 @@ class StoreMealUsageQrViewHttpIntegrationTest {
             Boolean.class,
             fixture.issued.context().id().value()
         )).isTrue();
+        assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usage_qr_operation_audits", Long.class)).isEqualTo(1);
+    }
+
+    @Test
+    void rollsBackRenewalWhenProtectionAuditPersistenceFails() throws Exception {
+        Fixture fixture = activeFixture("qr-view-rollback-renewal", STORE_A, "매장 A");
+        Timestamp expiredAt = Timestamp.from(Instant.now().minusSeconds(1));
+        jdbcTemplate.update(
+            "update meal_usage_qr_contexts set created_at = ?, expires_at = ? where id = ?",
+            Timestamp.from(Instant.now().minusSeconds(2)),
+            expiredAt,
+            fixture.issued.context().id().value()
+        );
+        jdbcTemplate.execute(failingAuditFunction("qr_view_fail_renewal"));
+        jdbcTemplate.execute(failingAuditTrigger("qr_view_fail_renewal"));
+        try {
+            assertThatThrownBy(() -> operations.renew(new ManageMealUsageQrOperationsUseCase.RenewalCommand(
+                STORE_A, "qr-view-rollback-renewal"
+            ))).isInstanceOf(RuntimeException.class);
+        } finally {
+            dropFailingAuditTrigger("qr_view_fail_renewal");
+        }
+        assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usage_qr_contexts", Long.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+            "select revoked_at from meal_usage_qr_contexts where id = ?", Timestamp.class, fixture.issued.context().id().value()
+        )).isNull();
+        assertThat(jdbcTemplate.queryForObject(
+            "select expires_at from meal_usage_qr_contexts where id = ?", Timestamp.class, fixture.issued.context().id().value()
+        )).isEqualTo(expiredAt);
         assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usage_qr_operation_audits", Long.class)).isEqualTo(1);
     }
 

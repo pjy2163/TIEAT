@@ -21,6 +21,8 @@ public interface MealUsageQrOperationsRepository {
 
     void revoke(MealUsageQrContextId contextId, Instant revokedAt);
 
+    void renew(MealUsageQrContextId contextId, Instant renewedExpiresAt);
+
     List<QrPartnerSelection> findPartnerSelectionsByStoreId(StoreId storeId);
 
     Optional<QrPartnerSelection> findPartnerSelectionByIdAndStoreIdForUpdate(
