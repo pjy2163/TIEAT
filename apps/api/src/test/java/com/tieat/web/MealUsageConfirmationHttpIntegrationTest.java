@@ -82,6 +82,7 @@ class MealUsageConfirmationHttpIntegrationTest {
 
     @BeforeEach
     void clearDatabase() {
+        jdbcTemplate.update("delete from auth_abuse_rate_limits");
         jdbcTemplate.update("delete from meal_usages");
         jdbcTemplate.update("delete from meal_contracts");
         jdbcTemplate.update("delete from store_accounts");
@@ -147,6 +148,7 @@ class MealUsageConfirmationHttpIntegrationTest {
         mockMvc.perform(loginRequest(badPasswordSession, "store-hk", "wrong-password", csrfToken(badPasswordSession)))
             .andExpect(problem(HttpStatus.UNAUTHORIZED.value(), "AUTHENTICATION_FAILED"));
 
+        jdbcTemplate.update("delete from auth_abuse_rate_limits");
         jdbcTemplate.update("update store_accounts set enabled = false where login_id = ?", "store-hk");
         SessionHandle disabledSession = csrfSession();
         mockMvc.perform(loginRequest(disabledSession, "store-hk", "correct-password", csrfToken(disabledSession)))
