@@ -73,19 +73,43 @@ jobs:
           evidence_dir="$RUNNER_TEMP/tieat-qr-api-evidence"
           for report in "${reports[@]}"; do
             if [ -f "$report" ]; then
-              sed -E \
-                -e 's#(QR_URL=https?://[^/]+/qr/)[A-Za-z0-9_-]+#\1[REDACTED]#g' \
-                -e 's#(/qr/)[A-Za-z0-9_-]{20,}#\1[REDACTED]#g' \
-                -e 's#(TIEAT_SESSION=)[^;[:space:]]+#\1[REDACTED]#g' \
-                -e 's#((X-CSRF-TOKEN|Authorization|token|secret|password)[=:][[:space:]]*)[^[:space:]"<,;]+#\1[REDACTED]#gi' \
-                "$report" > "$evidence_dir/${report##*/}"
+              python3 - "$report" "$evidence_dir/${report##*/}.failures.txt" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as element_tree
+
+source, destination = sys.argv[1:3]
+root = element_tree.parse(source).getroot()
+redactions = (
+    (re.compile(r"(?i)(/qr/)[A-Za-z0-9_-]+"), r"\1[REDACTED]"),
+    (re.compile(r"(?i)(QR_URL=)[^<\s]+"), r"\1[REDACTED]"),
+    (re.compile(r"(?i)(TIEAT_SESSION[=:])[^;,\s]+"), r"\1[REDACTED]"),
+    (re.compile(r"(?i)(X-CSRF-TOKEN[=:])[^,;\s]+"), r"\1[REDACTED]"),
+)
+
+with open(destination, "w", encoding="utf-8") as output:
+    for testcase in root.iter("testcase"):
+        for kind in ("failure", "error"):
+            failure = testcase.find(kind)
+            if failure is None:
+                continue
+            message = failure.attrib.get("message", "")
+            for pattern, replacement in redactions:
+                message = pattern.sub(replacement, message)
+            test_name = f"{testcase.attrib.get('classname', '')}.{testcase.attrib.get('name', '')}"
+            output.write(f"test={test_name} kind={kind} message={message}\n")
+PY
+              if [ "$?" -ne 0 ]; then
+                status=1
+              fi
             fi
           done
 
           if rg -n \
             -e '/qr/[A-Za-z0-9_-]{20,}' \
-            -e 'QR_URL=https?://' \
-            -e 'TIEAT_SESSION=[^[:space:];]+' \
+            -e 'QR_URL=https?://[^[:space:]<]+' \
+            -e 'TIEAT_SESSION[=:][A-Za-z0-9_-]{20,}' \
+            -e 'X-CSRF-TOKEN[=:][A-Za-z0-9_-]{20,}' \
             "$evidence_dir" >/dev/null; then
             echo "API evidence redaction failed; refusing to upload the report."
             status=1

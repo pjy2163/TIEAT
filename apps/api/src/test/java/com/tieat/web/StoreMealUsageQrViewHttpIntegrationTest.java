@@ -23,6 +23,7 @@ import com.tieat.web.StoreOnboardingHttpIntegrationSupport.SessionHandle;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -277,13 +278,13 @@ class StoreMealUsageQrViewHttpIntegrationTest {
 
         mockMvc.perform(get("/api/v1/public/meal-usage-qr/" + fixture.issued.rawToken()))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.qrExpiresAt").value(expiresAt.toString()))
+            .andExpect(jsonPath("$.qrExpiresAt").value(databaseTimestampPrecision(expiresAt).toString()))
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
             .andExpect(jsonPath("$.storeDisplayName").value("매장 A"));
         mockMvc.perform(get("/api/v1/public/meal-usage-qr/" + newToken))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.storeDisplayName").value("매장 A"))
-            .andExpect(jsonPath("$.qrExpiresAt").value(expiresAt.toString()));
+            .andExpect(jsonPath("$.qrExpiresAt").value(databaseTimestampPrecision(expiresAt).toString()));
 
         mockMvc.perform(post("/api/v1/store-meal-usage-qr/renewals")
                 .cookie(fixture.session.cookie())
@@ -302,8 +303,8 @@ class StoreMealUsageQrViewHttpIntegrationTest {
         );
         long contextCount = jdbcTemplate.queryForObject("select count(*) from meal_usage_qr_contexts", Long.class);
         long auditCount = jdbcTemplate.queryForObject("select count(*) from meal_usage_qr_operation_audits", Long.class);
-        Timestamp createdAt = Timestamp.from(Instant.now().minusSeconds(2));
-        Timestamp expiredAt = Timestamp.from(Instant.now().minusSeconds(1));
+        Timestamp createdAt = Timestamp.from(databaseTimestampPrecision(Instant.now().minusSeconds(2)));
+        Timestamp expiredAt = Timestamp.from(databaseTimestampPrecision(Instant.now().minusSeconds(1)));
         jdbcTemplate.update(
             "update meal_usage_qr_contexts set created_at = ?, expires_at = ? where id = ?",
             createdAt,
@@ -418,10 +419,10 @@ class StoreMealUsageQrViewHttpIntegrationTest {
     @Test
     void rollsBackRenewalWhenProtectionAuditPersistenceFails() throws Exception {
         Fixture fixture = activeFixture("qr-view-rollback-renewal", STORE_A, "매장 A");
-        Timestamp expiredAt = Timestamp.from(Instant.now().minusSeconds(1));
+        Timestamp expiredAt = Timestamp.from(databaseTimestampPrecision(Instant.now().minusSeconds(1)));
         jdbcTemplate.update(
             "update meal_usage_qr_contexts set created_at = ?, expires_at = ? where id = ?",
-            Timestamp.from(Instant.now().minusSeconds(2)),
+            Timestamp.from(databaseTimestampPrecision(Instant.now().minusSeconds(2))),
             expiredAt,
             fixture.issued.context().id().value()
         );
@@ -482,6 +483,10 @@ class StoreMealUsageQrViewHttpIntegrationTest {
 
     private JsonResult json(MvcResult result) throws Exception {
         return new JsonResult(result, objectMapper.readTree(result.getResponse().getContentAsString()));
+    }
+
+    private static Instant databaseTimestampPrecision(Instant instant) {
+        return instant.plusNanos(500).truncatedTo(ChronoUnit.MICROS);
     }
 
     private String failingAuditFunction(String name) {
