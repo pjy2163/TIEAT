@@ -39,11 +39,11 @@ public class GetStoreMealUsageQrViewUseCase {
         if (context.protectedToken().isEmpty()) {
             return StoreMealUsageQrView.reissueRequired(context);
         }
-        if (!context.expiresAt().isAfter(now)) {
-            return StoreMealUsageQrView.expired(context);
-        }
         try {
             String rawToken = tokenProtector.reveal(context);
+            if (!context.expiresAt().isAfter(now)) {
+                return StoreMealUsageQrView.expired(context);
+            }
             return StoreMealUsageQrView.available(context, "/qr/" + rawToken);
         } catch (QrTokenProtectionException exception) {
             return StoreMealUsageQrView.reissueRequired(context);

@@ -352,6 +352,29 @@ class StoreMealUsageQrViewHttpIntegrationTest {
     }
 
     @Test
+    void reportsReissueRequiredForExpiredTamperedCiphertext() throws Exception {
+        Fixture fixture = activeFixture("qr-view-expired-tampered", STORE_A, "매장 A");
+        byte[] tampered = jdbcTemplate.queryForObject(
+            "select token_ciphertext from meal_usage_qr_contexts where id = ?",
+            byte[].class,
+            fixture.issued.context().id().value()
+        );
+        tampered[0] ^= 1;
+        jdbcTemplate.update(
+            "update meal_usage_qr_contexts set token_ciphertext = ?, created_at = ?, expires_at = ? where id = ?",
+            tampered,
+            Timestamp.from(Instant.now().minusSeconds(2)),
+            Timestamp.from(Instant.now().minusSeconds(1)),
+            fixture.issued.context().id().value()
+        );
+
+        JsonNode response = json(mockMvc.perform(get("/api/v1/store-meal-usage-qr").cookie(fixture.session.cookie()))
+            .andExpect(status().isOk()).andReturn()).body();
+        assertThat(response.get("status").asText()).isEqualTo("REISSUE_REQUIRED");
+        assertThat(response.get("publicPath").isNull()).isTrue();
+    }
+
+    @Test
     void rollsBackIssueWhenProtectionAuditPersistenceFails() {
         account("qr-view-rollback-issue", STORE_A);
         jdbcTemplate.execute(failingAuditFunction("qr_view_fail_issue"));
