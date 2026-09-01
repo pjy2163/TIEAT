@@ -70,6 +70,27 @@ jobs:
             apps/api/build/test-results/test/TEST-com.tieat.qr.adapter.in.cli.QrOperationsCommandRunnerTest.xml
           )
 
+          evidence_dir="$RUNNER_TEMP/tieat-qr-api-evidence"
+          for report in "${reports[@]}"; do
+            if [ -f "$report" ]; then
+              sed -E \
+                -e 's#(QR_URL=https?://[^/]+/qr/)[A-Za-z0-9_-]+#\1[REDACTED]#g' \
+                -e 's#(/qr/)[A-Za-z0-9_-]{20,}#\1[REDACTED]#g' \
+                -e 's#(TIEAT_SESSION=)[^;[:space:]]+#\1[REDACTED]#g' \
+                -e 's#((X-CSRF-TOKEN|Authorization|token|secret|password)[=:][[:space:]]*)[^[:space:]"<,;]+#\1[REDACTED]#gi' \
+                "$report" > "$evidence_dir/${report##*/}"
+            fi
+          done
+
+          if rg -n \
+            -e '/qr/[A-Za-z0-9_-]{20,}' \
+            -e 'QR_URL=https?://' \
+            -e 'TIEAT_SESSION=[^[:space:];]+' \
+            "$evidence_dir" >/dev/null; then
+            echo "API evidence redaction failed; refusing to upload the report."
+            status=1
+          fi
+
           {
             printf 'github_sha=%s\n' "$GITHUB_SHA"
             printf 'git_head=%s\n' "$(git rev-parse HEAD)"
