@@ -248,7 +248,11 @@ class StoreMealUsageQrViewHttpIntegrationTest {
         assertThat(MealUsageQrToken.isValid(newToken)).isTrue();
         assertThat(newToken).isEqualTo(fixture.issued.rawToken());
         assertThat(newPath).isEqualTo("/qr/" + fixture.issued.rawToken());
-        assertThat(expiresAt).isAfter(Instant.now().plus(MealUsageQrContext.DEFAULT_LIFETIME.minusSeconds(60)));
+        Instant renewalCheckTime = Instant.now();
+        assertThat(expiresAt).isBetween(
+            renewalCheckTime.plus(MealUsageQrContext.DEFAULT_LIFETIME.minusSeconds(60)),
+            renewalCheckTime.plus(MealUsageQrContext.DEFAULT_LIFETIME.plusSeconds(60))
+        );
         assertThat(issuedAt).isBefore(expiresAt);
         assertThat(jdbcTemplate.queryForObject(
             "select revoked_at is null from meal_usage_qr_contexts where id = ?",
