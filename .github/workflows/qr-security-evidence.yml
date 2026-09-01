@@ -1,0 +1,195 @@
+name: QR security evidence
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qr-security-evidence-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-qr-tests:
+    name: API QR focused tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up BellSoft Liberica JDK 25
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: liberica
+          java-version: '25'
+          cache: gradle
+
+      - name: Record revision and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_dir="$RUNNER_TEMP/tieat-qr-api-evidence"
+          mkdir -p "$evidence_dir"
+          {
+            printf 'github_sha=%s\n' "$GITHUB_SHA"
+            printf 'git_head=%s\n' "$(git rev-parse HEAD)"
+            printf "scope=StoreMealUsageQrViewHttpIntegrationTest,MealUsageQrOperationsLifecycleIntegrationTest,QrOperationsCommandRunnerTest\n"
+          } > "$evidence_dir/revision.txt"
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Run API QR focused tests
+        shell: bash
+        run: |
+          set +e
+          ./gradlew \
+            :apps:api:test \
+            --tests com.tieat.web.StoreMealUsageQrViewHttpIntegrationTest \
+            --tests com.tieat.qr.adapter.out.persistence.MealUsageQrOperationsLifecycleIntegrationTest \
+            --tests com.tieat.qr.adapter.in.cli.QrOperationsCommandRunnerTest \
+            --no-daemon \
+            --console=plain \
+            > "$RUNNER_TEMP/tieat-qr-api-gradle.log" 2>&1
+          status=$?
+          set -e
+
+          tests=0
+          skipped=0
+          failures=0
+          errors=0
+          reports=(
+            apps/api/build/test-results/test/TEST-com.tieat.web.StoreMealUsageQrViewHttpIntegrationTest.xml
+            apps/api/build/test-results/test/TEST-com.tieat.qr.adapter.out.persistence.MealUsageQrOperationsLifecycleIntegrationTest.xml
+            apps/api/build/test-results/test/TEST-com.tieat.qr.adapter.in.cli.QrOperationsCommandRunnerTest.xml
+          )
+
+          {
+            printf 'github_sha=%s\n' "$GITHUB_SHA"
+            printf 'git_head=%s\n' "$(git rev-parse HEAD)"
+            if [ "$status" -eq 0 ]; then
+              printf 'result=PASS\n'
+            else
+              printf 'result=FAIL\n'
+            fi
+
+            for report in "${reports[@]}"; do
+              if [ ! -f "$report" ]; then
+                printf 'report=%s missing=true\n' "${report##*/}"
+                continue
+              fi
+
+              report_tests="$(sed -nE 's/.*<testsuite[^>]*tests="([0-9]+)".*/\1/p' "$report" | head -n 1)"
+              report_skipped="$(sed -nE 's/.*<testsuite[^>]*skipped="([0-9]+)".*/\1/p' "$report" | head -n 1)"
+              report_failures="$(sed -nE 's/.*<testsuite[^>]*failures="([0-9]+)".*/\1/p' "$report" | head -n 1)"
+              report_errors="$(sed -nE 's/.*<testsuite[^>]*errors="([0-9]+)".*/\1/p' "$report" | head -n 1)"
+              report_tests="${report_tests:-0}"
+              report_skipped="${report_skipped:-0}"
+              report_failures="${report_failures:-0}"
+              report_errors="${report_errors:-0}"
+              tests=$((tests + report_tests))
+              skipped=$((skipped + report_skipped))
+              failures=$((failures + report_failures))
+              errors=$((errors + report_errors))
+              printf 'report=%s tests=%s skipped=%s failures=%s errors=%s\n' \
+                "${report##*/}" "$report_tests" "$report_skipped" "$report_failures" "$report_errors"
+            done
+
+            printf 'tests=%s\n' "$tests"
+            printf 'skipped=%s\n' "$skipped"
+            printf 'failures=%s\n' "$failures"
+            printf 'errors=%s\n' "$errors"
+          } > "$RUNNER_TEMP/tieat-qr-api-evidence/summary.txt"
+
+          if [ "$status" -ne 0 ]; then
+            echo "API QR focused tests failed; inspect the CI run without exposing raw test logs in artifacts."
+          fi
+          exit "$status"
+
+      - name: Upload sanitized API evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: qr-api-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/tieat-qr-api-evidence/
+          if-no-files-found: error
+          retention-days: 30
+
+  web-qr-tests:
+    name: Web QR focused tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Record revision and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_dir="$RUNNER_TEMP/tieat-qr-web-evidence"
+          mkdir -p "$evidence_dir"
+          {
+            printf 'github_sha=%s\n' "$GITHUB_SHA"
+            printf 'git_head=%s\n' "$(git rev-parse HEAD)"
+            printf 'scope=app/store/qr/StoreMealUsageQrView.test.tsx\n'
+          } > "$evidence_dir/revision.txt"
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Install locked web dependencies
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+
+      - name: Run web QR focused test
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set +e
+          npm test -- --run app/store/qr/StoreMealUsageQrView.test.tsx \
+            > "$RUNNER_TEMP/tieat-qr-web-vitest.log" 2>&1
+          status=$?
+          set -e
+
+          reported_tests="$(grep -Eo '[0-9]+ tests?' "$RUNNER_TEMP/tieat-qr-web-vitest.log" | tail -n 1 | awk '{print $1}')"
+          reported_tests="${reported_tests:-0}"
+          {
+            printf 'github_sha=%s\n' "$GITHUB_SHA"
+            printf 'git_head=%s\n' "$(git rev-parse HEAD)"
+            if [ "$status" -eq 0 ]; then
+              printf 'result=PASS\n'
+            else
+              printf 'result=FAIL\n'
+            fi
+            printf 'tests=%s\n' "$reported_tests"
+          } > "$RUNNER_TEMP/tieat-qr-web-evidence/summary.txt"
+
+          if [ "$status" -ne 0 ]; then
+            echo "Web QR focused test failed; inspect the CI run without exposing raw test logs in artifacts."
+          fi
+          exit "$status"
+
+      - name: Upload sanitized web evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: qr-web-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/tieat-qr-web-evidence/
+          if-no-files-found: error
+          retention-days: 30
