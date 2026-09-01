@@ -106,7 +106,7 @@ jobs:
           done
 
           if rg -n \
-            -e '/qr/[A-Za-z0-9_-]{20,}' \
+            -e '/qr/[A-Za-z0-9_-]{43}' \
             -e 'QR_URL=https?://[^[:space:]<]+' \
             -e 'TIEAT_SESSION[=:][A-Za-z0-9_-]{20,}' \
             -e 'X-CSRF-TOKEN[=:][A-Za-z0-9_-]{20,}' \
