@@ -25,6 +25,8 @@ import com.tieat.qr.domain.MealUsageQrContext;
 import com.tieat.qr.domain.MealUsageQrContextId;
 import com.tieat.qr.domain.MealUsageQrContextRepository;
 import com.tieat.qr.domain.MealUsageQrToken;
+import com.tieat.security.application.RateLimiter;
+import com.tieat.security.application.RateLimiter.Key;
 import com.tieat.store.domain.StoreId;
 import java.time.Clock;
 import java.time.Instant;
@@ -35,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class MealUsageUseCaseTest {
@@ -239,7 +242,7 @@ class MealUsageUseCaseTest {
             "강남점",
             MealUsageQrToken.sha256Hash(token),
             SERVER_TIME,
-            SERVER_TIME.plusSeconds(60),
+            SERVER_TIME.plusSeconds(3_600),
             null
         ));
         CreatePublicMealUsageUseCase useCase = new CreatePublicMealUsageUseCase(
@@ -247,12 +250,12 @@ class MealUsageUseCaseTest {
             contractRepository,
             usageRepository,
             idempotencyRepository,
-            Clock.fixed(SERVER_TIME, ZoneOffset.UTC)
+            Clock.fixed(SERVER_TIME, ZoneOffset.UTC), permittedRateLimiter()
         );
         UUID idempotencyKey = UUID.fromString("3279f750-a0d5-4978-81d5-a5da1a8d7b5a");
         String publicRequestKey = MealUsageQrToken.generate();
         CreatePublicMealUsageCommand command = new CreatePublicMealUsageCommand(
-            token, idempotencyKey, mealContractId(), 12_000, publicRequestKey, "홍길동"
+            token, idempotencyKey, mealContractId(), 12_000, publicRequestKey, "홍길동", validClientKey()
         );
 
         MealUsage created = useCase.create(command);
@@ -273,15 +276,131 @@ class MealUsageUseCaseTest {
         assertThat(storedRequest.createdAt()).isEqualTo(SERVER_TIME);
         assertThat(contractRepository.findById(mealContractId()).orElseThrow().prepaidBalance()).isEqualTo(12_000);
 
+        CreatePublicMealUsageUseCase expiredReplayUseCase = new CreatePublicMealUsageUseCase(
+            qrContextRepository,
+            contractRepository,
+            usageRepository,
+            idempotencyRepository,
+            Clock.fixed(SERVER_TIME.plusSeconds(10 * 60), ZoneOffset.UTC), permittedRateLimiter()
+        );
+        assertThatThrownBy(() -> expiredReplayUseCase.create(command))
+            .isInstanceOf(PublicMealUsageIdempotencyConflictException.class);
+
         assertThatThrownBy(() -> useCase.create(new CreatePublicMealUsageCommand(
-            token, idempotencyKey, mealContractId(), 12_001, publicRequestKey, "홍길동"
+            token, idempotencyKey, mealContractId(), 12_001, publicRequestKey, "홍길동", validClientKey()
         ))).isInstanceOf(PublicMealUsageIdempotencyConflictException.class);
         assertThatThrownBy(() -> useCase.create(new CreatePublicMealUsageCommand(
-            token, idempotencyKey, mealContractId(), 12_000, MealUsageQrToken.generate(), "홍길동"
+            token, idempotencyKey, mealContractId(), 12_000, MealUsageQrToken.generate(), "홍길동", validClientKey()
         ))).isInstanceOf(PublicMealUsageIdempotencyConflictException.class);
         assertThatThrownBy(() -> useCase.create(new CreatePublicMealUsageCommand(
-            token, idempotencyKey, mealContractId(), 12_000, publicRequestKey, "김길동"
+            token, idempotencyKey, mealContractId(), 12_000, publicRequestKey, "김길동", validClientKey()
         ))).isInstanceOf(PublicMealUsageIdempotencyConflictException.class);
+    }
+
+    @Test
+    void pausedCreateReplaysExistingIdempotencyWithoutConsumingClientLimiter() {
+        InMemoryMealUsageRepository usageRepository = new InMemoryMealUsageRepository();
+        InMemoryMealContractRepository contractRepository = new InMemoryMealContractRepository();
+        InMemoryMealUsageQrContextRepository qrContextRepository = new InMemoryMealUsageQrContextRepository();
+        InMemoryPublicMealUsageIdempotencyRepository idempotencyRepository = new InMemoryPublicMealUsageIdempotencyRepository();
+        contractRepository.save(prepaidContract(12_000));
+        String token = MealUsageQrToken.generate();
+        MealUsageQrContextId contextId = new MealUsageQrContextId(UUID.randomUUID());
+        qrContextRepository.add(new MealUsageQrContext(
+            contextId, storeId(), "강남점", MealUsageQrToken.sha256Hash(token), SERVER_TIME,
+            SERVER_TIME.plusSeconds(3_600), null, null, false
+        ));
+        MealUsage existing = MealUsage.pendingFromPublicQr(
+            new MealUsageId(UUID.randomUUID()), storeId(), mealContractId(), contextId, "협력사 A", "홍길동", 12_000, SERVER_TIME
+        );
+        usageRepository.save(existing);
+        UUID idempotencyKey = UUID.randomUUID();
+        String requestKey = MealUsageQrToken.generate();
+        idempotencyRepository.save(new PublicMealUsageIdempotency(
+            contextId, idempotencyKey, mealContractId(), 12_000, existing.id(),
+            PublicMealUsageIdempotency.hashRequestKey(requestKey), SERVER_TIME
+        ));
+        AtomicInteger consumed = new AtomicInteger();
+        RateLimiter limiter = new RateLimiter() {
+            public Decision check(List<Key> keys) { return Decision.permitted(); }
+            public Decision recordFailure(List<Key> keys) { return Decision.permitted(); }
+            public Decision consume(Key key, int limit, java.time.Duration window) {
+                consumed.incrementAndGet();
+                return Decision.permitted();
+            }
+            public void clear(List<Key> keys) { }
+        };
+        CreatePublicMealUsageUseCase useCase = new CreatePublicMealUsageUseCase(
+            qrContextRepository, contractRepository, usageRepository, idempotencyRepository,
+            Clock.fixed(SERVER_TIME, ZoneOffset.UTC), limiter
+        );
+        CreatePublicMealUsageCommand replay = new CreatePublicMealUsageCommand(
+            token, idempotencyKey, mealContractId(), 12_000, requestKey, "홍길동", validClientKey()
+        );
+
+        assertThat(useCase.create(replay).id()).isEqualTo(existing.id());
+        assertThat(consumed).hasValue(0);
+        assertThatThrownBy(() -> useCase.create(new CreatePublicMealUsageCommand(
+            token, UUID.randomUUID(), mealContractId(), 12_000, MealUsageQrToken.generate(), "홍길동", validClientKey()
+        ))).isInstanceOf(PublicQrCreationPausedException.class);
+        assertThat(consumed).hasValue(0);
+    }
+
+    @Test
+    void readsPublicQrUsageWithoutLockingQrContextOrUsage() {
+        InMemoryMealUsageRepository usageRepository = new InMemoryMealUsageRepository();
+        InMemoryMealUsageQrContextRepository qrContextRepository = new InMemoryMealUsageQrContextRepository();
+        InMemoryPublicMealUsageIdempotencyRepository idempotencyRepository = new InMemoryPublicMealUsageIdempotencyRepository();
+        String token = MealUsageQrToken.generate();
+        MealUsageQrContextId qrContextId = new MealUsageQrContextId(UUID.fromString("e7f94de9-97d2-47ad-8db0-23d0bdd799d4"));
+        MealUsageId mealUsageId = new MealUsageId(UUID.fromString("6e7e5fb6-c3b5-4f5b-9cb8-0f7f15c84f4a"));
+        UUID idempotencyKey = UUID.fromString("3279f750-a0d5-4978-81d5-a5da1a8d7b5a");
+        String publicRequestKey = MealUsageQrToken.generate();
+        String tokenHash = MealUsageQrToken.sha256Hash(token);
+        qrContextRepository.add(new MealUsageQrContext(
+            qrContextId,
+            storeId(),
+            "강남점",
+            tokenHash,
+            SERVER_TIME,
+            SERVER_TIME.plusSeconds(60),
+            null
+        ));
+        MealUsage usage = MealUsage.pendingFromPublicQr(
+            mealUsageId,
+            storeId(),
+            mealContractId(),
+            qrContextId,
+            "협력사 A",
+            12_000,
+            SERVER_TIME
+        );
+        usageRepository.save(usage);
+        idempotencyRepository.save(new PublicMealUsageIdempotency(
+            qrContextId,
+            idempotencyKey,
+            mealContractId(),
+            12_000,
+            mealUsageId,
+            PublicMealUsageIdempotency.hashRequestKey(publicRequestKey),
+            SERVER_TIME
+        ));
+        PublicMealUsageRequestUseCase useCase = new PublicMealUsageRequestUseCase(
+            qrContextRepository,
+            idempotencyRepository,
+            usageRepository,
+            Clock.fixed(SERVER_TIME, ZoneOffset.UTC)
+        );
+
+        assertThat(useCase.get(new PublicMealUsageRequestUseCase.RequestCommand(
+            token,
+            idempotencyKey,
+            mealUsageId,
+            publicRequestKey
+        ))).isSameAs(usage);
+        assertThat(qrContextRepository.nonlockingTokenHash).isEqualTo(tokenHash);
+        assertThat(qrContextRepository.lockedTokenHash).isNull();
+        assertThat(usageRepository.lockedId).isNull();
     }
 
     @Test
@@ -306,6 +425,32 @@ class MealUsageUseCaseTest {
         assertThat(contractRepository.findById(mealContractId()).orElseThrow().prepaidBalance()).isEqualTo(12_000);
         assertThatThrownBy(() -> useCase.reject(new RejectMealUsageCommand(pending.id(), storeId(), "store-hk")))
             .isInstanceOf(MealUsageNotPendingException.class);
+    }
+
+    @Test
+    void doesNotConfirmOrRejectExpiredPublicPendingUsage() {
+        InMemoryMealUsageRepository usageRepository = new InMemoryMealUsageRepository();
+        MealUsage pending = MealUsage.pendingFromPublicQr(
+            new MealUsageId(UUID.fromString("d9ef1fd5-2a3c-4fce-bb20-0d1b26a634ab")),
+            storeId(),
+            mealContractId(),
+            new MealUsageQrContextId(UUID.fromString("e7f94de9-97d2-47ad-8db0-23d0bdd799d4")),
+            "협력사 A",
+            12_000,
+            SERVER_TIME.minus(PublicMealUsageIdempotency.requestKeyLifetime())
+        );
+        usageRepository.save(pending);
+        InMemoryMealContractRepository contractRepository = new InMemoryMealContractRepository();
+        contractRepository.save(prepaidContract(12_000));
+        Clock clock = Clock.fixed(SERVER_TIME, ZoneOffset.UTC);
+
+        assertThatThrownBy(() -> new ConfirmMealUsageUseCase(usageRepository, contractRepository, clock)
+            .confirm(new ConfirmMealUsageCommand(pending.id(), storeId(), "HK")))
+            .isInstanceOf(MealUsageNotPendingException.class);
+        assertThatThrownBy(() -> new RejectMealUsageUseCase(usageRepository, clock)
+            .reject(new RejectMealUsageCommand(pending.id(), storeId(), "store-hk")))
+            .isInstanceOf(MealUsageNotPendingException.class);
+        assertThat(pending.status()).isEqualTo(MealUsageStatus.PENDING);
     }
 
     private MealUsage pendingUsage() {
@@ -344,10 +489,11 @@ class MealUsageUseCaseTest {
         }
 
         @Override
-        public long countPendingByStoreId(StoreId storeId) {
+        public long countPendingByStoreId(StoreId storeId, Instant now) {
             return mealUsages.values().stream()
                 .filter(usage -> usage.storeId().equals(storeId))
                 .filter(usage -> usage.status() == MealUsageStatus.PENDING)
+                .filter(usage -> usage.publicQrContextId().isEmpty() || usage.isPublicQrPendingActiveAt(now))
                 .count();
         }
 
@@ -370,10 +516,11 @@ class MealUsageUseCaseTest {
         }
 
         @Override
-        public MealUsageSlice findPendingByStoreId(StoreId storeId, int page, int size) {
+        public MealUsageSlice findPendingByStoreId(StoreId storeId, Instant now, int page, int size) {
             List<MealUsage> pending = mealUsages.values().stream()
                 .filter(usage -> usage.storeId().equals(storeId))
                 .filter(usage -> usage.status() == MealUsageStatus.PENDING)
+                .filter(usage -> usage.publicQrContextId().isEmpty() || usage.isPublicQrPendingActiveAt(now))
                 .sorted(Comparator.comparing(MealUsage::createdAt).thenComparing(usage -> usage.id().value().toString()))
                 .toList();
             int fromIndex = Math.min(page * size, pending.size());
@@ -528,7 +675,7 @@ class MealUsageUseCaseTest {
         }
 
         @Override
-        public boolean existsPendingUsage(MealContractId mealContractId, StoreId storeId) {
+        public boolean existsPendingUsage(MealContractId mealContractId, StoreId storeId, Instant now) {
             return false;
         }
 
@@ -545,9 +692,24 @@ class MealUsageUseCaseTest {
         }
     }
 
+    private static String validClientKey() {
+        return "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    }
+
+    private static RateLimiter permittedRateLimiter() {
+        return new RateLimiter() {
+            public Decision check(List<Key> keys) { return Decision.permitted(); }
+            public Decision recordFailure(List<Key> keys) { return Decision.permitted(); }
+            public Decision consume(Key key, int limit, java.time.Duration window) { return Decision.permitted(); }
+            public void clear(List<Key> keys) { }
+        };
+    }
+
     private static final class InMemoryMealUsageQrContextRepository implements MealUsageQrContextRepository {
 
         private final Map<String, MealUsageQrContext> contextsByTokenHash = new HashMap<>();
+        private String nonlockingTokenHash;
+        private String lockedTokenHash;
 
         void add(MealUsageQrContext context) {
             contextsByTokenHash.put(context.tokenHash(), context);
@@ -555,11 +717,13 @@ class MealUsageUseCaseTest {
 
         @Override
         public Optional<MealUsageQrContext> findByTokenHash(String tokenHash) {
+            nonlockingTokenHash = tokenHash;
             return Optional.ofNullable(contextsByTokenHash.get(tokenHash));
         }
 
         @Override
         public Optional<MealUsageQrContext> findByTokenHashForUpdate(String tokenHash) {
+            lockedTokenHash = tokenHash;
             return findByTokenHash(tokenHash);
         }
     }

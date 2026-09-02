@@ -43,7 +43,8 @@ public class GetPublicMealUsageQrContextUseCase {
                     contract.mealContractId(), contract.partnerDisplayName()
                 ))
                 .toList(),
-            context.expiresAt()
+            context.expiresAt(),
+            context.acceptingNewRequests()
         );
     }
 }

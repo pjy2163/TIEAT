@@ -36,7 +36,8 @@ public class CreateMealUsageUseCase {
         if (!mealContract.storeId().equals(command.storeId()) || mealContract.isArchived()) {
             throw new MealContractNotFoundException(command.mealContractId());
         }
-        if (mealUsageRepository.countPendingByStoreId(command.storeId()) >= MealUsageRepository.MAX_PENDING_PER_STORE) {
+        Instant now = Instant.now(clock);
+        if (mealUsageRepository.countPendingByStoreId(command.storeId(), now) >= MealUsageRepository.MAX_PENDING_PER_STORE) {
             throw new MealUsagePendingLimitReachedException();
         }
         MealUsage mealUsage = MealUsage.pending(
@@ -45,7 +46,7 @@ public class CreateMealUsageUseCase {
             command.mealContractId(),
             command.entrySource(),
             command.amount(),
-            Instant.now(clock)
+            now
         );
         return mealUsageRepository.save(mealUsage);
     }

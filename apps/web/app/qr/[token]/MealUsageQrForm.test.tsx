@@ -65,6 +65,7 @@ describe("MealUsageQrForm", () => {
       storeDisplayName: "강남점",
       partners: [{ mealContractId, partnerDisplayName: "협력사 A" }],
       qrExpiresAt: "2026-08-09T01:00:00Z",
+      acceptingNewRequests: true,
     });
     createPublicMealUsageMock
       .mockResolvedValueOnce({
@@ -98,7 +99,8 @@ describe("MealUsageQrForm", () => {
     await user.click(screen.getByRole("button", { name: "요청 보내기" }));
 
     await waitFor(() => expect(createPublicMealUsageMock).toHaveBeenCalledWith(
-      token, idempotencyKey, expect.stringMatching(/^[A-Za-z0-9_-]{43}$/), mealContractId, "홍길동", 8_500
+      token, idempotencyKey, expect.stringMatching(/^[A-Za-z0-9_-]{43}$/), mealContractId, "홍길동", 8_500,
+      expect.stringMatching(/^[A-Za-z0-9_-]{43}$/)
     ));
     expect(await screen.findByRole("status")).toHaveTextContent("확인 대기 요청을 보냈습니다");
     expect(screen.getByRole("status")).toHaveTextContent("₩8,500");
@@ -120,7 +122,9 @@ describe("MealUsageQrForm", () => {
       mealContractId,
       "홍길동",
       8_500,
+      expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
     ]);
+    expect(createPublicMealUsageMock.mock.calls[1][6]).toBe(createPublicMealUsageMock.mock.calls[0][6]);
     expect(await screen.findByRole("status")).toHaveTextContent("확인 대기 요청을 보냈습니다");
   });
 
@@ -131,6 +135,7 @@ describe("MealUsageQrForm", () => {
       storeDisplayName: "강남점",
       partners: [{ mealContractId, partnerDisplayName: "협력사 A" }],
       qrExpiresAt: "2026-08-09T01:00:00Z",
+      acceptingNewRequests: true,
     });
     createPublicMealUsageMock.mockResolvedValue({
       mealUsageId: "00000000-0000-0000-0000-000000000002",
@@ -177,6 +182,7 @@ describe("MealUsageQrForm", () => {
       storeDisplayName: "강남점",
       partners: [{ mealContractId, partnerDisplayName: "협력사 A" }],
       qrExpiresAt: "2026-08-09T01:00:00Z",
+      acceptingNewRequests: true,
     });
     createPublicMealUsageMock
       .mockRejectedValueOnce(new TypeError("network failed"))
@@ -220,6 +226,7 @@ describe("MealUsageQrForm", () => {
       storeDisplayName: "강남점",
       partners: [{ mealContractId, partnerDisplayName: "협력사 A" }],
       qrExpiresAt: "2026-08-09T01:00:00Z",
+      acceptingNewRequests: true,
     });
     createPublicMealUsageMock.mockResolvedValue(pendingUsage);
     getPublicMealUsageRequestMock.mockResolvedValue(pendingUsage);
@@ -233,6 +240,12 @@ describe("MealUsageQrForm", () => {
     await user.click(screen.getByRole("button", { name: "요청 보내기" }));
     await screen.findByRole("status");
     const publicRequestKey = createPublicMealUsageMock.mock.calls[0][2];
+    const publicClientKey = createPublicMealUsageMock.mock.calls[0][6];
+    expect(publicClientKey).toEqual(expect.stringMatching(/^[A-Za-z0-9_-]{43}$/));
+    const clientKeyStorageKey = Object.keys(window.sessionStorage)
+      .find((key) => key.startsWith("tieat.public-qr-client-key.v1:"));
+    expect(clientKeyStorageKey).toBeDefined();
+    expect(window.sessionStorage.getItem(clientKeyStorageKey!)).toBe(publicClientKey);
     expect(window.sessionStorage.getItem("tieat.public-meal-usage-request.v1")).not.toContain(token);
 
     cleanup();
@@ -243,6 +256,7 @@ describe("MealUsageQrForm", () => {
     ));
     expect(await screen.findByRole("status")).toHaveTextContent("확인 대기 요청을 보냈습니다");
     expect(createPublicMealUsageMock).toHaveBeenCalledTimes(1);
+    expect(window.sessionStorage.getItem(clientKeyStorageKey!)).toBe(publicClientKey);
   });
 
   it("keeps invalid QR state free of partner controls and blocks local invalid amounts", async () => {
@@ -259,6 +273,7 @@ describe("MealUsageQrForm", () => {
       storeDisplayName: "강남점",
       partners: [{ mealContractId, partnerDisplayName: "협력사 A" }],
       qrExpiresAt: "2026-08-09T01:00:00Z",
+      acceptingNewRequests: true,
     });
     render(<MealUsageQrForm token={token} />);
     await screen.findByRole("heading", { name: "강남점 식대 요청" });
@@ -279,6 +294,7 @@ describe("MealUsageQrForm", () => {
         storeDisplayName: "강남점",
         partners: [{ mealContractId, partnerDisplayName: "협력사 A" }],
         qrExpiresAt: "2026-08-09T01:00:00Z",
+        acceptingNewRequests: true,
       });
 
     render(<MealUsageQrForm token={token} />);
@@ -298,6 +314,7 @@ describe("MealUsageQrForm", () => {
         { mealContractId: "00000000-0000-0000-0000-000000000004", partnerDisplayName: "가 나 협력사" },
       ],
       qrExpiresAt: "2026-08-09T01:00:00Z",
+      acceptingNewRequests: true,
     });
 
     render(<MealUsageQrForm token={token} />);
@@ -310,5 +327,29 @@ describe("MealUsageQrForm", () => {
     await user.click(screen.getByRole("button", { name: "가 나 협력사" }));
     expect(search).toHaveValue("가 나 협력사");
     expect(screen.queryByText("선택됨: 가 나 협력사")).not.toBeInTheDocument();
+  });
+
+  it("keeps input when the store pauses creation during submit", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("crypto", browserCrypto());
+    getPublicMealUsageQrContextMock.mockResolvedValue({
+      storeDisplayName: "강남점",
+      partners: [{ mealContractId, partnerDisplayName: "협력사 A" }],
+      qrExpiresAt: "2026-08-09T01:00:00Z",
+      acceptingNewRequests: true,
+    });
+    createPublicMealUsageMock.mockRejectedValue(new PublicQrApiError(503, "PUBLIC_QR_CREATION_PAUSED"));
+
+    render(<MealUsageQrForm token={token} />);
+    await screen.findByRole("heading", { name: "강남점 식대 요청" });
+    await user.type(screen.getByLabelText("협력사 검색"), "협력");
+    await user.click(screen.getByRole("button", { name: "협력사 A" }));
+    await user.type(screen.getByLabelText("고객 이름"), "홍길동");
+    await user.type(screen.getByLabelText("금액"), "8500");
+    await user.click(screen.getByRole("button", { name: "요청 보내기" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("새 요청이 일시 중지되었습니다");
+    expect(screen.getByLabelText("고객 이름")).toHaveValue("홍길동");
+    expect(screen.getByLabelText("금액")).toHaveValue("8500");
   });
 });

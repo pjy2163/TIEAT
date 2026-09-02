@@ -18,6 +18,7 @@ public final class MealUsageQrContext {
     private final Instant expiresAt;
     private final Instant revokedAt;
     private final ProtectedToken protectedToken;
+    private final boolean acceptingNewRequests;
 
     public MealUsageQrContext(
         MealUsageQrContextId id,
@@ -28,7 +29,7 @@ public final class MealUsageQrContext {
         Instant expiresAt,
         Instant revokedAt
     ) {
-        this(id, storeId, storeDisplayName, tokenHash, issuedAt, expiresAt, revokedAt, null);
+        this(id, storeId, storeDisplayName, tokenHash, issuedAt, expiresAt, revokedAt, null, true);
     }
 
     public MealUsageQrContext(
@@ -40,6 +41,14 @@ public final class MealUsageQrContext {
         Instant expiresAt,
         Instant revokedAt,
         ProtectedToken protectedToken
+    ) {
+        this(id, storeId, storeDisplayName, tokenHash, issuedAt, expiresAt, revokedAt, protectedToken, true);
+    }
+
+    public MealUsageQrContext(
+        MealUsageQrContextId id, StoreId storeId, String storeDisplayName, String tokenHash,
+        Instant issuedAt, Instant expiresAt, Instant revokedAt, ProtectedToken protectedToken,
+        boolean acceptingNewRequests
     ) {
         this.id = Objects.requireNonNull(id, "Meal usage QR context id must be supplied");
         this.storeId = Objects.requireNonNull(storeId, "Store id must be supplied");
@@ -58,6 +67,7 @@ public final class MealUsageQrContext {
         }
         this.revokedAt = revokedAt;
         this.protectedToken = protectedToken;
+        this.acceptingNewRequests = acceptingNewRequests;
     }
 
     public static MealUsageQrContext issue(
@@ -88,7 +98,7 @@ public final class MealUsageQrContext {
             issuedAt,
             issuedAt.plus(DEFAULT_LIFETIME),
             null,
-            protectedToken
+            protectedToken, true
         );
     }
 
@@ -113,7 +123,7 @@ public final class MealUsageQrContext {
             issuedAt,
             renewedExpiresAt,
             null,
-            protectedToken
+            protectedToken, acceptingNewRequests
         );
     }
 
@@ -147,6 +157,10 @@ public final class MealUsageQrContext {
 
     public Optional<ProtectedToken> protectedToken() {
         return Optional.ofNullable(protectedToken);
+    }
+
+    public boolean acceptingNewRequests() {
+        return acceptingNewRequests;
     }
 
     public record ProtectedToken(byte[] ciphertext, byte[] nonce, int keyVersion) {

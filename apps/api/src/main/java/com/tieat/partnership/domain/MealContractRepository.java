@@ -2,6 +2,7 @@ package com.tieat.partnership.domain;
 
 import java.util.Optional;
 import java.util.List;
+import java.time.Instant;
 import com.tieat.store.domain.StoreId;
 
 public interface MealContractRepository {
@@ -19,7 +20,7 @@ public interface MealContractRepository {
         StoreId storeId
     );
 
-    boolean existsPendingUsage(MealContractId mealContractId, StoreId storeId);
+    boolean existsPendingUsage(MealContractId mealContractId, StoreId storeId, Instant now);
 
     boolean existsOutstandingReceivable(MealContractId mealContractId, StoreId storeId);
 

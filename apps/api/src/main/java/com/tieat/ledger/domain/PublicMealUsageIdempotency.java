@@ -27,6 +27,10 @@ public record PublicMealUsageIdempotency(
     private static final Pattern REQUEST_KEY_HASH_PATTERN = Pattern.compile("[0-9a-f]{64}");
     private static final Duration REQUEST_KEY_LIFETIME = Duration.ofMinutes(10);
 
+    public static Duration requestKeyLifetime() {
+        return REQUEST_KEY_LIFETIME;
+    }
+
     public PublicMealUsageIdempotency {
         Objects.requireNonNull(qrContextId, "Meal usage QR context id must be supplied");
         Objects.requireNonNull(idempotencyKey, "Idempotency key must be supplied");

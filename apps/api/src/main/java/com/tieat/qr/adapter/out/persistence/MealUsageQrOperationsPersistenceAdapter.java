@@ -53,7 +53,7 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
         return jdbcTemplate.query(
             """
                 select id, store_id, store_display_name, token_hash, created_at, expires_at, revoked_at,
-                       token_ciphertext, token_nonce, token_key_version
+                       token_ciphertext, token_nonce, token_key_version, accepting_new_requests
                 from meal_usage_qr_contexts
                 where store_id = ? and revoked_at is null
                 """,
@@ -68,7 +68,7 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
         return jdbcTemplate.query(
             """
                 select id, store_id, store_display_name, token_hash, created_at, expires_at, revoked_at,
-                       token_ciphertext, token_nonce, token_key_version
+                       token_ciphertext, token_nonce, token_key_version, accepting_new_requests
                 from meal_usage_qr_contexts
                 where store_id = ? and revoked_at is null
                 for update
@@ -85,8 +85,8 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
             """
                 insert into meal_usage_qr_contexts
                     (id, store_id, store_display_name, token_hash, expires_at, revoked_at, created_at,
-                     token_ciphertext, token_nonce, token_key_version)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     token_ciphertext, token_nonce, token_key_version, accepting_new_requests)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
             context.id().value(),
             context.storeId().value(),
@@ -97,7 +97,8 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
             Timestamp.from(context.issuedAt()),
             context.protectedToken().map(MealUsageQrContext.ProtectedToken::ciphertext).orElse(null),
             context.protectedToken().map(MealUsageQrContext.ProtectedToken::nonce).orElse(null),
-            context.protectedToken().map(MealUsageQrContext.ProtectedToken::keyVersion).orElse(null)
+            context.protectedToken().map(MealUsageQrContext.ProtectedToken::keyVersion).orElse(null),
+            context.acceptingNewRequests()
         );
     }
 
@@ -127,6 +128,16 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
         if (updated != 1) {
             throw new IllegalStateException("Current meal usage QR context was not renewed");
         }
+    }
+
+    @Override
+    public void setAcceptingNewRequests(MealUsageQrContextId contextId, boolean accepting) {
+        Objects.requireNonNull(contextId, "QR context id must be supplied");
+        int updated = jdbcTemplate.update(
+            "update meal_usage_qr_contexts set accepting_new_requests = ? where id = ? and revoked_at is null",
+            accepting, contextId.value()
+        );
+        if (updated != 1) throw new IllegalStateException("Current meal usage QR context was not updated");
     }
 
     @Override
@@ -225,7 +236,8 @@ public class MealUsageQrOperationsPersistenceAdapter implements MealUsageQrOpera
             resultSet.getTimestamp("created_at").toInstant(),
             resultSet.getTimestamp("expires_at").toInstant(),
             revokedAt == null ? null : revokedAt.toInstant(),
-            protectedToken
+            protectedToken,
+            resultSet.getBoolean("accepting_new_requests")
         );
     }
 

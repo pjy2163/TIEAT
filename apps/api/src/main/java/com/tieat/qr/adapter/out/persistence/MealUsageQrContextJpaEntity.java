@@ -41,6 +41,9 @@ class MealUsageQrContextJpaEntity {
     @Column(name = "token_key_version")
     private Integer tokenKeyVersion;
 
+    @Column(name = "accepting_new_requests", nullable = false)
+    private boolean acceptingNewRequests;
+
     protected MealUsageQrContextJpaEntity() {
     }
 
@@ -82,5 +85,9 @@ class MealUsageQrContextJpaEntity {
 
     Integer tokenKeyVersion() {
         return tokenKeyVersion;
+    }
+
+    boolean acceptingNewRequests() {
+        return acceptingNewRequests;
     }
 }

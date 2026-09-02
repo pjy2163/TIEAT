@@ -51,7 +51,8 @@ class StorePartnerArchiveService {
         if (!mealContract.storeId().equals(actorStoreId)) {
             throw new StorePartnerNotFoundException();
         }
-        if (mealContractRepository.existsPendingUsage(mealContractId, actorStoreId)
+        Instant now = Instant.now(clock);
+        if (mealContractRepository.existsPendingUsage(mealContractId, actorStoreId, now)
             || mealContractRepository.existsOutstandingReceivable(mealContractId, actorStoreId)
             || mealContract.prepaidBalance() > 0) {
             throw new StorePartnerArchiveConflictException();
@@ -61,7 +62,7 @@ class StorePartnerArchiveService {
         if (mealContract.isArchived()) {
             return;
         }
-        mealContract.archive(actorLoginId, Instant.now(clock));
+        mealContract.archive(actorLoginId, now);
         mealContractRepository.save(mealContract);
     }
 

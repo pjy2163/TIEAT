@@ -7,6 +7,7 @@ export type PublicMealUsageQrContext = {
   storeDisplayName: string;
   partners: PublicQrPartner[];
   qrExpiresAt: string;
+  acceptingNewRequests: boolean;
 };
 
 export type PublicMealUsageStatus = "PENDING" | "CONFIRMED" | "REJECTED" | "CANCELLED";
@@ -95,6 +96,7 @@ function parseContext(value: unknown): PublicMealUsageQrContext {
   if (!isRecord(value)
     || !isNonEmptyString(value.storeDisplayName)
     || !Array.isArray(value.partners)
+    || typeof value.acceptingNewRequests !== "boolean"
     || !isIsoInstant(value.qrExpiresAt)) {
     throw new InvalidPublicQrApiResponseError();
   }
@@ -102,6 +104,7 @@ function parseContext(value: unknown): PublicMealUsageQrContext {
     storeDisplayName: value.storeDisplayName,
     partners: value.partners.map(parsePartner),
     qrExpiresAt: value.qrExpiresAt,
+    acceptingNewRequests: value.acceptingNewRequests,
   };
 }
 
@@ -149,6 +152,7 @@ export async function createPublicMealUsage(
   mealContractId: string,
   customerName: string,
   amountMinor: number,
+  publicClientKey: string,
 ): Promise<PublicPendingMealUsage> {
   const response = await fetch(`${contextPath(token)}/meal-usages`, {
     method: "POST",
@@ -158,6 +162,7 @@ export async function createPublicMealUsage(
       "Content-Type": "application/json",
       "Idempotency-Key": idempotencyKey,
       "Public-Request-Key": publicRequestKey,
+      "Public-Client-Key": publicClientKey,
     },
     body: JSON.stringify({ mealContractId, customerName, amountMinor }),
   });

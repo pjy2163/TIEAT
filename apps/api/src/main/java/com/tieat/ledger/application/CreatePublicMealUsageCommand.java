@@ -11,7 +11,8 @@ public record CreatePublicMealUsageCommand(
     MealContractId mealContractId,
     long amount,
     String rawRequestKey,
-    String customerName
+    String customerName,
+    String publicClientKey
 ) {
 
     public static final long MAX_AMOUNT_MINOR = 1_000_000;
@@ -25,8 +26,12 @@ public record CreatePublicMealUsageCommand(
             throw new IllegalArgumentException("Usage amount must be between 1 and 1000000");
         }
         PublicMealUsageIdempotency.hashRequestKey(rawRequestKey);
+        if (publicClientKey == null || !publicClientKey.matches("[A-Za-z0-9_-]{43}")) {
+            throw new IllegalArgumentException("Public client key is invalid");
+        }
         customerName = normalizeCustomerName(customerName);
     }
+
 
     public String requestKeyHash() {
         return PublicMealUsageIdempotency.hashRequestKey(rawRequestKey);

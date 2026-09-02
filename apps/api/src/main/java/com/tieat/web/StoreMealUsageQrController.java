@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -49,6 +50,20 @@ class StoreMealUsageQrController {
             .body(StoreMealUsageQrResponse.from(view));
     }
 
+    @PostMapping("/request-pauses")
+    ResponseEntity<StoreMealUsageQrResponse> pause(@AuthenticationPrincipal StoreAccountPrincipal principal) {
+        manageMealUsageQrOperationsUseCase.setPublicCreationPaused(
+            new ManageMealUsageQrOperationsUseCase.PauseCommand(principal.storeId(), true, principal.loginId()));
+        return get(principal);
+    }
+
+    @DeleteMapping("/request-pauses")
+    ResponseEntity<StoreMealUsageQrResponse> resume(@AuthenticationPrincipal StoreAccountPrincipal principal) {
+        manageMealUsageQrOperationsUseCase.setPublicCreationPaused(
+            new ManageMealUsageQrOperationsUseCase.PauseCommand(principal.storeId(), false, principal.loginId()));
+        return get(principal);
+    }
+
     @Operation(summary = "Renew an expired QR for the authenticated store")
     @SecurityRequirement(name = "sessionCookie")
     @ApiResponses({
@@ -73,10 +88,11 @@ class StoreMealUsageQrController {
         String publicPath,
         Instant issuedAt,
         Instant expiresAt
+        , boolean acceptingNewRequests
     ) {
 
         static StoreMealUsageQrResponse from(StoreMealUsageQrView view) {
-            return new StoreMealUsageQrResponse(view.status(), view.publicPath(), view.issuedAt(), view.expiresAt());
+            return new StoreMealUsageQrResponse(view.status(), view.publicPath(), view.issuedAt(), view.expiresAt(), view.acceptingNewRequests());
         }
 
         static StoreMealUsageQrResponse from(ManageMealUsageQrOperationsUseCase.IssuedQr issued) {
@@ -84,7 +100,7 @@ class StoreMealUsageQrController {
                 StoreMealUsageQrView.Status.AVAILABLE,
                 "/qr/" + issued.rawToken(),
                 issued.context().issuedAt(),
-                issued.context().expiresAt()
+                issued.context().expiresAt(), issued.context().acceptingNewRequests()
             );
         }
     }

@@ -5,6 +5,8 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import {
   getStoreMealUsageQr,
+  pauseStoreMealUsageQr,
+  resumeStoreMealUsageQr,
   renewStoreMealUsageQr,
   type StoreMealUsageQrView as StoreMealUsageQrApiView,
 } from "@/lib/store-meal-usage-qr-api";
@@ -38,7 +40,9 @@ export function StoreMealUsageQrView() {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [renewalErrorMessage, setRenewalErrorMessage] = useState<string | null>(null);
+  const [pauseErrorMessage, setPauseErrorMessage] = useState<string | null>(null);
   const [renewalState, setRenewalState] = useState<"idle" | "loading">("idle");
+  const [pauseState, setPauseState] = useState<"idle" | "loading">("idle");
   const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
@@ -77,6 +81,14 @@ export function StoreMealUsageQrView() {
     } finally {
       setRenewalState("idle");
     }
+  }
+
+  async function changePause(paused: boolean) {
+    setPauseState("loading");
+    setPauseErrorMessage(null);
+    try { setView(await (paused ? pauseStoreMealUsageQr() : resumeStoreMealUsageQr())); }
+    catch { setPauseErrorMessage("QR 요청 설정을 변경하지 못했습니다. 잠시 후 다시 시도해 주세요."); }
+    finally { setPauseState("idle"); }
   }
 
   useEffect(() => {
@@ -147,6 +159,11 @@ export function StoreMealUsageQrView() {
           <p className={styles.eyebrow}>TIEAT STORE</p>
           <h1 className={styles.title} id="store-meal-usage-qr-title">{storeName} QR코드</h1>
           <p className={styles.description}>협력사 직원이 식대 사용을 등록할 때 스캔하는 매장 QR코드입니다.</p>
+          <p>{view.acceptingNewRequests ? "새 요청을 받고 있습니다." : "새 요청은 일시 중지되었습니다. 기존 대기 요청은 계속 처리할 수 있습니다."}</p>
+          <button className={styles.stateAction} disabled={pauseState === "loading"} onClick={() => void changePause(view.acceptingNewRequests)} type="button">
+            {view.acceptingNewRequests ? "새 요청 일시 중지" : "새 요청 재개"}
+          </button>
+          {pauseErrorMessage !== null && <p className={styles.stateDescription} role="alert">{pauseErrorMessage}</p>}
           <div className={styles.card}>
             <div className={styles.qrFrame} aria-busy={qrDataUrl === null}>
               {qrDataUrl === null ? (

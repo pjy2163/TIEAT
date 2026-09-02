@@ -69,6 +69,26 @@ class PublicQrCreateProtectionFilterTest {
             .doesNotContain("198.51.100.20", "sensitive-token");
     }
 
+    @Test
+    void rejectsMalformedClientKeyAfterConsumingIpBudget() throws Exception {
+        RateLimiter rateLimiter = mock(RateLimiter.class);
+        ProblemDetailFactory problemDetailFactory = mock(ProblemDetailFactory.class);
+        when(rateLimiter.consume(any(), eq(15), eq(Duration.ofMinutes(1))))
+            .thenReturn(RateLimiter.Decision.permitted());
+        PublicQrCreateProtectionFilter filter = filter(true, rateLimiter, problemDetailFactory);
+        MockHttpServletRequest request = publicCreateRequest("sensitive-token", "198.51.100.20", "bad");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, (ignoredRequest, ignoredResponse) -> {
+            throw new AssertionError("invalid client key must not reach the controller");
+        });
+
+        verify(rateLimiter).consume(any(), eq(15), eq(Duration.ofMinutes(1)));
+        verify(problemDetailFactory).write(
+            eq(request), eq(response), eq(HttpStatus.BAD_REQUEST), eq("PUBLIC_CLIENT_KEY_INVALID"), any()
+        );
+    }
+
     private PublicQrCreateProtectionFilter filter(
         boolean enabled,
         RateLimiter rateLimiter,
@@ -82,10 +102,15 @@ class PublicQrCreateProtectionFilterTest {
     }
 
     private MockHttpServletRequest publicCreateRequest(String token, String remoteAddress) {
+        return publicCreateRequest(token, remoteAddress, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+    }
+
+    private MockHttpServletRequest publicCreateRequest(String token, String remoteAddress, String clientKey) {
         MockHttpServletRequest request = new MockHttpServletRequest(new MockServletContext());
         request.setMethod("POST");
         request.setRequestURI("/api/v1/public/meal-usage-qr/" + token + "/meal-usages");
         request.setRemoteAddr(remoteAddress);
+        request.addHeader(PublicQrCreateProtectionFilter.CLIENT_KEY_HEADER, clientKey);
         request.setContent("{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         return request;
     }

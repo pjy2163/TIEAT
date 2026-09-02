@@ -8,7 +8,8 @@ import java.util.Objects;
 public record PublicMealUsageQrContext(
     String storeDisplayName,
     List<PartnerOption> partners,
-    Instant qrExpiresAt
+    Instant qrExpiresAt,
+    boolean acceptingNewRequests
 ) {
 
     public PublicMealUsageQrContext {

@@ -21,9 +21,32 @@ interface MealUsageJpaRepository extends JpaRepository<MealUsageJpaEntity, UUID>
     @Query("select mealUsage from MealUsageJpaEntity mealUsage where mealUsage.id = :id")
     Optional<MealUsageJpaEntity> findByIdForUpdate(@Param("id") UUID id);
 
-    long countByStoreIdAndStatus(UUID storeId, MealUsageStatus status);
+    @Query("""
+        select count(mealUsage)
+        from MealUsageJpaEntity mealUsage
+        where mealUsage.storeId = :storeId
+          and mealUsage.status = :status
+          and (mealUsage.publicQrContextId is null or mealUsage.createdAt > :publicPendingCutoff)
+        """)
+    long countPendingByStoreIdAndActivePublicCutoff(
+        @Param("storeId") UUID storeId,
+        @Param("status") MealUsageStatus status,
+        @Param("publicPendingCutoff") Instant publicPendingCutoff
+    );
 
-    Slice<MealUsageJpaEntity> findByStoreIdAndStatus(UUID storeId, MealUsageStatus status, Pageable pageable);
+    @Query("""
+        select mealUsage
+        from MealUsageJpaEntity mealUsage
+        where mealUsage.storeId = :storeId
+          and mealUsage.status = :status
+          and (mealUsage.publicQrContextId is null or mealUsage.createdAt > :publicPendingCutoff)
+        """)
+    Slice<MealUsageJpaEntity> findPendingByStoreIdAndActivePublicCutoff(
+        @Param("storeId") UUID storeId,
+        @Param("status") MealUsageStatus status,
+        @Param("publicPendingCutoff") Instant publicPendingCutoff,
+        Pageable pageable
+    );
 
     @Query("""
         select mealUsage

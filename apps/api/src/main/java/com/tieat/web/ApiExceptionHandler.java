@@ -5,6 +5,7 @@ import com.tieat.ledger.application.MealUsageNotPendingException;
 import com.tieat.ledger.application.MealContractNotFoundException;
 import com.tieat.ledger.application.PublicMealUsageIdempotencyConflictException;
 import com.tieat.ledger.application.PublicMealUsageRateLimitExceededException;
+import com.tieat.ledger.application.PublicQrCreationPausedException;
 import com.tieat.ledger.application.MealUsagePendingLimitReachedException;
 import com.tieat.ledger.application.PublicQrMealContractNotFoundException;
 import com.tieat.ledger.application.MealUsageNotFoundException;
@@ -32,6 +33,7 @@ import com.tieat.security.application.RateLimitExceededException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -303,7 +305,19 @@ public class ApiExceptionHandler {
         PublicMealUsageRateLimitExceededException exception,
         HttpServletRequest request
     ) {
-        return problem(request, HttpStatus.TOO_MANY_REQUESTS, "PUBLIC_QR_RATE_LIMITED", "Public QR request rate limit was exceeded");
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .header(HttpHeaders.RETRY_AFTER, Long.toString(exception.retryAfter().toSeconds()))
+            .cacheControl(CacheControl.noStore())
+            .body(problemDetailFactory.create(
+                request, HttpStatus.TOO_MANY_REQUESTS, "PUBLIC_QR_RATE_LIMITED", "Public QR request rate limit was exceeded"
+            ));
+    }
+
+    @ExceptionHandler(PublicQrCreationPausedException.class)
+    ResponseEntity<ProblemDetail> handlePublicQrCreationPaused(
+        PublicQrCreationPausedException exception, HttpServletRequest request
+    ) {
+        return problem(request, HttpStatus.SERVICE_UNAVAILABLE, "PUBLIC_QR_CREATION_PAUSED", "Public QR creation is paused");
     }
 
     @ExceptionHandler(MealUsagePendingLimitReachedException.class)

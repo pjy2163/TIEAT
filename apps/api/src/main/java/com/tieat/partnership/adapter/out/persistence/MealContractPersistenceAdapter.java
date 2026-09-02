@@ -10,6 +10,8 @@ import com.tieat.store.domain.StoreId;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.time.Instant;
+import com.tieat.ledger.domain.PublicMealUsageIdempotency;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -96,10 +98,13 @@ public class MealContractPersistenceAdapter implements MealContractRepository {
     }
 
     @Override
-    public boolean existsPendingUsage(MealContractId mealContractId, StoreId storeId) {
+    public boolean existsPendingUsage(MealContractId mealContractId, StoreId storeId, Instant now) {
         Objects.requireNonNull(mealContractId, "Meal contract id must be supplied");
         Objects.requireNonNull(storeId, "Store id must be supplied");
-        return repository.existsPendingUsageByStoreIdAndMealContractId(storeId.value(), mealContractId.value());
+        Objects.requireNonNull(now, "Pending check time must be supplied");
+        return repository.existsActivePendingUsageByStoreIdAndMealContractId(
+            storeId.value(), mealContractId.value(), now.minus(PublicMealUsageIdempotency.requestKeyLifetime())
+        );
     }
 
     @Override

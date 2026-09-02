@@ -20,6 +20,7 @@ const SUCCESS_RESET_DELAY_SECONDS = 5;
 const SUCCESS_RESET_DELAY_MILLIS = SUCCESS_RESET_DELAY_SECONDS * 1_000;
 const REQUEST_RECOVERY_LIFETIME_MILLIS = 10 * 60 * 1_000;
 const REQUEST_RECOVERY_STORAGE_KEY = "tieat.public-meal-usage-request.v1";
+const PUBLIC_CLIENT_KEY_PREFIX = "tieat.public-qr-client-key.v1:";
 const amountFormatter = new Intl.NumberFormat("ko-KR", {
   style: "currency",
   currency: "KRW",
@@ -121,6 +122,9 @@ function parseRequestRecovery(value: string | null): RequestRecovery | null {
 }
 
 function submissionError(error: unknown): string {
+  if (error instanceof PublicQrApiError && error.status === 503 && error.errorCode === "PUBLIC_QR_CREATION_PAUSED") {
+    return "새 요청이 일시 중지되었습니다. 입력한 내용은 유지되니 매장 직원에게 재개를 요청해 주세요.";
+  }
   if (error instanceof PublicQrApiError && error.status === 404) {
     return "이 QR 또는 선택한 협력사는 지금 사용할 수 없습니다. QR을 다시 확인해 주세요.";
   }
@@ -164,6 +168,7 @@ function MealUsageQrFormForToken({ token, onRetry }: { token: string; onRetry: (
   const [secondsUntilReset, setSecondsUntilReset] = useState(SUCCESS_RESET_DELAY_SECONDS);
   const idempotencyKeyRef = useRef<string | null>(null);
   const publicRequestKeyRef = useRef<string | null>(null);
+  const publicClientKeyRef = useRef<string | null>(createPublicRequestKey());
   const requestFingerprintRef = useRef<string | null>(null);
   const [requestFingerprint, setRequestFingerprint] = useState<string | null>(null);
   const [recoveryHydrated, setRecoveryHydrated] = useState(false);
@@ -221,11 +226,24 @@ function MealUsageQrFormForToken({ token, onRetry }: { token: string; onRetry: (
       if (!active) return;
       requestFingerprintRef.current = fingerprint;
       setRequestFingerprint(fingerprint);
+      if (fingerprint) {
+        const storageKey = `${PUBLIC_CLIENT_KEY_PREFIX}${fingerprint}`;
+        let stored: string | null = null;
+        try { stored = window.sessionStorage.getItem(storageKey); } catch { /* page-memory key remains usable */ }
+        const clientKey = stored && /^[A-Za-z0-9_-]{43}$/.test(stored)
+          ? stored : publicClientKeyRef.current ?? createPublicRequestKey();
+        if (clientKey) {
+          publicClientKeyRef.current = clientKey;
+          try { window.sessionStorage.setItem(storageKey, clientKey); } catch { /* best effort */ }
+        }
+      }
       if (!fingerprint) {
         setRecoveryHydrated(true);
         return;
       }
-      const recovery = parseRequestRecovery(window.sessionStorage.getItem(REQUEST_RECOVERY_STORAGE_KEY));
+      let savedRecovery: string | null = null;
+      try { savedRecovery = window.sessionStorage.getItem(REQUEST_RECOVERY_STORAGE_KEY); } catch { /* best effort */ }
+      const recovery = parseRequestRecovery(savedRecovery);
       if (!recovery
         || recovery.tokenFingerprint !== fingerprint
         || Date.now() - recovery.savedAt >= REQUEST_RECOVERY_LIFETIME_MILLIS) {
@@ -390,8 +408,14 @@ function MealUsageQrFormForToken({ token, onRetry }: { token: string; onRetry: (
     setFormError(null);
     setFormNotice(null);
     try {
+      const publicClientKey = publicClientKeyRef.current;
+      if (!publicClientKey) {
+        setFormError("이 브라우저에서 안전한 제출 키를 준비하지 못했습니다. 다시 시도해 주세요.");
+        return;
+      }
       const usage = await createPublicMealUsage(
-        token, idempotencyKey, publicRequestKey, selectedMealContractId, normalizedCustomerName, Number(amountInput)
+        token, idempotencyKey, publicRequestKey, selectedMealContractId, normalizedCustomerName, Number(amountInput),
+        publicClientKey
       );
       const pendingCapability = { mealUsageId: usage.mealUsageId, idempotencyKey, publicRequestKey };
       setRecentPendingCapability(pendingCapability);
@@ -478,7 +502,12 @@ function MealUsageQrFormForToken({ token, onRetry }: { token: string; onRetry: (
         <p className={mealUsageQrFormStyles.eyebrow}>TIEAT QR</p>
         <h1 id="qr-meal-usage-title" className={mealUsageQrFormStyles.title}>{context.storeDisplayName} 식대 요청</h1>
         <p className={mealUsageQrFormStyles.description}>협력사, 고객 이름과 금액을 입력해 주세요.</p>
-        {context.partners.length === 0 ? (
+        {context.acceptingNewRequests === false ? (
+          <div className={mealUsageQrFormStyles.state}>
+            <h2 className={mealUsageQrFormStyles.stateTitle}>새 요청이 일시 중지되었습니다</h2>
+            <p className={mealUsageQrFormStyles.stateDescription}>기존에 보낸 대기 요청은 이 QR에서 계속 확인하거나 취소할 수 있습니다.</p>
+          </div>
+        ) : context.partners.length === 0 ? (
           <div className={mealUsageQrFormStyles.state}>
             <h2 className={mealUsageQrFormStyles.stateTitle}>선택 가능한 협력사가 없습니다</h2>
             <p className={mealUsageQrFormStyles.stateDescription}>매장 직원에게 현재 식대 계약을 확인해 주세요.</p>

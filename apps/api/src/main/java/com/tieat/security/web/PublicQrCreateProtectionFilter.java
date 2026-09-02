@@ -32,6 +32,7 @@ public final class PublicQrCreateProtectionFilter extends OncePerRequestFilter {
     private static final PathPatternRequestMatcher CREATE_REQUEST = PathPatternRequestMatcher.pathPattern(
         HttpMethod.POST, "/api/v1/public/meal-usage-qr/{token}/meal-usages"
     );
+    static final String CLIENT_KEY_HEADER = "Public-Client-Key";
 
     private final RateLimiter rateLimiter;
     private final ProblemDetailFactory problemDetailFactory;
@@ -83,6 +84,13 @@ public final class PublicQrCreateProtectionFilter extends OncePerRequestFilter {
                 decision.retryAfter().toSeconds()
             );
             problemDetailFactory.writeRateLimited(request, response, decision.retryAfter().toSeconds());
+            return;
+        }
+
+        String clientKey = request.getHeader(CLIENT_KEY_HEADER);
+        if (clientKey == null || !clientKey.matches("[A-Za-z0-9_-]{43}")) {
+            problemDetailFactory.write(request, response, HttpStatus.BAD_REQUEST,
+                "PUBLIC_CLIENT_KEY_INVALID", "Public client key is invalid");
             return;
         }
 

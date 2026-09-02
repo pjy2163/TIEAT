@@ -37,7 +37,7 @@ public class PublicMealUsageRequestUseCase {
         this.clock = Objects.requireNonNull(clock);
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public MealUsage get(RequestCommand command) {
         Objects.requireNonNull(command, "Public request command must be supplied");
         return loadAuthorizedUsage(command, Instant.now(clock), false);
@@ -62,9 +62,10 @@ public class PublicMealUsageRequestUseCase {
         if (!MealUsageQrToken.isValid(command.rawQrToken())) {
             throw new PublicMealUsageQrNotFoundException();
         }
-        MealUsageQrContext context = mealUsageQrContextRepository.findByTokenHashForUpdate(
-            MealUsageQrToken.sha256Hash(command.rawQrToken())
-        )
+        String tokenHash = MealUsageQrToken.sha256Hash(command.rawQrToken());
+        MealUsageQrContext context = (lockUsage
+            ? mealUsageQrContextRepository.findByTokenHashForUpdate(tokenHash)
+            : mealUsageQrContextRepository.findByTokenHash(tokenHash))
             .filter(candidate -> candidate.isActiveAt(now))
             .orElseThrow(PublicMealUsageQrNotFoundException::new);
         PublicMealUsageIdempotency idempotency = idempotencyRepository.findByQrContextIdAndKey(

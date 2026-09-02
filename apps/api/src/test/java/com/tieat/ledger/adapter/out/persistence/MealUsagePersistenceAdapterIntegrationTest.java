@@ -12,7 +12,11 @@ import com.tieat.ledger.domain.MealUsageId;
 import com.tieat.ledger.domain.MealUsageRepository;
 import com.tieat.ledger.domain.MealUsageStatus;
 import com.tieat.ledger.domain.PrepaidAllocation;
+import com.tieat.ledger.domain.PublicMealUsageIdempotency;
+import com.tieat.partnership.domain.MealContract;
 import com.tieat.partnership.domain.MealContractId;
+import com.tieat.partnership.domain.MealContractPaymentType;
+import com.tieat.partnership.domain.MealContractRepository;
 import com.tieat.qr.domain.MealUsageQrContextId;
 import com.tieat.store.domain.StoreId;
 import java.sql.Timestamp;
@@ -47,6 +51,9 @@ class MealUsagePersistenceAdapterIntegrationTest {
 
     @Autowired
     private MealUsageRepository mealUsageRepository;
+
+    @Autowired
+    private MealContractRepository mealContractRepository;
 
     @Autowired
     private EntityManager entityManager;
@@ -171,6 +178,49 @@ class MealUsagePersistenceAdapterIntegrationTest {
         assertThat(reloaded.prepaidAllocation()).isEmpty();
         assertThat(reloaded.rejection()).isEmpty();
         assertThat(reloaded.version()).isEqualTo(saved.version());
+    }
+
+    @Test
+    @Transactional
+    void appliesPublicPendingCutoffToCountListAndContractExistenceQueries() {
+        StoreId storeId = new StoreId(UUID.fromString("9d5e37dd-dbe2-40dc-97fb-8e77c89aa4cb"));
+        MealUsageQrContextId qrContextId = new MealUsageQrContextId(
+            UUID.fromString("8d39e2bb-0752-4a97-9f56-9297cbaa385a")
+        );
+        Instant now = Instant.parse("2026-08-05T09:30:00Z");
+        Instant cutoff = now.minus(PublicMealUsageIdempotency.requestKeyLifetime());
+        MealContractId staleContractId = new MealContractId(UUID.fromString("019c0f9c-6d58-7d37-b0e3-1af21f7124b9"));
+        MealContractId activeContractId = new MealContractId(UUID.fromString("019c0f9c-6d58-7d37-b0e3-1af21f7124ba"));
+        MealContractId internalContractId = new MealContractId(UUID.fromString("019c0f9c-6d58-7d37-b0e3-1af21f7124bb"));
+
+        jdbcTemplate.update(
+            "insert into meal_usage_qr_contexts (id, store_id, store_display_name, token_hash, created_at, expires_at) values (?, ?, ?, ?, ?, ?)",
+            qrContextId.value(), storeId.value(), "테스트 매장", "b".repeat(64), Timestamp.from(now.minusSeconds(60)), Timestamp.from(now.plusSeconds(86_400))
+        );
+        mealContractRepository.save(new MealContract(staleContractId, storeId, MealContractPaymentType.POSTPAID, 0));
+        mealContractRepository.save(new MealContract(activeContractId, storeId, MealContractPaymentType.POSTPAID, 0));
+        mealContractRepository.save(new MealContract(internalContractId, storeId, MealContractPaymentType.POSTPAID, 0));
+
+        mealUsageRepository.save(MealUsage.pendingFromPublicQr(
+            new MealUsageId(UUID.fromString("7693bfcf-01b4-4de2-9c9f-5d81612460e5")),
+            storeId, staleContractId, qrContextId, "협력사 A", 12_000, cutoff
+        ));
+        mealUsageRepository.save(MealUsage.pendingFromPublicQr(
+            new MealUsageId(UUID.fromString("7693bfcf-01b4-4de2-9c9f-5d81612460e6")),
+            storeId, activeContractId, qrContextId, "협력사 A", 13_000, cutoff.plusMillis(1)
+        ));
+        mealUsageRepository.save(MealUsage.pending(
+            new MealUsageId(UUID.fromString("7693bfcf-01b4-4de2-9c9f-5d81612460e7")),
+            storeId, internalContractId, EntrySource.STORE_TABLET, 14_000, cutoff.minusSeconds(1)
+        ));
+
+        assertThat(mealUsageRepository.countPendingByStoreId(storeId, now)).isEqualTo(2);
+        assertThat(mealUsageRepository.findPendingByStoreId(storeId, now, 0, 10).items())
+            .extracting(MealUsage::mealContractId)
+            .containsExactly(internalContractId, activeContractId);
+        assertThat(mealContractRepository.existsPendingUsage(staleContractId, storeId, now)).isFalse();
+        assertThat(mealContractRepository.existsPendingUsage(activeContractId, storeId, now)).isTrue();
+        assertThat(mealContractRepository.existsPendingUsage(internalContractId, storeId, now)).isTrue();
     }
 
     @Test

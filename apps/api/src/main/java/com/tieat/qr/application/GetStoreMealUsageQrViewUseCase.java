@@ -54,7 +54,8 @@ public class GetStoreMealUsageQrViewUseCase {
         Status status,
         String publicPath,
         Instant issuedAt,
-        Instant expiresAt
+        Instant expiresAt,
+        boolean acceptingNewRequests
     ) {
 
         public StoreMealUsageQrView {
@@ -62,15 +63,15 @@ public class GetStoreMealUsageQrViewUseCase {
         }
 
         static StoreMealUsageQrView notAvailable() {
-            return new StoreMealUsageQrView(Status.NOT_AVAILABLE, null, null, null);
+            return new StoreMealUsageQrView(Status.NOT_AVAILABLE, null, null, null, true);
         }
 
         static StoreMealUsageQrView expired(MealUsageQrContext context) {
-            return new StoreMealUsageQrView(Status.EXPIRED, null, context.issuedAt(), context.expiresAt());
+            return new StoreMealUsageQrView(Status.EXPIRED, null, context.issuedAt(), context.expiresAt(), context.acceptingNewRequests());
         }
 
         static StoreMealUsageQrView reissueRequired(MealUsageQrContext context) {
-            return new StoreMealUsageQrView(Status.REISSUE_REQUIRED, null, context.issuedAt(), context.expiresAt());
+            return new StoreMealUsageQrView(Status.REISSUE_REQUIRED, null, context.issuedAt(), context.expiresAt(), context.acceptingNewRequests());
         }
 
         static StoreMealUsageQrView available(MealUsageQrContext context, String publicPath) {
@@ -78,7 +79,8 @@ public class GetStoreMealUsageQrViewUseCase {
                 Status.AVAILABLE,
                 publicPath,
                 context.issuedAt(),
-                context.expiresAt()
+                context.expiresAt(),
+                context.acceptingNewRequests()
             );
         }
 

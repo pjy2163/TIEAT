@@ -113,6 +113,20 @@ public class ManageMealUsageQrOperationsUseCase {
     }
 
     @Transactional
+    public PauseResult setPublicCreationPaused(PauseCommand command) {
+        Objects.requireNonNull(command, "QR pause command must be supplied");
+        repository.lockStoreForOperations(command.storeId());
+        MealUsageQrContext current = repository.findCurrentByStoreIdForUpdate(command.storeId())
+            .orElseThrow(() -> new QrOperationException("No current QR context exists for this store"));
+        boolean accepting = !command.paused();
+        if (current.acceptingNewRequests() == accepting) return new PauseResult(accepting, false);
+        repository.setAcceptingNewRequests(current.id(), accepting);
+        repository.appendAudit(QrOperationAudit.publicQrCreationChanged(
+            command.operatorId(), command.storeId(), current.id(), accepting, Instant.now(clock)));
+        return new PauseResult(accepting, true);
+    }
+
+    @Transactional
     public PartnerSelectionResult changePartnerSelection(ChangePartnerSelectionCommand command) {
         Objects.requireNonNull(command, "QR partner selection command must be supplied");
         repository.lockStoreForOperations(command.storeId());
@@ -212,6 +226,15 @@ public class ManageMealUsageQrOperationsUseCase {
             operatorId = requireNonBlank(operatorId, "QR operator id");
         }
     }
+
+    public record PauseCommand(StoreId storeId, boolean paused, String operatorId) {
+        public PauseCommand {
+            Objects.requireNonNull(storeId, "Store id must be supplied");
+            operatorId = requireNonBlank(operatorId, "QR operator id");
+        }
+    }
+
+    public record PauseResult(boolean acceptingNewRequests, boolean changed) { }
 
     public record ChangePartnerSelectionCommand(
         StoreId storeId,

@@ -3,6 +3,7 @@ package com.tieat.security.web;
 import com.tieat.security.application.RateLimiter.Key;
 import java.util.List;
 import java.util.Locale;
+import com.tieat.qr.domain.MealUsageQrContextId;
 
 public final class RateLimitKeys {
 
@@ -27,6 +28,10 @@ public final class RateLimitKeys {
 
     public static Key publicQrCreateIp(String ip) {
         return new Key("PUBLIC_QR_CREATE_IP", ip);
+    }
+
+    public static Key publicQrCreateClient(MealUsageQrContextId contextId, String clientKey) {
+        return new Key("PUBLIC_QR_CREATE_CLIENT", contextId.value() + ":" + clientKey);
     }
 
     private static List<Key> keys(String ipScope, String ip, String identityScope, String identity) {

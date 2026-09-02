@@ -23,6 +23,8 @@ public interface MealUsageQrOperationsRepository {
 
     void renew(MealUsageQrContextId contextId, Instant renewedExpiresAt);
 
+    void setAcceptingNewRequests(MealUsageQrContextId contextId, boolean accepting);
+
     List<QrPartnerSelection> findPartnerSelectionsByStoreId(StoreId storeId);
 
     Optional<QrPartnerSelection> findPartnerSelectionByIdAndStoreIdForUpdate(

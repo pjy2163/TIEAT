@@ -7,6 +7,7 @@ export type StoreMealUsageQrView = {
   publicPath: string | null;
   issuedAt: string | null;
   expiresAt: string | null;
+  acceptingNewRequests: boolean;
 };
 
 type CsrfToken = {
@@ -58,7 +59,7 @@ function isIsoInstant(value: unknown): value is string {
 }
 
 function hasExactlyFields(value: Record<string, unknown>): boolean {
-  const fields = ["status", "publicPath", "issuedAt", "expiresAt"];
+  const fields = ["status", "publicPath", "issuedAt", "expiresAt", "acceptingNewRequests"];
   return Object.keys(value).length === fields.length && fields.every((field) => field in value);
 }
 
@@ -72,9 +73,11 @@ function parseView(value: unknown): StoreMealUsageQrView {
   const publicPath = value.publicPath;
   const issuedAt = value.issuedAt;
   const expiresAt = value.expiresAt;
+  const acceptingNewRequests = value.acceptingNewRequests;
   if ((publicPath !== null && (typeof publicPath !== "string" || !PUBLIC_PATH_PATTERN.test(publicPath)))
     || (issuedAt !== null && !isIsoInstant(issuedAt))
-    || (expiresAt !== null && !isIsoInstant(expiresAt))) {
+    || (expiresAt !== null && !isIsoInstant(expiresAt))
+    || typeof acceptingNewRequests !== "boolean") {
     throw new InvalidApiResponseError();
   }
 
@@ -92,6 +95,7 @@ function parseView(value: unknown): StoreMealUsageQrView {
     publicPath,
     issuedAt,
     expiresAt,
+    acceptingNewRequests: acceptingNewRequests as boolean,
   };
 }
 
@@ -122,4 +126,26 @@ export async function renewStoreMealUsageQr(): Promise<StoreMealUsageQrView> {
   });
   if (!response.ok) throw await apiError(response);
   return parseView(await response.json() as unknown);
+}
+
+async function changeStoreMealUsageQrPause(method: "POST" | "DELETE"): Promise<StoreMealUsageQrView> {
+  const csrfResponse = await fetch("/api/v1/csrf", { cache: "no-store", credentials: "same-origin" });
+  if (!csrfResponse.ok) throw await apiError(csrfResponse);
+  const csrf = parseCsrfToken(await csrfResponse.json() as unknown);
+  const response = await fetch(`${API_PATH}/request-pauses`, {
+    method,
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { [csrf.headerName]: csrf.token },
+  });
+  if (!response.ok) throw await apiError(response);
+  return parseView(await response.json() as unknown);
+}
+
+export function pauseStoreMealUsageQr(): Promise<StoreMealUsageQrView> {
+  return changeStoreMealUsageQrPause("POST");
+}
+
+export function resumeStoreMealUsageQr(): Promise<StoreMealUsageQrView> {
+  return changeStoreMealUsageQrPause("DELETE");
 }

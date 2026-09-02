@@ -12,35 +12,45 @@ import com.tieat.qr.application.PublicMealUsageQrNotFoundException;
 import com.tieat.qr.domain.MealUsageQrContext;
 import com.tieat.qr.domain.MealUsageQrContextRepository;
 import com.tieat.qr.domain.MealUsageQrToken;
+import com.tieat.security.application.RateLimiter;
+import com.tieat.security.web.RateLimitKeys;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class CreatePublicMealUsageUseCase {
 
+    private static final Logger log = LoggerFactory.getLogger(CreatePublicMealUsageUseCase.class);
+
     private static final long MAX_SUCCESSES_PER_MINUTE = 10;
+    private static final int MAX_CLIENT_CREATES_PER_MINUTE = 5;
 
     private final MealUsageQrContextRepository mealUsageQrContextRepository;
     private final MealContractRepository mealContractRepository;
     private final MealUsageRepository mealUsageRepository;
     private final PublicMealUsageIdempotencyRepository idempotencyRepository;
     private final Clock clock;
+    private final RateLimiter rateLimiter;
 
     public CreatePublicMealUsageUseCase(
         MealUsageQrContextRepository mealUsageQrContextRepository,
         MealContractRepository mealContractRepository,
         MealUsageRepository mealUsageRepository,
         PublicMealUsageIdempotencyRepository idempotencyRepository,
-        Clock clock
+        Clock clock,
+        RateLimiter rateLimiter
     ) {
         this.mealUsageQrContextRepository = Objects.requireNonNull(mealUsageQrContextRepository);
         this.mealContractRepository = Objects.requireNonNull(mealContractRepository);
         this.mealUsageRepository = Objects.requireNonNull(mealUsageRepository);
         this.idempotencyRepository = Objects.requireNonNull(idempotencyRepository);
         this.clock = Objects.requireNonNull(clock);
+        this.rateLimiter = Objects.requireNonNull(rateLimiter);
     }
 
     @Transactional
@@ -69,12 +79,27 @@ public class CreatePublicMealUsageUseCase {
             if (!prior.matchesCreatePayload(command.mealContractId(), command.amount(), requestKeyHash)) {
                 throw new PublicMealUsageIdempotencyConflictException();
             }
+            if (!prior.isRequestKeyActiveAt(now)) {
+                throw new PublicMealUsageIdempotencyConflictException();
+            }
             MealUsage existing = mealUsageRepository.findById(prior.mealUsageId())
                 .orElseThrow(() -> new IllegalStateException("Idempotency record refers to a missing meal usage"));
             if (existing.customerNameSnapshot().filter(command.customerName()::equals).isEmpty()) {
                 throw new PublicMealUsageIdempotencyConflictException();
             }
             return existing;
+        }
+        if (!context.acceptingNewRequests()) {
+            throw new PublicQrCreationPausedException();
+        }
+
+        RateLimiter.Decision clientDecision = rateLimiter.consume(
+            RateLimitKeys.publicQrCreateClient(context.id(), command.publicClientKey()),
+            MAX_CLIENT_CREATES_PER_MINUTE, java.time.Duration.ofMinutes(1)
+        );
+        if (!clientDecision.allowed()) {
+            log.warn("security_event=public_qr_bot_challenge_recommended");
+            throw new PublicMealUsageRateLimitExceededException(clientDecision.retryAfter());
         }
 
         MealContract lockedContract = mealContractRepository.findByIdForUpdate(command.mealContractId())
@@ -86,7 +111,7 @@ public class CreatePublicMealUsageUseCase {
             .filter(contract -> contract.mealContractId().equals(command.mealContractId()))
             .findFirst()
             .orElseThrow(PublicQrMealContractNotFoundException::new);
-        if (mealUsageRepository.countPendingByStoreId(context.storeId()) >= MealUsageRepository.MAX_PENDING_PER_STORE) {
+        if (mealUsageRepository.countPendingByStoreId(context.storeId(), now) >= MealUsageRepository.MAX_PENDING_PER_STORE) {
             throw new MealUsagePendingLimitReachedException();
         }
         if (mealUsageRepository.countPublicQrCreatedSince(context.id(), now.minusSeconds(60)) >= MAX_SUCCESSES_PER_MINUTE) {

@@ -62,7 +62,7 @@ class StorePartnerPaymentTermService {
                 StorePartnerPaymentTermConflictException.Reason.EXPECTED_PAYMENT_TYPE_STALE
             );
         }
-        if (mealContractRepository.existsPendingUsage(mealContractId, actorStoreId)) {
+        if (mealContractRepository.existsPendingUsage(mealContractId, actorStoreId, Instant.now(clock))) {
             throw new StorePartnerPaymentTermConflictException(
                 StorePartnerPaymentTermConflictException.Reason.PENDING_USAGE
             );

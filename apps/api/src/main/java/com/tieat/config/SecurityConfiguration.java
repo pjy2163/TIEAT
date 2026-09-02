@@ -85,6 +85,8 @@ public class SecurityConfiguration {
                 .requestMatchers(HttpMethod.GET, "/api/v1/meal-usages/confirmed/export").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.GET, "/api/v1/store-meal-usage-qr").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.POST, "/api/v1/store-meal-usage-qr/renewals").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.POST, "/api/v1/store-meal-usage-qr/request-pauses").hasRole("STORE_STAFF")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/store-meal-usage-qr/request-pauses").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.GET, "/api/v1/store-partners").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.POST, "/api/v1/store-partners").hasRole("STORE_STAFF")
                 .requestMatchers(HttpMethod.PATCH, "/api/v1/store-partners/*/payment-terms").hasRole("STORE_STAFF")

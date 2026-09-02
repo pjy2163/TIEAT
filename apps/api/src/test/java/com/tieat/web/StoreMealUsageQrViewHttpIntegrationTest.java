@@ -3,6 +3,7 @@ package com.tieat.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -219,12 +220,60 @@ class StoreMealUsageQrViewHttpIntegrationTest {
     }
 
     @Test
+    void pausesAndResumesNewRequestsWithoutChangingQrOrDuplicatingTransitionAudit() throws Exception {
+        Fixture fixture = activeFixture("qr-view-pause", STORE_A, "매장 A");
+        String publicPath = "/qr/" + fixture.issued.rawToken();
+
+        mockMvc.perform(post("/api/v1/store-meal-usage-qr/request-pauses")
+                .cookie(fixture.session.cookie()))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("CSRF_TOKEN_INVALID"));
+
+        mockMvc.perform(post("/api/v1/store-meal-usage-qr/request-pauses")
+                .cookie(fixture.session.cookie())
+                .header("X-CSRF-TOKEN", fixture.session.csrfToken()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.publicPath").value(publicPath))
+            .andExpect(jsonPath("$.acceptingNewRequests").value(false));
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from meal_usage_qr_operation_audits where action = 'PUBLIC_QR_CREATION_PAUSED'",
+            Long.class
+        )).isEqualTo(1);
+
+        mockMvc.perform(post("/api/v1/store-meal-usage-qr/request-pauses")
+                .cookie(fixture.session.cookie())
+                .header("X-CSRF-TOKEN", fixture.session.csrfToken()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.publicPath").value(publicPath))
+            .andExpect(jsonPath("$.acceptingNewRequests").value(false));
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from meal_usage_qr_operation_audits where action = 'PUBLIC_QR_CREATION_PAUSED'",
+            Long.class
+        )).isEqualTo(1);
+
+        mockMvc.perform(delete("/api/v1/store-meal-usage-qr/request-pauses")
+                .cookie(fixture.session.cookie())
+                .header("X-CSRF-TOKEN", fixture.session.csrfToken()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.publicPath").value(publicPath))
+            .andExpect(jsonPath("$.acceptingNewRequests").value(true));
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from meal_usage_qr_operation_audits where action = 'PUBLIC_QR_CREATION_RESUMED'",
+            Long.class
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from meal_usage_qr_operation_audits",
+            Long.class
+        )).isEqualTo(3);
+    }
+
+    @Test
     void renewsExpiredQrWithAuthenticatedCsrfAndRejectsNonExpiredRenewal() throws Exception {
         Fixture fixture = activeFixture("qr-view-renew-expired", STORE_A, "매장 A");
         Fixture otherStore = activeFixture("qr-view-renew-other", STORE_B, "매장 B");
         UUID oldContextId = fixture.issued.context().id().value();
         jdbcTemplate.update(
-            "update meal_usage_qr_contexts set created_at = ?, expires_at = ? where id = ?",
+            "update meal_usage_qr_contexts set created_at = ?, expires_at = ?, accepting_new_requests = false where id = ?",
             Timestamp.from(Instant.now().minusSeconds(2)),
             Timestamp.from(Instant.now().minusSeconds(1)),
             oldContextId
@@ -239,6 +288,7 @@ class StoreMealUsageQrViewHttpIntegrationTest {
             .andExpect(jsonPath("$.publicPath").value(org.hamcrest.Matchers.startsWith("/qr/")))
             .andExpect(jsonPath("$.issuedAt").isNotEmpty())
             .andExpect(jsonPath("$.expiresAt").isNotEmpty())
+            .andExpect(jsonPath("$.acceptingNewRequests").value(false))
             .andReturn();
         JsonNode renewed = json(renewedResult).body();
         String newPath = renewed.get("publicPath").asText();
@@ -260,6 +310,10 @@ class StoreMealUsageQrViewHttpIntegrationTest {
             Boolean.class,
             oldContextId
         )).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+            "select accepting_new_requests from meal_usage_qr_contexts where id = ?",
+            Boolean.class, oldContextId
+        )).isFalse();
         assertThat(jdbcTemplate.queryForObject(
             "select count(*) from meal_usage_qr_contexts where store_id = ? and revoked_at is null",
             Long.class,

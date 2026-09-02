@@ -33,6 +33,8 @@ import com.tieat.web.StoreOnboardingHttpIntegrationSupport.SessionHandle;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -72,6 +74,7 @@ class PublicMealUsageQrHttpIntegrationTest {
     private static final StoreId STORE_ID = new StoreId(UUID.fromString("9d5e37dd-dbe2-40dc-97fb-8e77c89aa4cb"));
     private static final StoreId OTHER_STORE_ID = new StoreId(UUID.fromString("6142be7d-0dc9-4f77-a17d-07e1e5c6e9a1"));
     private static final String PUBLIC_REQUEST_KEY = MealUsageQrToken.generate();
+    private static final String PUBLIC_CLIENT_KEY = publicClientKey(0);
     private static final String CUSTOMER_NAME = "홍길동";
     private static final String STORE_TABLET_LOGIN_ID = "public-cross-store-tablet";
     private static final String STORE_TABLET_PASSWORD = "correct-password";
@@ -161,7 +164,7 @@ class PublicMealUsageQrHttpIntegrationTest {
             .andReturn();
 
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
-        assertThat(fieldNames(response)).containsExactlyInAnyOrder("storeDisplayName", "partners", "qrExpiresAt");
+        assertThat(fieldNames(response)).containsExactlyInAnyOrder("storeDisplayName", "partners", "qrExpiresAt", "acceptingNewRequests");
         assertThat(fieldNames(response.get("partners").get(0)))
             .containsExactlyInAnyOrder("mealContractId", "partnerDisplayName");
         assertThat(result.getResponse().getContentAsString())
@@ -517,23 +520,30 @@ class PublicMealUsageQrHttpIntegrationTest {
                 .andExpect(publicProblem(HttpStatus.BAD_REQUEST.value(), "VALIDATION_FAILED", fixture.token));
         }
         mockMvc.perform(post(path(fixture.token) + "/meal-usages")
+                .header("Idempotency-Key", UUID.randomUUID())
+                .header("Public-Request-Key", PUBLIC_REQUEST_KEY)
+                .header("Public-Client-Key", PUBLIC_CLIENT_KEY)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"mealContractId\":\"" + fixture.contract.id().value() + "\",\"amountMinor\":12000}"))
             .andExpect(publicProblem(HttpStatus.BAD_REQUEST.value(), "VALIDATION_FAILED", fixture.token));
         mockMvc.perform(post(path(fixture.token) + "/meal-usages")
                 .header("Idempotency-Key", UUID.randomUUID())
+                .header("Public-Request-Key", PUBLIC_REQUEST_KEY)
+                .header("Public-Client-Key", PUBLIC_CLIENT_KEY)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"mealContractId\":\"" + fixture.contract.id().value() + "\",\"amountMinor\":12000}"))
             .andExpect(publicProblem(HttpStatus.BAD_REQUEST.value(), "VALIDATION_FAILED", fixture.token));
         mockMvc.perform(post(path(fixture.token) + "/meal-usages")
                 .header("Idempotency-Key", "not-a-uuid")
                 .header("Public-Request-Key", PUBLIC_REQUEST_KEY)
+                .header("Public-Client-Key", PUBLIC_CLIENT_KEY)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"mealContractId\":\"" + fixture.contract.id().value() + "\",\"amountMinor\":12000}"))
             .andExpect(publicProblem(HttpStatus.BAD_REQUEST.value(), "VALIDATION_FAILED", fixture.token));
         mockMvc.perform(post(path(fixture.token) + "/meal-usages")
                 .header("Idempotency-Key", UUID.randomUUID())
                 .header("Public-Request-Key", PUBLIC_REQUEST_KEY)
+                .header("Public-Client-Key", PUBLIC_CLIENT_KEY)
                 .contentType(MediaType.TEXT_PLAIN)
                 .content("not-json"))
             .andExpect(publicProblem(HttpStatus.UNSUPPORTED_MEDIA_TYPE.value(), "UNSUPPORTED_MEDIA_TYPE", fixture.token));
@@ -557,10 +567,16 @@ class PublicMealUsageQrHttpIntegrationTest {
         Fixture fixture = activeFixture();
 
         for (int index = 0; index < 10; index++) {
-            mockMvc.perform(publicCreate(fixture.token, UUID.randomUUID(), fixture.contract.id().value(), 1_000 + index))
+            mockMvc.perform(publicCreate(
+                fixture.token, UUID.randomUUID(), fixture.contract.id().value(), 1_000 + index,
+                PUBLIC_REQUEST_KEY, publicClientKey(index + 1)
+            ))
                 .andExpect(status().isCreated());
         }
-        mockMvc.perform(publicCreate(fixture.token, UUID.randomUUID(), fixture.contract.id().value(), 20_000))
+        mockMvc.perform(publicCreate(
+            fixture.token, UUID.randomUUID(), fixture.contract.id().value(), 20_000,
+            PUBLIC_REQUEST_KEY, publicClientKey(11)
+        ))
             .andExpect(publicProblem(HttpStatus.TOO_MANY_REQUESTS.value(), "PUBLIC_QR_RATE_LIMITED", fixture.token));
         assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usages", Long.class)).isEqualTo(10);
     }
@@ -583,7 +599,7 @@ class PublicMealUsageQrHttpIntegrationTest {
             ));
         }
 
-        assertThat(mealUsageRepository.countPendingByStoreId(STORE_ID))
+        assertThat(mealUsageRepository.countPendingByStoreId(STORE_ID, Instant.now()))
             .isEqualTo(MealUsageRepository.MAX_PENDING_PER_STORE);
 
         mockMvc.perform(publicCreate(fixture.token, UUID.randomUUID(), fixture.contract.id().value(), 1_000))
@@ -593,6 +609,10 @@ class PublicMealUsageQrHttpIntegrationTest {
 
         assertThat(jdbcTemplate.queryForObject("select count(*) from meal_usages", Long.class))
             .isEqualTo((long) MealUsageRepository.MAX_PENDING_PER_STORE);
+        assertThat(jdbcTemplate.queryForObject(
+            "select count(*) from auth_abuse_rate_limits where scope = 'PUBLIC_QR_CREATE_CLIENT'",
+            Long.class
+        )).isZero();
     }
 
     @Test
@@ -630,7 +650,8 @@ class PublicMealUsageQrHttpIntegrationTest {
         }
 
         List<MvcResult> results = performConcurrently(11, index -> publicCreate(
-            fixture.token, idempotencyKeys.get(index), fixture.contract.id().value(), 1_000 + index
+            fixture.token, idempotencyKeys.get(index), fixture.contract.id().value(), 1_000 + index,
+            PUBLIC_REQUEST_KEY, publicClientKey(index + 1)
         ));
 
         List<Integer> statuses = results.stream().map(result -> result.getResponse().getStatus()).toList();
@@ -737,11 +758,13 @@ class PublicMealUsageQrHttpIntegrationTest {
             .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}/meal-usages'].post.security").doesNotExist())
             .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}/meal-usages'].post.parameters[?(@.name == 'Idempotency-Key')].required").value(true))
             .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}/meal-usages'].post.parameters[?(@.name == 'Public-Request-Key')].required").value(true))
+            .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}/meal-usages'].post.parameters[?(@.name == 'Public-Client-Key')].required").value(true))
             .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}/meal-usages'].post.responses['201']").exists())
             .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}/meal-usages'].post.responses['400']").exists())
             .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}/meal-usages'].post.responses['404']").exists())
             .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}/meal-usages'].post.responses['409']").exists())
             .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}/meal-usages'].post.responses['429']").exists())
+            .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}/meal-usages'].post.responses['503']").exists())
             .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}/meal-usages/{mealUsageId}'].get").exists())
             .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}/meal-usages/{mealUsageId}'].get.security").doesNotExist())
             .andExpect(jsonPath("$.paths['/api/v1/public/meal-usage-qr/{token}/meal-usages/{mealUsageId}/cancellations'].post").exists())
@@ -750,7 +773,7 @@ class PublicMealUsageQrHttpIntegrationTest {
 
         JsonNode document = objectMapper.readTree(result.getResponse().getContentAsString());
         assertThat(fieldNames(document.at("/components/schemas/PublicQrContextResponse/properties")))
-            .containsExactlyInAnyOrder("storeDisplayName", "partners", "qrExpiresAt");
+            .containsExactlyInAnyOrder("storeDisplayName", "partners", "qrExpiresAt", "acceptingNewRequests");
         assertThat(fieldNames(document.at("/components/schemas/PartnerResponse/properties")))
             .containsExactlyInAnyOrder("mealContractId", "partnerDisplayName");
         assertThat(fieldNames(document.at("/components/schemas/PublicCreationRequest/properties")))
@@ -834,7 +857,7 @@ class PublicMealUsageQrHttpIntegrationTest {
         UUID mealContractId,
         long amountMinor
     ) {
-        return publicCreate(token, idempotencyKey, mealContractId, CUSTOMER_NAME, amountMinor, PUBLIC_REQUEST_KEY);
+        return publicCreate(token, idempotencyKey, mealContractId, CUSTOMER_NAME, amountMinor, PUBLIC_REQUEST_KEY, PUBLIC_CLIENT_KEY);
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder publicCreate(
@@ -844,7 +867,18 @@ class PublicMealUsageQrHttpIntegrationTest {
         long amountMinor,
         String publicRequestKey
     ) {
-        return publicCreate(token, idempotencyKey, mealContractId, CUSTOMER_NAME, amountMinor, publicRequestKey);
+        return publicCreate(token, idempotencyKey, mealContractId, CUSTOMER_NAME, amountMinor, publicRequestKey, PUBLIC_CLIENT_KEY);
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder publicCreate(
+        String token,
+        UUID idempotencyKey,
+        UUID mealContractId,
+        long amountMinor,
+        String publicRequestKey,
+        String publicClientKey
+    ) {
+        return publicCreate(token, idempotencyKey, mealContractId, CUSTOMER_NAME, amountMinor, publicRequestKey, publicClientKey);
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder publicCreate(
@@ -855,11 +889,24 @@ class PublicMealUsageQrHttpIntegrationTest {
         long amountMinor,
         String publicRequestKey
     ) {
+        return publicCreate(token, idempotencyKey, mealContractId, customerName, amountMinor, publicRequestKey, PUBLIC_CLIENT_KEY);
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder publicCreate(
+        String token,
+        UUID idempotencyKey,
+        UUID mealContractId,
+        String customerName,
+        long amountMinor,
+        String publicRequestKey,
+        String publicClientKey
+    ) {
         return publicCreate(
             token,
             idempotencyKey,
             "{\"mealContractId\":\"" + mealContractId + "\",\"customerName\":\"" + customerName + "\",\"amountMinor\":" + amountMinor + "}",
-            publicRequestKey
+            publicRequestKey,
+            publicClientKey
         );
     }
 
@@ -868,7 +915,7 @@ class PublicMealUsageQrHttpIntegrationTest {
         UUID idempotencyKey,
         String body
     ) {
-        return publicCreate(token, idempotencyKey, body, PUBLIC_REQUEST_KEY);
+        return publicCreate(token, idempotencyKey, body, PUBLIC_REQUEST_KEY, PUBLIC_CLIENT_KEY);
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder publicCreate(
@@ -877,11 +924,28 @@ class PublicMealUsageQrHttpIntegrationTest {
         String body,
         String publicRequestKey
     ) {
+        return publicCreate(token, idempotencyKey, body, publicRequestKey, PUBLIC_CLIENT_KEY);
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder publicCreate(
+        String token,
+        UUID idempotencyKey,
+        String body,
+        String publicRequestKey,
+        String publicClientKey
+    ) {
         return post(path(token) + "/meal-usages")
             .header("Idempotency-Key", idempotencyKey)
             .header("Public-Request-Key", publicRequestKey)
+            .header("Public-Client-Key", publicClientKey)
             .contentType(MediaType.APPLICATION_JSON)
             .content(body);
+    }
+
+    private static String publicClientKey(int seed) {
+        byte[] bytes = new byte[32];
+        Arrays.fill(bytes, (byte) seed);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder withClient(

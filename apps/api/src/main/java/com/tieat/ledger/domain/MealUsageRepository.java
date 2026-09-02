@@ -12,7 +12,7 @@ public interface MealUsageRepository {
 
     void lockStoreForPendingCreation(StoreId storeId);
 
-    long countPendingByStoreId(StoreId storeId);
+    long countPendingByStoreId(StoreId storeId, Instant now);
 
     MealUsage save(MealUsage mealUsage);
 
@@ -20,7 +20,7 @@ public interface MealUsageRepository {
 
     Optional<MealUsage> findByIdForUpdate(MealUsageId id);
 
-    MealUsageSlice findPendingByStoreId(StoreId storeId, int page, int size);
+    MealUsageSlice findPendingByStoreId(StoreId storeId, Instant now, int page, int size);
 
     MonthlyMealUsageSlice findConfirmedByStoreIdAndCreatedAtBetween(
         StoreId storeId,

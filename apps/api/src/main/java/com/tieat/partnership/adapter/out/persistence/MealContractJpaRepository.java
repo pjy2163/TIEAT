@@ -5,6 +5,7 @@ import com.tieat.partnership.domain.MealContractPaymentType;
 import java.util.Optional;
 import java.util.List;
 import java.util.UUID;
+import java.time.Instant;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -70,11 +71,13 @@ interface MealContractJpaRepository extends JpaRepository<MealContractJpaEntity,
             where mealUsage.store_id = :storeId
               and mealUsage.meal_contract_id = :mealContractId
               and mealUsage.status = 'PENDING'
+              and (mealUsage.public_qr_context_id is null or mealUsage.created_at > :publicPendingCutoff)
         )
         """, nativeQuery = true)
-    boolean existsPendingUsageByStoreIdAndMealContractId(
+    boolean existsActivePendingUsageByStoreIdAndMealContractId(
         @Param("storeId") UUID storeId,
-        @Param("mealContractId") UUID mealContractId
+        @Param("mealContractId") UUID mealContractId,
+        @Param("publicPendingCutoff") Instant publicPendingCutoff
     );
 
     @Query(value = """

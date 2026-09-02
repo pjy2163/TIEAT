@@ -19,6 +19,7 @@ function response(status: number, body?: unknown): Response {
 const token = "qR8wszyH5CXUTpt-Np5deNiRFi9OKKcjPCAwXWpEM5s";
 const mealContractId = "00000000-0000-0000-0000-000000000001";
 const publicRequestKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const publicClientKey = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
 const customerName = "홍길동";
 
 describe("public QR API", () => {
@@ -32,6 +33,7 @@ describe("public QR API", () => {
       storeDisplayName: "강남점",
       partners: [{ mealContractId, partnerDisplayName: "협력사 A" }],
       qrExpiresAt: "2026-08-09T01:00:00Z",
+      acceptingNewRequests: true,
     }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -39,6 +41,7 @@ describe("public QR API", () => {
       storeDisplayName: "강남점",
       partners: [{ mealContractId, partnerDisplayName: "협력사 A" }],
       qrExpiresAt: "2026-08-09T01:00:00Z",
+      acceptingNewRequests: true,
     });
 
     expect(fetchMock).toHaveBeenCalledWith(`/api/v1/public/meal-usage-qr/${token}`, {
@@ -61,7 +64,7 @@ describe("public QR API", () => {
     vi.stubGlobal("fetch", fetchMock);
     const idempotencyKey = "00000000-0000-0000-0000-000000000003";
 
-    await createPublicMealUsage(token, idempotencyKey, publicRequestKey, mealContractId, customerName, 8_500);
+    await createPublicMealUsage(token, idempotencyKey, publicRequestKey, mealContractId, customerName, 8_500, publicClientKey);
     await getPublicMealUsageRequest(token, pendingUsage.mealUsageId, idempotencyKey, publicRequestKey);
     await cancelPublicMealUsage(token, pendingUsage.mealUsageId, idempotencyKey, publicRequestKey);
 
@@ -72,6 +75,7 @@ describe("public QR API", () => {
       headers: {
         "Content-Type": "application/json",
         "Idempotency-Key": idempotencyKey,
+        "Public-Client-Key": publicClientKey,
         "Public-Request-Key": publicRequestKey,
       },
       body: JSON.stringify({ mealContractId, customerName, amountMinor: 8_500 }),
@@ -107,7 +111,7 @@ describe("public QR API", () => {
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(200, {})));
     await expect(createPublicMealUsage(
-      token, "00000000-0000-0000-0000-000000000003", publicRequestKey, mealContractId, customerName, 8_500
+      token, "00000000-0000-0000-0000-000000000003", publicRequestKey, mealContractId, customerName, 8_500, publicClientKey
     ))
       .rejects.toEqual(new UnexpectedPublicQrCreationResponseError());
   });

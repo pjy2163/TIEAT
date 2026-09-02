@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -29,6 +30,19 @@ class ApiExceptionHandlerTest {
         assertThat(response.getBody().getProperties()).containsEntry(
             "errorCode", "MEAL_USAGE_CONFIRMATION_CONFLICT"
         );
+    }
+
+    @Test
+    void buildsPublicQrRateLimitResponseWithRetryAfterAndNoStoreHeaders() {
+        var response = handler.handlePublicRateLimit(
+            new com.tieat.ledger.application.PublicMealUsageRateLimitExceededException(java.time.Duration.ofSeconds(5)),
+            new MockHttpServletRequest("POST", "/api/v1/public/meal-usage-qr/token/meal-usages")
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(response.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("5");
+        assertThat(response.getHeaders().getCacheControl()).contains("no-store");
+        assertThat(response.getBody().getProperties()).containsEntry("errorCode", "PUBLIC_QR_RATE_LIMITED");
     }
 
     @Test

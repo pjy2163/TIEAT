@@ -120,6 +120,7 @@ public class JdbcRateLimiterAdapter implements RateLimiter {
         cleanupExpired(now);
         while (true) {
             RateRow row = lockCurrent(key, now);
+            now = clock.instant();
             if (row == null) {
                 int inserted = jdbcTemplate.update(
                     "insert into auth_abuse_rate_limits "
@@ -142,12 +143,22 @@ public class JdbcRateLimiterAdapter implements RateLimiter {
                 );
                 return Decision.permitted();
             }
+            if (row.availableAt().isAfter(now)) {
+                return Decision.limited(remaining(row.availableAt(), now));
+            }
             if (row.failedAttempts() >= limit) {
                 return Decision.limited(remaining(resetsAt, now));
             }
+            Instant nextAvailableAt = now;
+            if ("PUBLIC_QR_CREATE_CLIENT".equals(key.scope()) && row.failedAttempts() == 3) {
+                nextAvailableAt = now.plusSeconds(5);
+            } else if ("PUBLIC_QR_CREATE_CLIENT".equals(key.scope()) && row.failedAttempts() == 2) {
+                nextAvailableAt = now.plusSeconds(2);
+            }
             jdbcTemplate.update(
-                "update auth_abuse_rate_limits set failed_attempts = failed_attempts + 1 "
+                "update auth_abuse_rate_limits set failed_attempts = failed_attempts + 1, available_at = ? "
                     + "where scope = ? and key_hash = ?",
+                Timestamp.from(nextAvailableAt),
                 key.scope(), hash(key.value())
             );
             return Decision.permitted();

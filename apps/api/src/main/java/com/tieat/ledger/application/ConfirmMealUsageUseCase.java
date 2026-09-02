@@ -51,11 +51,15 @@ public class ConfirmMealUsageUseCase {
         if (!mealUsage.storeId().equals(mealContract.storeId())) {
             throw new MealUsageContractScopeMismatchException(mealUsage, mealContract);
         }
+        Instant now = Instant.now(clock);
+        if (mealUsage.publicQrContextId().isPresent() && !mealUsage.isPublicQrPendingActiveAt(now)) {
+            throw new MealUsageNotPendingException(mealUsage.id());
+        }
 
         MealContractAllocation allocation = mealContract.allocate(mealUsage.amount());
         mealUsage.confirm(
             command.staffInitials(),
-            Instant.now(clock),
+            now,
             new PrepaidAllocation(
                 allocation.usageAmount(),
                 allocation.prepaidApplied(),

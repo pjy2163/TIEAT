@@ -7,6 +7,7 @@ import com.tieat.ledger.domain.MealUsageSlice;
 import com.tieat.ledger.domain.MonthlyMealUsageRow;
 import com.tieat.ledger.domain.MonthlyMealUsageSlice;
 import com.tieat.ledger.domain.MealUsageStatus;
+import com.tieat.ledger.domain.PublicMealUsageIdempotency;
 import com.tieat.ledger.domain.PrepaidAllocation;
 import com.tieat.ledger.domain.Confirmation;
 import com.tieat.ledger.domain.Rejection;
@@ -65,9 +66,12 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
     }
 
     @Override
-    public long countPendingByStoreId(StoreId storeId) {
+    public long countPendingByStoreId(StoreId storeId, Instant now) {
         Objects.requireNonNull(storeId, "Store id must be supplied");
-        return repository.countByStoreIdAndStatus(storeId.value(), MealUsageStatus.PENDING);
+        Objects.requireNonNull(now, "Pending check time must be supplied");
+        return repository.countPendingByStoreIdAndActivePublicCutoff(
+            storeId.value(), MealUsageStatus.PENDING, now.minus(PublicMealUsageIdempotency.requestKeyLifetime())
+        );
     }
 
     @Override
@@ -89,14 +93,17 @@ public class MealUsagePersistenceAdapter implements MealUsageRepository {
     }
 
     @Override
-    public MealUsageSlice findPendingByStoreId(StoreId storeId, int page, int size) {
+    public MealUsageSlice findPendingByStoreId(StoreId storeId, Instant now, int page, int size) {
         Objects.requireNonNull(storeId, "Store id must be supplied");
+        Objects.requireNonNull(now, "Pending check time must be supplied");
         var pageable = PageRequest.of(
             page,
             size,
             Sort.by(Sort.Direction.ASC, "createdAt").and(Sort.by(Sort.Direction.ASC, "id"))
         );
-        var result = repository.findByStoreIdAndStatus(storeId.value(), MealUsageStatus.PENDING, pageable);
+        var result = repository.findPendingByStoreIdAndActivePublicCutoff(
+            storeId.value(), MealUsageStatus.PENDING, now.minus(PublicMealUsageIdempotency.requestKeyLifetime()), pageable
+        );
         return new MealUsageSlice(result.getContent().stream().map(this::toDomain).toList(), result.hasNext());
     }
 

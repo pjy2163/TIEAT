@@ -480,6 +480,13 @@ public final class MealUsage {
         return Optional.ofNullable(publicQrContextId);
     }
 
+    public boolean isPublicQrPendingActiveAt(Instant instant) {
+        Objects.requireNonNull(instant, "Public pending check time must be supplied");
+        return status == MealUsageStatus.PENDING
+            && publicQrContextId != null
+            && instant.isBefore(createdAt.plus(PublicMealUsageIdempotency.requestKeyLifetime()));
+    }
+
     public MealUsageStatus status() {
         return status;
     }

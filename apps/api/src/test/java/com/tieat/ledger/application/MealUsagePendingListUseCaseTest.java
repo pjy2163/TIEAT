@@ -14,6 +14,8 @@ import com.tieat.ledger.domain.MealUsageSlice;
 import com.tieat.partnership.domain.MealContractId;
 import com.tieat.store.domain.StoreId;
 import java.time.Instant;
+import java.time.Clock;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -26,11 +28,14 @@ class MealUsagePendingListUseCaseTest {
     void returnsStoreScopedSliceMetadataAndKeepsEmptyResultsEmpty() {
         MealUsageRepository repository = mock(MealUsageRepository.class);
         MealUsage usage = pending("00000000-0000-0000-0000-000000000001");
-        given(repository.findPendingByStoreId(STORE_ID, 2, 50))
+        Instant now = Instant.parse("2026-08-06T01:00:00Z");
+        given(repository.findPendingByStoreId(STORE_ID, now, 2, 50))
             .willReturn(new MealUsageSlice(List.of(usage), true));
-        given(repository.findPendingByStoreId(STORE_ID, 0, 50))
+        given(repository.findPendingByStoreId(STORE_ID, now, 0, 50))
             .willReturn(new MealUsageSlice(List.of(), false));
-        ListPendingMealUsagesUseCase useCase = new ListPendingMealUsagesUseCase(repository);
+        ListPendingMealUsagesUseCase useCase = new ListPendingMealUsagesUseCase(
+            repository, Clock.fixed(now, ZoneOffset.UTC)
+        );
 
         PendingMealUsagePage result = useCase.list(new ListPendingMealUsagesQuery(STORE_ID, "PENDING", 2, 50));
         PendingMealUsagePage empty = useCase.list(new ListPendingMealUsagesQuery(STORE_ID, "PENDING", 0, 50));
@@ -41,8 +46,8 @@ class MealUsagePendingListUseCaseTest {
         assertThat(result.hasNext()).isTrue();
         assertThat(empty.items()).isEmpty();
         assertThat(empty.hasNext()).isFalse();
-        verify(repository).findPendingByStoreId(STORE_ID, 2, 50);
-        verify(repository).findPendingByStoreId(STORE_ID, 0, 50);
+        verify(repository).findPendingByStoreId(STORE_ID, now, 2, 50);
+        verify(repository).findPendingByStoreId(STORE_ID, now, 0, 50);
     }
 
     @Test

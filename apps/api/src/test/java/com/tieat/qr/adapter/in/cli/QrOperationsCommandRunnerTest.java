@@ -160,6 +160,11 @@ class QrOperationsCommandRunnerTest {
         }
 
         @Override
+        public void setAcceptingNewRequests(MealUsageQrContextId contextId, boolean accepting) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
         public List<QrPartnerSelection> findPartnerSelectionsByStoreId(StoreId storeId) {
             return List.of(new QrPartnerSelection(CONTRACT_ID, "협력사 A", true));
         }

@@ -73,10 +73,11 @@ class PublicMealUsageQrController {
     @Operation(summary = "Create a pending meal usage from a public QR")
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Pending meal usage created or replayed", content = @Content(schema = @Schema(implementation = PublicCreationResponse.class))),
-        @ApiResponse(responseCode = "400", description = "Invalid JSON, amount, or idempotency key", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Invalid JSON, Public-Client-Key, amount, or idempotency key", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "404", description = "Unknown, revoked, expired QR, or unavailable contract", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "409", description = "Idempotency key payload conflict", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "429", description = "Public QR rate limit exceeded", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
+        @ApiResponse(responseCode = "503", description = "Public QR creation is paused", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "500", description = "Internal error", content = @Content(schema = @Schema(implementation = ProblemResponse.class)))
     })
     @PostMapping(value = "/meal-usages", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -84,6 +85,7 @@ class PublicMealUsageQrController {
         @PathVariable String token,
         @RequestHeader("Idempotency-Key") UUID idempotencyKey,
         @RequestHeader("Public-Request-Key") String publicRequestKey,
+        @RequestHeader("Public-Client-Key") String publicClientKey,
         @Valid @RequestBody PublicCreationRequest request
     ) {
         MealUsage created = createPublicMealUsageUseCase.create(new CreatePublicMealUsageCommand(
@@ -92,7 +94,8 @@ class PublicMealUsageQrController {
             new MealContractId(request.mealContractId()),
             request.amountMinor().longValueExact(),
             publicRequestKey,
-            request.customerName()
+            request.customerName(),
+            publicClientKey
         ));
         return ResponseEntity.status(HttpStatus.CREATED)
             .cacheControl(CacheControl.noStore())
@@ -142,12 +145,12 @@ class PublicMealUsageQrController {
     ) {
     }
 
-    record PublicQrContextResponse(String storeDisplayName, List<PartnerResponse> partners, Instant qrExpiresAt) {
+    record PublicQrContextResponse(String storeDisplayName, List<PartnerResponse> partners, Instant qrExpiresAt, boolean acceptingNewRequests) {
         static PublicQrContextResponse from(PublicMealUsageQrContext context) {
             return new PublicQrContextResponse(
                 context.storeDisplayName(),
                 context.partners().stream().map(PartnerResponse::from).toList(),
-                context.qrExpiresAt()
+                context.qrExpiresAt(), context.acceptingNewRequests()
             );
         }
     }

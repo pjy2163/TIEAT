@@ -31,7 +31,11 @@ public class RejectMealUsageUseCase {
         if (mealUsage.status() != MealUsageStatus.PENDING) {
             throw new MealUsageNotPendingException(mealUsage.id());
         }
-        mealUsage.reject(command.actorLoginId(), Instant.now(clock));
+        Instant now = Instant.now(clock);
+        if (mealUsage.publicQrContextId().isPresent() && !mealUsage.isPublicQrPendingActiveAt(now)) {
+            throw new MealUsageNotPendingException(mealUsage.id());
+        }
+        mealUsage.reject(command.actorLoginId(), now);
         return mealUsageRepository.save(mealUsage);
     }
 }

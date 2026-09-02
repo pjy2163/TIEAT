@@ -41,7 +41,8 @@ public class MealUsageQrContextPersistenceAdapter implements MealUsageQrContextR
             entity.createdAt(),
             entity.expiresAt(),
             entity.revokedAt(),
-            protectedToken
+            protectedToken,
+            entity.acceptingNewRequests()
         );
     }
 
