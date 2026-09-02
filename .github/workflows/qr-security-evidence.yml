@@ -39,7 +39,7 @@ jobs:
           {
             printf 'github_sha=%s\n' "$GITHUB_SHA"
             printf 'git_head=%s\n' "$(git rev-parse HEAD)"
-            printf "scope=StoreMealUsageQrViewHttpIntegrationTest,MealUsageQrOperationsLifecycleIntegrationTest,QrOperationsCommandRunnerTest\n"
+            printf "scope=MealUsagePersistenceAdapterIntegrationTest,JdbcRateLimiterAdapterIntegrationTest,PublicMealUsageQrHttpIntegrationTest,StoreMealUsageQrViewHttpIntegrationTest,MealUsageQrOperationsLifecycleIntegrationTest,QrOperationsCommandRunnerTest\n"
           } > "$evidence_dir/revision.txt"
 
       - name: Check whitespace
@@ -51,6 +51,9 @@ jobs:
           set +e
           ./gradlew \
             :apps:api:test \
+            --tests com.tieat.ledger.adapter.out.persistence.MealUsagePersistenceAdapterIntegrationTest \
+            --tests com.tieat.security.adapter.out.persistence.JdbcRateLimiterAdapterIntegrationTest \
+            --tests com.tieat.web.PublicMealUsageQrHttpIntegrationTest \
             --tests com.tieat.web.StoreMealUsageQrViewHttpIntegrationTest \
             --tests com.tieat.qr.adapter.out.persistence.MealUsageQrOperationsLifecycleIntegrationTest \
             --tests com.tieat.qr.adapter.in.cli.QrOperationsCommandRunnerTest \
@@ -65,6 +68,9 @@ jobs:
           failures=0
           errors=0
           reports=(
+            apps/api/build/test-results/test/TEST-com.tieat.ledger.adapter.out.persistence.MealUsagePersistenceAdapterIntegrationTest.xml
+            apps/api/build/test-results/test/TEST-com.tieat.security.adapter.out.persistence.JdbcRateLimiterAdapterIntegrationTest.xml
+            apps/api/build/test-results/test/TEST-com.tieat.web.PublicMealUsageQrHttpIntegrationTest.xml
             apps/api/build/test-results/test/TEST-com.tieat.web.StoreMealUsageQrViewHttpIntegrationTest.xml
             apps/api/build/test-results/test/TEST-com.tieat.qr.adapter.out.persistence.MealUsageQrOperationsLifecycleIntegrationTest.xml
             apps/api/build/test-results/test/TEST-com.tieat.qr.adapter.in.cli.QrOperationsCommandRunnerTest.xml
@@ -192,7 +198,7 @@ jobs:
           {
             printf 'github_sha=%s\n' "$GITHUB_SHA"
             printf 'git_head=%s\n' "$(git rev-parse HEAD)"
-            printf 'scope=app/store/qr/StoreMealUsageQrView.test.tsx\n'
+            printf 'scope=lib/public-qr-api.test.ts,app/qr/[token]/MealUsageQrForm.test.tsx,app/store/qr/StoreMealUsageQrView.test.tsx\n'
           } > "$evidence_dir/revision.txt"
 
       - name: Check whitespace
@@ -207,7 +213,10 @@ jobs:
         shell: bash
         run: |
           set +e
-          npm test -- --run app/store/qr/StoreMealUsageQrView.test.tsx \
+          npm test -- --run \
+            lib/public-qr-api.test.ts \
+            'app/qr/[token]/MealUsageQrForm.test.tsx' \
+            app/store/qr/StoreMealUsageQrView.test.tsx \
             > "$RUNNER_TEMP/tieat-qr-web-vitest.log" 2>&1
           status=$?
           set -e
