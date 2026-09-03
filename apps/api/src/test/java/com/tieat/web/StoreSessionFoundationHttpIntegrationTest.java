@@ -43,7 +43,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest(classes = TieatApiApplication.class)
+@SpringBootTest(classes = TieatApiApplication.class, properties = "tieat.session.cookie.secure=")
 @AutoConfigureMockMvc
 @Testcontainers
 class StoreSessionFoundationHttpIntegrationTest {
@@ -53,7 +53,7 @@ class StoreSessionFoundationHttpIntegrationTest {
     private static final UUID STORE_ID = UUID.fromString("9d5e37dd-dbe2-40dc-97fb-8e77c89aa4cb");
 
     @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:16-alpine"))
         .withDatabaseName("tieat")
         .withUsername("tieat")
         .withPassword("tieat");

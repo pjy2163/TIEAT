@@ -80,7 +80,7 @@ class PublicMealUsageQrHttpIntegrationTest {
     private static final String STORE_TABLET_PASSWORD = "correct-password";
 
     @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:16-alpine"))
         .withDatabaseName("tieat")
         .withUsername("tieat")
         .withPassword("tieat");

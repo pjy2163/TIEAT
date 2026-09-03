@@ -113,6 +113,8 @@ resource retentionJob 'Microsoft.App/jobs@2025-01-01' = {
           image: apiImage
           args: [
             '--spring.profiles.active=retention'
+            '--spring.datasource.hikari.maximum-pool-size=2'
+            '--spring.datasource.hikari.minimum-idle=0'
             '--tieat.customer-name-anonymization.command=anonymize'
           ]
           resources: {

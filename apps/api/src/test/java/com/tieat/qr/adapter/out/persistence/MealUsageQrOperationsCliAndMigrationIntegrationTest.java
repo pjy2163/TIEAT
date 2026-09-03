@@ -49,7 +49,7 @@ class MealUsageQrOperationsCliAndMigrationIntegrationTest {
     private static final String LEGACY_SCHEMA = "legacy_qr_ops_preflight";
 
     @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:16-alpine"))
         .withDatabaseName("tieat")
         .withUsername("tieat")
         .withPassword("tieat");

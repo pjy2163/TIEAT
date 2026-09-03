@@ -59,7 +59,7 @@ class MealUsageConfirmationHttpIntegrationTest {
     private static final StoreId OTHER_STORE_ID = new StoreId(UUID.fromString("6142be7d-0dc9-4f77-a17d-07e1e5c6e9a1"));
 
     @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:16-alpine"))
         .withDatabaseName("tieat")
         .withUsername("tieat")
         .withPassword("tieat");

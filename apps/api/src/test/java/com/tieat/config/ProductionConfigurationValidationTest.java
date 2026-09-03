@@ -74,6 +74,8 @@ class ProductionConfigurationValidationTest {
                 assertThat(environment.getProperty(DATASOURCE_URL))
                     .isEqualTo("jdbc:postgresql://config-data.example:5432/tieat");
                 assertThat(environment.getProperty(DATASOURCE_USERNAME)).isEqualTo("tieat-config-data");
+                assertThat(environment.getProperty("spring.datasource.hikari.maximum-pool-size")).isEqualTo("5");
+                assertThat(environment.getProperty("spring.datasource.hikari.minimum-idle")).isEqualTo("1");
                 assertThat(environment.getProperty(SESSION_COOKIE_SECURE)).isEqualTo("true");
                 assertThat(environment.getProperty(QR_ENCRYPTION_REQUIRED)).isEqualTo("true");
                 assertThat(environment.getProperty(QR_ENCRYPTION_KEYS)).isEqualTo(QR_KEY_RING);
