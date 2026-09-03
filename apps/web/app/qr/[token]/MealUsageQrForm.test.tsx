@@ -57,6 +57,7 @@ describe("MealUsageQrForm", () => {
   it("loads QR options then submits a minimal pending request and shows no personal history or balance", async () => {
     const user = userEvent.setup();
     const crypto = browserCrypto();
+    crypto.subtle.digest.mockReturnValue(new Promise(() => {}));
     crypto.randomUUID
       .mockReturnValueOnce(idempotencyKey)
       .mockReturnValueOnce(nextIdempotencyKey);

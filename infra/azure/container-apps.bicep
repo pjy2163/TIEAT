@@ -78,6 +78,27 @@ param receiptsAzureContainer string
 @description('Active QR token encryption key version. Must be a positive integer understood by the production validator.')
 param qrTokenEncryptionKeyVersion string = '1'
 
+@description('Initial floor for this deployment. Pass the current scheduled value on redeploy: 1 during service hours, 0 overnight. scale-schedule.bicep changes the actual floor thereafter.')
+@allowed([0, 1])
+param initialMinReplicas int = 1
+
+// A real minReplicas=1 is eligible for idle billing; a cron desiredReplicas floor is not.
+// Keep HTTP scaling enabled so overnight ledger requests can wake both apps.
+var appScale = {
+  minReplicas: initialMinReplicas
+  maxReplicas: 1
+  rules: [
+    {
+      name: 'http'
+      http: {
+        metadata: {
+          concurrentRequests: '10'
+        }
+      }
+    }
+  ]
+}
+
 resource web 'Microsoft.App/containerApps@2025-01-01' = {
   name: webName
   location: resourceGroup().location
@@ -147,6 +168,7 @@ resource web 'Microsoft.App/containerApps@2025-01-01' = {
           ]
         }
       ]
+      scale: appScale
     }
   }
 }
@@ -322,6 +344,7 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
           ])
         }
       ]
+      scale: appScale
       // Explicit TCP probes avoid probing the protected actuator endpoints.
     }
   }

@@ -84,6 +84,7 @@ export function buildSecurityHeaders(nodeEnv: string | undefined) {
 
 const nextConfig: NextConfig = {
   agentRules: false,
+  output: "standalone",
   async rewrites() {
     return [
       {

@@ -77,6 +77,14 @@ GET /actuator/health
 
 운영에서는 `security_event=public_qr_create_rate_limited` 로그 발생률을 경보로 연결합니다. 이 이벤트에는 QR token이나 client IP가 기록되지 않습니다. 프록시 CIDR을 잘못 넓히면 IP 위조가 가능하므로 실제 배포 경로에서 확인한 범위만 설정해야 합니다.
 
+### Azure Container Apps deployment template
+
+- Web/API의 실제 `minReplicas`는 한국시간 07:55에 각각 1, 00:00에 각각 0으로 전환합니다. 최대 1개와 HTTP 규칙은 유지하여 새벽 장부 조회에도 다시 기동합니다. `container-apps.bicep`의 `initialMinReplicas`는 최초 배포 기본값 1이며, 재배포에는 현재 시간대의 값(야간 0/주간 1)을 전달해야 합니다. 앱만 배포하면 시간 예약은 동작하지 않습니다.
+- 앱 생성 후 `scale-schedule.bicep`를 별도로 배포하면 동일 Web 이미지의 운영 스크립트를 실행하는 예약 Job 두 개가 만들어집니다(UTC `55 22 * * *`, `0 15 * * *`). 별도 상시 서버는 없으며 Job 실행 시간은 과금 대상입니다. 스케줄러 identity의 앱 read/write 권한은 대상 두 앱에만 부여합니다. `minReplicas`만 수정하는 RBAC 권한은 없으므로 이 identity는 앱 설정도 변경할 수 있는 민감한 운영 권한입니다. Web 이미지를 갱신하면 Job 이미지도 같은 검증된 digest로 갱신합니다.
+- 최소 개수 변경은 새 revision을 만들므로 5분 예열은 준비 완료 보장이 아닙니다. 최초 적용 전 두 Job의 수동 실행, 최신 ready revision·설정 보존, 08시 QR 요청과 야간 장부 조회를 실환경에서 확인해야 합니다. 전환 실패 시 기존 revision이 남을 수 있어 Job 실패 감시도 필요합니다. DB와 독립 retention Job에는 이 일정이 적용되지 않습니다.
+- 실제 0 replica이면 앱 컴퓨팅 요금은 없고, 주간 실제 min=1에서는 HTTP 요청 없음·낮은 CPU/네트워크 사용 등 조건을 충족할 때 유휴 요금 대상이 됩니다. 기존 cron floor와 달리 유휴 요금 적용이 가능한 구성이지 전 시간 할인 보장은 아닙니다. 이전 USD 33.48(컴퓨팅), USD 39~40(ACR 등 포함)은 하루 16시간 활성 요금 기준의 참고 추정이며 새 정책의 확정 견적이 아닙니다. 실제 비용은 5분 예열·활성/유휴 비중·새벽 요청·Job·로그·네트워크와 무료 할당량 적용 여부로 재확인합니다. [Azure 과금 기준](https://learn.microsoft.com/en-us/azure/container-apps/billing)
+- Web 이미지는 Next.js standalone 산출물과 정적 파일만 포함하며, Next.js 시작 전 로그 필터를 로드해 QR 경로의 토큰·query·fragment를 마스킹합니다. 이 필터는 Web 프로세스 console 로그 대상이며 Azure ingress·외부 APM 로그는 별도로 확인해야 합니다.
+
 ### Retention worker
 
 고객 이름 익명화 worker는 retention profile의 non-web 프로세스로 실행합니다.

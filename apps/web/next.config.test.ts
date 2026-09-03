@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import nextConfig, { buildSecurityHeaders, resolveApiOrigin } from "./next.config";
 
 describe("Next web configuration", () => {
+  it("builds only the traced standalone runtime", () => {
+    expect(nextConfig.output).toBe("standalone");
+  });
+
   it("keeps the localhost API fallback outside production", () => {
     expect(resolveApiOrigin(undefined, "development")).toBe("http://localhost:8080");
   });

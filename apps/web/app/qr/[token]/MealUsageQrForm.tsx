@@ -168,7 +168,7 @@ function MealUsageQrFormForToken({ token, onRetry }: { token: string; onRetry: (
   const [secondsUntilReset, setSecondsUntilReset] = useState(SUCCESS_RESET_DELAY_SECONDS);
   const idempotencyKeyRef = useRef<string | null>(null);
   const publicRequestKeyRef = useRef<string | null>(null);
-  const publicClientKeyRef = useRef<string | null>(createPublicRequestKey());
+  const publicClientKeyRef = useRef<string | null>(null);
   const requestFingerprintRef = useRef<string | null>(null);
   const [requestFingerprint, setRequestFingerprint] = useState<string | null>(null);
   const [recoveryHydrated, setRecoveryHydrated] = useState(false);
@@ -222,6 +222,7 @@ function MealUsageQrFormForToken({ token, onRetry }: { token: string; onRetry: (
 
   useEffect(() => {
     let active = true;
+    publicClientKeyRef.current ??= createPublicRequestKey();
     void tokenFingerprint(token).then(async (fingerprint) => {
       if (!active) return;
       requestFingerprintRef.current = fingerprint;
