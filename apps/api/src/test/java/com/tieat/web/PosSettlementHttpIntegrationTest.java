@@ -35,6 +35,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Base64;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -77,7 +78,7 @@ class PosSettlementHttpIntegrationTest {
     private static final StoreId OTHER_STORE_ID = new StoreId(UUID.fromString("6142be7d-0dc9-4f77-a17d-07e1e5c6e9a1"));
 
     @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:16-alpine"))
         .withDatabaseName("tieat")
         .withUsername("tieat")
         .withPassword("tieat");
@@ -497,10 +498,10 @@ class PosSettlementHttpIntegrationTest {
         );
         SessionHandle storeSession = authenticatedSession("store-hk", "correct-password");
         SessionHandle otherStoreSession = authenticatedSession("other-store", "correct-password");
-        byte[] originalPdf = "%PDF-1.7\nTIEAT receipt\n".getBytes(StandardCharsets.US_ASCII);
+        byte[] originalPng = validPng();
 
         mockMvc.perform(multipart("/api/v1/pos-settlements/{posSettlementId}/receipt", settlementId)
-                .file(receiptFile("settlement.pdf", originalPdf))
+                .file(receiptFile("settlement.png", originalPng))
                 .cookie(storeSession.cookie()))
             .andExpect(problem(HttpStatus.FORBIDDEN.value(), "CSRF_TOKEN_INVALID"));
         assertThat(jdbcTemplate.queryForObject("select count(*) from pos_settlement_receipts", Long.class)).isZero();
@@ -509,7 +510,7 @@ class PosSettlementHttpIntegrationTest {
                 storeSession,
                 csrfToken(storeSession),
                 settlementId,
-                receiptFile("settlement.pdf", originalPdf)
+                receiptFile("settlement.png", originalPng)
             ))
             .andExpect(status().isCreated())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
@@ -520,23 +521,23 @@ class PosSettlementHttpIntegrationTest {
             "posSettlementId", "fileName", "contentType", "sizeBytes", "uploadedAt", "expiresAt"
         );
         assertThat(uploadedBody.get("posSettlementId").asText()).isEqualTo(settlementId.toString());
-        assertThat(uploadedBody.get("fileName").asText()).isEqualTo("settlement.pdf");
-        assertThat(uploadedBody.get("contentType").asText()).isEqualTo(MediaType.APPLICATION_PDF_VALUE);
-        assertThat(uploadedBody.get("sizeBytes").asLong()).isEqualTo(originalPdf.length);
+        assertThat(uploadedBody.get("fileName").asText()).isEqualTo("settlement.png");
+        assertThat(uploadedBody.get("contentType").asText()).isEqualTo(MediaType.IMAGE_PNG_VALUE);
+        assertThat(uploadedBody.get("sizeBytes").asLong()).isEqualTo(originalPng.length);
 
         mockMvc.perform(get("/api/v1/pos-settlements/{posSettlementId}/receipt", settlementId)
                 .cookie(storeSession.cookie()))
             .andExpect(status().isOk())
             .andExpect(header().string(HttpHeaders.CACHE_CONTROL, org.hamcrest.Matchers.containsString("no-store")))
-            .andExpect(content().contentType(MediaType.APPLICATION_PDF))
+            .andExpect(content().contentType(MediaType.IMAGE_PNG))
             .andExpect(header().string(
                 HttpHeaders.CONTENT_DISPOSITION,
                 org.hamcrest.Matchers.allOf(
                     org.hamcrest.Matchers.containsString("attachment"),
-                    org.hamcrest.Matchers.containsString("settlement.pdf")
+                    org.hamcrest.Matchers.containsString("settlement.png")
                 )
             ))
-            .andExpect(content().bytes(originalPdf));
+            .andExpect(content().bytes(originalPng));
 
         UUID receiptId = jdbcTemplate.queryForObject(
             "select id from pos_settlement_receipts where pos_settlement_id = ?",
@@ -552,7 +553,7 @@ class PosSettlementHttpIntegrationTest {
                 storeSession,
                 csrfToken(storeSession),
                 settlementId,
-                receiptFile("replacement.pdf", "%PDF-1.7\nreplacement\n".getBytes(StandardCharsets.US_ASCII))
+                receiptFile("replacement.png", validPng())
             ))
             .andExpect(problem(HttpStatus.CONFLICT.value(), "POS_SETTLEMENT_RECEIPT_ALREADY_ATTACHED"));
         assertThat(jdbcTemplate.queryForObject("select count(*) from pos_settlement_receipts", Long.class)).isEqualTo(1);
@@ -565,7 +566,7 @@ class PosSettlementHttpIntegrationTest {
         mockMvc.perform(get("/api/v1/pos-settlements/{posSettlementId}/receipt", settlementId)
                 .cookie(storeSession.cookie()))
             .andExpect(status().isOk())
-            .andExpect(content().bytes(originalPdf));
+            .andExpect(content().bytes(originalPng));
 
         MvcResult history = mockMvc.perform(get("/api/v1/pos-settlements?page=0&size=20")
                 .cookie(storeSession.cookie()))
@@ -845,7 +846,7 @@ class PosSettlementHttpIntegrationTest {
     }
 
     private MockMultipartFile receiptFile(String fileName, byte[] bytes) {
-        return new MockMultipartFile("file", fileName, MediaType.APPLICATION_PDF_VALUE, bytes);
+        return new MockMultipartFile("file", fileName, MediaType.IMAGE_PNG_VALUE, bytes);
     }
 
     private MockMultipartHttpServletRequestBuilder receiptUploadRequest(
@@ -915,8 +916,8 @@ class PosSettlementHttpIntegrationTest {
             """
                 insert into pos_settlement_receipts
                     (id, pos_settlement_id, store_id, object_key, file_name, content_type,
-                     size_bytes, uploaded_at, expires_at, scan_status, deleted_at)
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'CLEAN', null)
+                     size_bytes, uploaded_at, expires_at, validation_status, deleted_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'VALIDATED', null)
                 """,
             receiptId,
             settlementId,
@@ -927,6 +928,12 @@ class PosSettlementHttpIntegrationTest {
             1L,
             java.sql.Timestamp.from(uploadedAt),
             java.sql.Timestamp.from(uploadedAt.plusSeconds(365L * 24 * 60 * 60))
+        );
+    }
+
+    private byte[] validPng() {
+        return Base64.getDecoder().decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
         );
     }
 

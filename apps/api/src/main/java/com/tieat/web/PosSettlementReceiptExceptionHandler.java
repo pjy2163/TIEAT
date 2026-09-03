@@ -47,16 +47,7 @@ class PosSettlementReceiptExceptionHandler {
         PosSettlementReceiptExceptions.Validation exception,
         HttpServletRequest request
     ) {
-        if (exception.reason() == PosSettlementReceiptExceptions.Validation.Reason.UNSAFE_FILE) {
-            log.warn("operational_event=receipt_scan_failed reason={}", exception.reason());
-        }
-        HttpStatus status = exception.reason() == PosSettlementReceiptExceptions.Validation.Reason.UNSAFE_FILE
-            ? HttpStatus.UNPROCESSABLE_ENTITY
-            : HttpStatus.BAD_REQUEST;
-        String errorCode = exception.reason() == PosSettlementReceiptExceptions.Validation.Reason.UNSAFE_FILE
-            ? "POS_SETTLEMENT_RECEIPT_UNSAFE"
-            : "POS_SETTLEMENT_RECEIPT_INVALID";
-        return problem(request, status, errorCode, exception.getMessage());
+        return problem(request, HttpStatus.BAD_REQUEST, "POS_SETTLEMENT_RECEIPT_INVALID", exception.getMessage());
     }
 
     @ExceptionHandler(PosSettlementReceiptExceptions.StorageFailure.class)

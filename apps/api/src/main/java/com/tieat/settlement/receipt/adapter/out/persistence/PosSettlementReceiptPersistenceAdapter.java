@@ -44,7 +44,7 @@ public class PosSettlementReceiptPersistenceAdapter {
         return jdbcTemplate.query(
             """
                 select id, pos_settlement_id, store_id, object_key, file_name, content_type,
-                       size_bytes, uploaded_at, expires_at, scan_status, deleted_at
+                       size_bytes, uploaded_at, expires_at, validation_status, deleted_at
                 from pos_settlement_receipts
                 where pos_settlement_id = ? and store_id = ?
                 """,
@@ -68,7 +68,7 @@ public class PosSettlementReceiptPersistenceAdapter {
         return jdbcTemplate.query(
             """
                 select id, pos_settlement_id, store_id, object_key, file_name, content_type,
-                       size_bytes, uploaded_at, expires_at, scan_status, deleted_at
+                       size_bytes, uploaded_at, expires_at, validation_status, deleted_at
                 from pos_settlement_receipts
                 where store_id = ? and pos_settlement_id in (""" + placeholders + ")",
             (resultSet, rowNum) -> toDomain(resultSet),
@@ -82,7 +82,7 @@ public class PosSettlementReceiptPersistenceAdapter {
             """
                 insert into pos_settlement_receipts
                     (id, pos_settlement_id, store_id, object_key, file_name, content_type,
-                     size_bytes, uploaded_at, expires_at, scan_status, deleted_at)
+                     size_bytes, uploaded_at, expires_at, validation_status, deleted_at)
                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
             receipt.id(),
@@ -94,7 +94,7 @@ public class PosSettlementReceiptPersistenceAdapter {
             receipt.sizeBytes(),
             Timestamp.from(receipt.uploadedAt()),
             Timestamp.from(receipt.expiresAt()),
-            receipt.scanStatus().name(),
+            receipt.validationStatus().name(),
             receipt.deletedAt() == null ? null : Timestamp.from(receipt.deletedAt())
         );
     }
@@ -107,7 +107,7 @@ public class PosSettlementReceiptPersistenceAdapter {
         return jdbcTemplate.query(
             """
                 select id, pos_settlement_id, store_id, object_key, file_name, content_type,
-                       size_bytes, uploaded_at, expires_at, scan_status, deleted_at
+                       size_bytes, uploaded_at, expires_at, validation_status, deleted_at
                 from pos_settlement_receipts
                 where deleted_at is null and expires_at <= ?
                 order by expires_at asc, id asc
@@ -147,7 +147,7 @@ public class PosSettlementReceiptPersistenceAdapter {
             resultSet.getLong("size_bytes"),
             resultSet.getTimestamp("uploaded_at").toInstant(),
             resultSet.getTimestamp("expires_at").toInstant(),
-            PosSettlementReceipt.ScanStatus.valueOf(resultSet.getString("scan_status")),
+            PosSettlementReceipt.ValidationStatus.valueOf(resultSet.getString("validation_status")),
             resultSet.getTimestamp("deleted_at") == null ? null : resultSet.getTimestamp("deleted_at").toInstant()
         );
     }

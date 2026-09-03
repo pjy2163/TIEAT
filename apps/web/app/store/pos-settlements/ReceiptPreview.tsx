@@ -28,6 +28,7 @@ export function ReceiptPreview({
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    if (contentType === "application/pdf") return;
     let active = true;
     let objectUrl: string | null = null;
 
@@ -46,17 +47,13 @@ export function ReceiptPreview({
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [posSettlementId]);
+  }, [contentType, posSettlementId]);
 
   return (
     <div className={posSettlementFormStyles.receiptPreview} aria-label="영수증 미리보기">
-      {previewUrl ? contentType === "application/pdf" ? (
-        <iframe
-          className={posSettlementFormStyles.receiptPreviewFrame}
-          src={previewUrl}
-          title={`첨부된 영수증 ${fileName ?? "PDF"}`}
-        />
-      ) : (
+      {contentType === "application/pdf" ? (
+        <p className={posSettlementFormStyles.receiptPreviewMessage}>기존 PDF 영수증은 보안 정책상 제공하지 않습니다.</p>
+      ) : previewUrl ? (
         <img
           alt={`첨부된 영수증 ${fileName ?? "이미지"}`}
           className={posSettlementFormStyles.receiptPreviewImage}

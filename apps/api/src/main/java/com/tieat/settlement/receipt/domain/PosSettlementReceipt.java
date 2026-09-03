@@ -16,7 +16,7 @@ public record PosSettlementReceipt(
     long sizeBytes,
     Instant uploadedAt,
     Instant expiresAt,
-    ScanStatus scanStatus,
+    ValidationStatus validationStatus,
     Instant deletedAt
 ) {
 
@@ -41,7 +41,7 @@ public record PosSettlementReceipt(
         if (!expiresAt.equals(uploadedAt.plusSeconds(365L * 24 * 60 * 60))) {
             throw new IllegalArgumentException("Receipt expiry must be upload time plus 365 days");
         }
-        Objects.requireNonNull(scanStatus, "Receipt scan status must be supplied");
+        Objects.requireNonNull(validationStatus, "Receipt validation status must be supplied");
     }
 
     public boolean isExpired(Instant now) {
@@ -49,7 +49,7 @@ public record PosSettlementReceipt(
         return !now.isBefore(expiresAt);
     }
 
-    public enum ScanStatus {
-        CLEAN
+    public enum ValidationStatus {
+        VALIDATED
     }
 }

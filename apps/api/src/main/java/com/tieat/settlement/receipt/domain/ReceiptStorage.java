@@ -27,14 +27,4 @@ public interface ReceiptStorage {
         Objects.requireNonNull(bytes, "Receipt bytes must be supplied");
         Objects.requireNonNull(contentType, "Receipt content type must be supplied");
     }
-
-    final class UnsafeReceiptException extends RuntimeException {
-        public UnsafeReceiptException(String message) {
-            super(message);
-        }
-
-        public UnsafeReceiptException(String message, Throwable cause) {
-            super(message, cause);
-        }
-    }
 }

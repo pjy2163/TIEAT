@@ -105,7 +105,9 @@ function ReceiptSummaryView({
   onUploaded: (receipt: PosSettlementReceipt) => void;
 }) {
   const receipt = receiptSummaryOf(record);
-  const canDownload = receipt.status === "AVAILABLE" && Boolean(record.posSettlementId);
+  const canDownload = receipt.status === "AVAILABLE"
+    && receipt.contentType !== "application/pdf"
+    && Boolean(record.posSettlementId);
 
   if (receipt.status === "NONE" && record.posSettlementId) {
     return <ReceiptAttachment onUploaded={onUploaded} posSettlementId={record.posSettlementId} />;

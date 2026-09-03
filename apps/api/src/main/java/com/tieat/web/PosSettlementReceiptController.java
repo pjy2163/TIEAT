@@ -47,8 +47,7 @@ class PosSettlementReceiptController {
         @ApiResponse(responseCode = "401", description = "Authentication required", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "403", description = "Access denied or invalid CSRF token", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "404", description = "Settlement was not found in the authenticated store", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
-        @ApiResponse(responseCode = "409", description = "Settlement already has a receipt", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
-        @ApiResponse(responseCode = "422", description = "Receipt did not pass malware scanning", content = @Content(schema = @Schema(implementation = ProblemResponse.class)))
+        @ApiResponse(responseCode = "409", description = "Settlement already has a receipt", content = @Content(schema = @Schema(implementation = ProblemResponse.class)))
     })
     @PostMapping(value = "/{posSettlementId}/receipt", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     ResponseEntity<PosSettlementReceiptResponse> upload(
@@ -68,13 +67,13 @@ class PosSettlementReceiptController {
             .body(PosSettlementReceiptResponse.from(receipt));
     }
 
-    @Operation(summary = "Download a clean private POS settlement receipt")
+    @Operation(summary = "Download a validated private POS settlement receipt")
     @SecurityRequirement(name = "sessionCookie")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Private receipt bytes"),
         @ApiResponse(responseCode = "401", description = "Authentication required", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
         @ApiResponse(responseCode = "403", description = "Access denied", content = @Content(schema = @Schema(implementation = ProblemResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Receipt was not found, expired, or not clean", content = @Content(schema = @Schema(implementation = ProblemResponse.class)))
+        @ApiResponse(responseCode = "404", description = "Receipt was not found, expired, or not validated", content = @Content(schema = @Schema(implementation = ProblemResponse.class)))
     })
     @GetMapping("/{posSettlementId}/receipt")
     ResponseEntity<ByteArrayResource> download(

@@ -12,8 +12,6 @@ import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.tieat.settlement.receipt.domain.ReceiptStorage;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
-import java.time.Duration;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,45 +19,27 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/** Production private Azure Blob adapter. Defender for Storage tags gate every download. */
+/** Production private Azure Blob adapter. Validation happens in the application before storage. */
 @Component
 @ConditionalOnProperty(name = "tieat.receipts.provider", havingValue = "azure")
 public final class AzureBlobPrivateReceiptStorageAdapter implements ReceiptStorage {
 
-    private static final String SCAN_RESULT_TAG = "Malware scanning scan result";
-    private static final String CLEAN_RESULT = "No threats found";
+    private static final int MAX_DOWNLOAD_SIZE_BYTES = 10 * 1024 * 1024;
 
     private final BlobContainerClient container;
-    private final Duration scanTimeout;
-    private final Duration scanPollInterval;
 
     @Autowired
     public AzureBlobPrivateReceiptStorageAdapter(
         @Value("${tieat.receipts.azure.endpoint:}") String endpoint,
         @Value("${tieat.receipts.azure.managed-identity-client-id:}") String managedIdentityClientId,
-        @Value("${tieat.receipts.azure.container:tieat-receipts-private}") String containerName,
-        @Value("${tieat.receipts.azure.scan-timeout:PT30S}") Duration scanTimeout,
-        @Value("${tieat.receipts.azure.scan-poll-interval:PT1S}") Duration scanPollInterval
+        @Value("${tieat.receipts.azure.container:tieat-receipts-private}") String containerName
     ) {
-        this(
-            privateContainer(endpoint, managedIdentityClientId, containerName),
-            scanTimeout,
-            scanPollInterval
-        );
+        this(privateContainer(endpoint, managedIdentityClientId, containerName));
     }
 
-    public AzureBlobPrivateReceiptStorageAdapter(
-        BlobContainerClient container,
-        Duration scanTimeout,
-        Duration scanPollInterval
-    ) {
+    public AzureBlobPrivateReceiptStorageAdapter(BlobContainerClient container) {
         this.container = Objects.requireNonNull(container);
         verifyPrivateContainer(this.container);
-        this.scanTimeout = Objects.requireNonNull(scanTimeout);
-        this.scanPollInterval = Objects.requireNonNull(scanPollInterval);
-        if (scanTimeout.isNegative() || scanTimeout.isZero() || scanPollInterval.isNegative() || scanPollInterval.isZero()) {
-            throw new IllegalArgumentException("Azure scan durations must be positive");
-        }
     }
 
     @Override
@@ -68,24 +48,22 @@ public final class AzureBlobPrivateReceiptStorageAdapter implements ReceiptStora
         BlobClient blob = container.getBlobClient(objectKey);
         blob.upload(new ByteArrayInputStream(bytes), bytes.length, false);
         blob.setHttpHeaders(new BlobHttpHeaders().setContentType(contentType));
-        try {
-            awaitCleanScan(blob);
-        } catch (RuntimeException exception) {
-            deleteAllVersions(objectKey);
-            throw exception;
-        }
     }
 
     @Override
     public byte[] get(String objectKey) {
         validateKey(objectKey);
         BlobClient blob = container.getBlobClient(objectKey);
-        Map<String, String> tags = blob.getTags();
-        if (!CLEAN_RESULT.equals(tags.get(SCAN_RESULT_TAG))) {
-            throw new IllegalStateException("Receipt has not passed Azure Defender malware scan");
+        long contentLength = blob.getProperties().getBlobSize();
+        if (contentLength < 1 || contentLength > MAX_DOWNLOAD_SIZE_BYTES) {
+            throw new IllegalStateException("Azure receipt size is outside the allowed range");
         }
         try (var input = blob.openInputStream()) {
-            return input.readAllBytes();
+            byte[] bytes = input.readNBytes(MAX_DOWNLOAD_SIZE_BYTES + 1);
+            if (bytes.length != contentLength) {
+                throw new IllegalStateException("Azure receipt size changed while reading");
+            }
+            return bytes;
         } catch (java.io.IOException exception) {
             throw new IllegalStateException("Azure receipt read failed", exception);
         }
@@ -158,24 +136,4 @@ public final class AzureBlobPrivateReceiptStorageAdapter implements ReceiptStora
         }
     }
 
-    private void awaitCleanScan(BlobClient blob) {
-        long deadline = System.nanoTime() + scanTimeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            Map<String, String> tags = blob.getTags();
-            String result = tags.get(SCAN_RESULT_TAG);
-            if (CLEAN_RESULT.equals(result)) {
-                return;
-            }
-            if ("Malicious".equals(result) || "Error".equals(result) || "Not scanned".equals(result)) {
-                throw new ReceiptStorage.UnsafeReceiptException("Azure Defender rejected receipt scan result: " + result);
-            }
-            try {
-                Thread.sleep(scanPollInterval.toMillis());
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Azure Defender scan was interrupted", exception);
-            }
-        }
-        throw new ReceiptStorage.UnsafeReceiptException("Azure Defender scan did not complete before timeout");
-    }
 }

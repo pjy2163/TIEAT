@@ -142,14 +142,6 @@ module keyVaultRbac './platform-security.key-vault-rbac.bicep' = {
   }
 }
 
-module storageBlobTagsRole './platform-security.storage-blob-tags-role.bicep' = {
-  name: 'platform-security-storage-blob-tags-role'
-  scope: subscription(storageAccountSubscriptionId)
-  params: {
-    storageAccountResourceGroupName: storageAccountResourceGroupName
-  }
-}
-
 module storageRbac './platform-security.storage-rbac.bicep' = {
   name: 'platform-security-storage-rbac'
   scope: resourceGroup(storageAccountSubscriptionId, storageAccountResourceGroupName)
@@ -159,6 +151,5 @@ module storageRbac './platform-security.storage-rbac.bicep' = {
       apiRuntimePrincipalId
       retentionRuntimePrincipalId
     ]
-    blobTagsReaderRoleDefinitionResourceId: storageBlobTagsRole.outputs.roleDefinitionResourceId
   }
 }

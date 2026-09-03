@@ -4,6 +4,9 @@ import com.tieat.settlement.receipt.adapter.out.persistence.PosSettlementReceipt
 import com.tieat.settlement.receipt.domain.PosSettlementReceipt;
 import com.tieat.settlement.receipt.domain.ReceiptStorage;
 import com.tieat.store.domain.StoreId;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -14,6 +17,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
+import javax.imageio.stream.MemoryCacheImageInputStream;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,11 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class PosSettlementReceiptService {
 
     public static final long MAX_FILE_SIZE_BYTES = 10L * 1024 * 1024;
+    public static final long MAX_IMAGE_PIXELS = 25_000_000L;
     public static final int RETENTION_DAYS = 365;
     private static final List<String> ALLOWED_CONTENT_TYPES = List.of(
         "image/jpeg",
-        "image/png",
-        "application/pdf"
+        "image/png"
     );
 
     private final PosSettlementReceiptPersistenceAdapter repository;
@@ -52,7 +59,7 @@ public class PosSettlementReceiptService {
     ) {
         Objects.requireNonNull(storeId, "Store id must be supplied");
         Objects.requireNonNull(posSettlementId, "POS settlement id must be supplied");
-        validate(fileName, contentType, bytes);
+        ValidatedUpload upload = validate(fileName, contentType, bytes);
         if (!repository.lockSettlement(posSettlementId, storeId)) {
             throw new PosSettlementReceiptExceptions.NotFound(posSettlementId);
         }
@@ -63,18 +70,18 @@ public class PosSettlementReceiptService {
         Instant uploadedAt = Instant.now(clock);
         String objectKey = UUID.randomUUID().toString();
         try {
-            storage.put(objectKey, Arrays.copyOf(bytes, bytes.length), contentType);
+            storage.put(objectKey, upload.bytes(), upload.contentType());
             PosSettlementReceipt receipt = new PosSettlementReceipt(
                 UUID.randomUUID(),
                 posSettlementId,
                 storeId,
                 objectKey,
-                safeFileName(fileName),
-                contentType,
-                bytes.length,
+                upload.fileName(),
+                upload.contentType(),
+                upload.bytes().length,
                 uploadedAt,
                 uploadedAt.plus(RETENTION_DAYS, ChronoUnit.DAYS),
-                PosSettlementReceipt.ScanStatus.CLEAN,
+                PosSettlementReceipt.ValidationStatus.VALIDATED,
                 null
             );
             repository.insert(receipt);
@@ -83,12 +90,6 @@ public class PosSettlementReceiptService {
             throw exception;
         } catch (RuntimeException exception) {
             deleteAfterFailedUpload(objectKey, exception);
-            if (exception instanceof com.tieat.settlement.receipt.domain.ReceiptStorage.UnsafeReceiptException) {
-                throw new PosSettlementReceiptExceptions.Validation(
-                    PosSettlementReceiptExceptions.Validation.Reason.UNSAFE_FILE,
-                    "Receipt did not pass malware scanning"
-                );
-            }
             if (exception instanceof PosSettlementReceiptExceptions.Validation validation) {
                 throw validation;
             }
@@ -106,11 +107,18 @@ public class PosSettlementReceiptService {
         PosSettlementReceipt receipt = repository.findBySettlementIdAndStoreId(posSettlementId, storeId)
             .filter(candidate -> candidate.deletedAt() == null)
             .orElseThrow(() -> new PosSettlementReceiptExceptions.NotFound(posSettlementId));
-        if (receipt.isExpired(Instant.now(clock)) || receipt.scanStatus() != PosSettlementReceipt.ScanStatus.CLEAN) {
+        if (receipt.isExpired(Instant.now(clock))
+            || receipt.validationStatus() != PosSettlementReceipt.ValidationStatus.VALIDATED) {
+            throw new PosSettlementReceiptExceptions.NotFound(posSettlementId);
+        }
+        if (!ALLOWED_CONTENT_TYPES.contains(receipt.contentType())
+            || !hasExpectedExtension(receipt.fileName(), receipt.contentType())) {
             throw new PosSettlementReceiptExceptions.NotFound(posSettlementId);
         }
         try {
-            return new ReceiptDownload(receipt, storage.get(receipt.objectKey()));
+            byte[] bytes = storage.get(receipt.objectKey());
+            validateStoredReceipt(receipt, bytes);
+            return new ReceiptDownload(receipt, bytes);
         } catch (RuntimeException exception) {
             throw new PosSettlementReceiptExceptions.StorageFailure("Receipt download failed", exception);
         }
@@ -159,7 +167,7 @@ public class PosSettlementReceiptService {
         storage.reconcileOrphans(repository.findAllObjectKeys());
     }
 
-    private void validate(String fileName, String contentType, byte[] bytes) {
+    private ValidatedUpload validate(String fileName, String contentType, byte[] bytes) {
         if (bytes == null || bytes.length == 0) {
             throw new PosSettlementReceiptExceptions.Validation(
                 PosSettlementReceiptExceptions.Validation.Reason.EMPTY_FILE,
@@ -172,18 +180,24 @@ public class PosSettlementReceiptService {
                 "Receipt file must not exceed 10 MiB"
             );
         }
-        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase(java.util.Locale.ROOT))) {
+        String normalizedContentType = contentType == null
+            ? null
+            : contentType.toLowerCase(java.util.Locale.ROOT);
+        if (normalizedContentType == null || !ALLOWED_CONTENT_TYPES.contains(normalizedContentType)) {
             throw new PosSettlementReceiptExceptions.Validation(
                 PosSettlementReceiptExceptions.Validation.Reason.UNSUPPORTED_MEDIA_TYPE,
-                "Receipt file must be JPG, PNG, or PDF"
+                "Receipt file must be JPG or PNG"
             );
         }
         String detected = detectContentType(bytes);
-        if (!contentType.equalsIgnoreCase(detected)) {
+        if (!normalizedContentType.equals(detected)) {
             throw new PosSettlementReceiptExceptions.Validation(
                 PosSettlementReceiptExceptions.Validation.Reason.CONTENT_SIGNATURE_MISMATCH,
                 "Receipt file content does not match its media type"
             );
+        }
+        if (!hasExactImageEnding(bytes, normalizedContentType)) {
+            throw invalidImage();
         }
         if (fileName == null || fileName.isBlank()) {
             throw new PosSettlementReceiptExceptions.Validation(
@@ -191,6 +205,15 @@ public class PosSettlementReceiptService {
                 "Receipt file name must be supplied"
             );
         }
+        String storedFileName = safeFileName(fileName);
+        if (!hasExpectedExtension(storedFileName, normalizedContentType)) {
+            throw new PosSettlementReceiptExceptions.Validation(
+                PosSettlementReceiptExceptions.Validation.Reason.FILE_NAME_MISMATCH,
+                "Receipt file extension does not match its media type"
+            );
+        }
+        validateDecodableImage(bytes, normalizedContentType);
+        return new ValidatedUpload(storedFileName, normalizedContentType, Arrays.copyOf(bytes, bytes.length));
     }
 
     private String detectContentType(byte[] bytes) {
@@ -202,20 +225,164 @@ public class PosSettlementReceiptService {
             && (bytes[4] & 0xff) == 0x0d && (bytes[5] & 0xff) == 0x0a && (bytes[6] & 0xff) == 0x1a && bytes[7] == 0x0a) {
             return "image/png";
         }
-        if (bytes.length >= 5
-            && bytes[0] == '%' && bytes[1] == 'P' && bytes[2] == 'D' && bytes[3] == 'F' && bytes[4] == '-') {
-            return "application/pdf";
-        }
         return "application/octet-stream";
+    }
+
+    private void validateDecodableImage(byte[] bytes, String contentType) {
+        try (ImageInputStream input = new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes))) {
+            var readers = ImageIO.getImageReaders(input);
+            if (!readers.hasNext()) {
+                throw invalidImage();
+            }
+            ImageReader reader = readers.next();
+            try {
+                reader.setInput(input, true, true);
+                String expectedFormat = contentType.equals("image/png") ? "png" : "jpeg";
+                if (!reader.getFormatName().equalsIgnoreCase(expectedFormat)) {
+                    throw invalidImage();
+                }
+                int width = reader.getWidth(0);
+                int height = reader.getHeight(0);
+                if (width <= 0 || height <= 0 || (long) width * height > MAX_IMAGE_PIXELS) {
+                    throw new PosSettlementReceiptExceptions.Validation(
+                        PosSettlementReceiptExceptions.Validation.Reason.IMAGE_DIMENSIONS_TOO_LARGE,
+                        "Receipt image dimensions are too large"
+                    );
+                }
+                BufferedImage decoded = reader.read(0);
+                if (decoded == null) {
+                    throw invalidImage();
+                }
+            } finally {
+                reader.dispose();
+            }
+        } catch (IOException | IllegalArgumentException exception) {
+            throw invalidImage();
+        }
+    }
+
+    private void validateStoredReceipt(PosSettlementReceipt receipt, byte[] bytes) {
+        try {
+            if (bytes == null || bytes.length != receipt.sizeBytes()
+                || !receipt.contentType().equals(detectContentType(bytes))
+                || !hasExactImageEnding(bytes, receipt.contentType())) {
+                throw invalidImage();
+            }
+            validateDecodableImage(bytes, receipt.contentType());
+        } catch (PosSettlementReceiptExceptions.Validation exception) {
+            throw new IllegalStateException("Stored receipt failed integrity validation", exception);
+        }
+    }
+
+    private PosSettlementReceiptExceptions.Validation invalidImage() {
+        return new PosSettlementReceiptExceptions.Validation(
+            PosSettlementReceiptExceptions.Validation.Reason.INVALID_IMAGE,
+            "Receipt file is not a valid decodable image"
+        );
+    }
+
+    private boolean hasExpectedExtension(String fileName, String contentType) {
+        String normalized = fileName.toLowerCase(java.util.Locale.ROOT);
+        return contentType.equals("image/png")
+            ? normalized.endsWith(".png")
+            : normalized.endsWith(".jpg") || normalized.endsWith(".jpeg");
+    }
+
+    private boolean hasExactImageEnding(byte[] bytes, String contentType) {
+        if (contentType.equals("image/jpeg")) {
+            return hasExactJpegEnding(bytes);
+        }
+        return hasExactPngEnding(bytes);
+    }
+
+    private boolean hasExactPngEnding(byte[] bytes) {
+        if (bytes.length < 8 || detectContentType(bytes).equals("application/octet-stream")) {
+            return false;
+        }
+        int offset = 8;
+        while (offset <= bytes.length - 12) {
+            long chunkLength = ((long) (bytes[offset] & 0xff) << 24)
+                | ((long) (bytes[offset + 1] & 0xff) << 16)
+                | ((long) (bytes[offset + 2] & 0xff) << 8)
+                | (bytes[offset + 3] & 0xffL);
+            long chunkEnd = offset + 12L + chunkLength;
+            if (chunkEnd > bytes.length) {
+                return false;
+            }
+            boolean iend = bytes[offset + 4] == 'I' && bytes[offset + 5] == 'E'
+                && bytes[offset + 6] == 'N' && bytes[offset + 7] == 'D';
+            if (iend) {
+                return chunkLength == 0 && chunkEnd == bytes.length;
+            }
+            offset = (int) chunkEnd;
+        }
+        return false;
+    }
+
+    private boolean hasExactJpegEnding(byte[] bytes) {
+        if (bytes.length < 4 || (bytes[0] & 0xff) != 0xff || (bytes[1] & 0xff) != 0xd8) {
+            return false;
+        }
+        int offset = 2;
+        boolean inScan = false;
+        while (offset < bytes.length) {
+            if (inScan) {
+                while (offset < bytes.length && (bytes[offset] & 0xff) != 0xff) {
+                    offset++;
+                }
+                if (offset >= bytes.length) {
+                    return false;
+                }
+            }
+            if ((bytes[offset++] & 0xff) != 0xff) {
+                return false;
+            }
+            while (offset < bytes.length && (bytes[offset] & 0xff) == 0xff) {
+                offset++;
+            }
+            if (offset >= bytes.length) {
+                return false;
+            }
+            int marker = bytes[offset++] & 0xff;
+            if (inScan && marker == 0x00) {
+                continue;
+            }
+            if (inScan && marker >= 0xd0 && marker <= 0xd7) {
+                continue;
+            }
+            inScan = false;
+            if (marker == 0xd9) {
+                return offset == bytes.length;
+            }
+            if (marker == 0x01) {
+                continue;
+            }
+            if (marker == 0xd8 || marker >= 0xd0 && marker <= 0xd7 || offset + 2 > bytes.length) {
+                return false;
+            }
+            int segmentLength = ((bytes[offset] & 0xff) << 8) | (bytes[offset + 1] & 0xff);
+            if (segmentLength < 2 || offset + segmentLength > bytes.length) {
+                return false;
+            }
+            offset += segmentLength;
+            if (marker == 0xda) {
+                inScan = true;
+            }
+        }
+        return false;
     }
 
     private String safeFileName(String fileName) {
         String leaf = fileName.replace('\\', '/');
         leaf = leaf.substring(leaf.lastIndexOf('/') + 1).trim();
+        leaf = leaf.replaceAll("[\\p{Cntrl}]", "");
         if (leaf.isEmpty() || leaf.equals(".") || leaf.equals("..")) {
             return "receipt";
         }
         return leaf.length() > 180 ? leaf.substring(leaf.length() - 180) : leaf;
+    }
+
+    private record ValidatedUpload(String fileName, String contentType, byte[] bytes) {
     }
 
     private void deleteAfterFailedUpload(String objectKey, RuntimeException original) {

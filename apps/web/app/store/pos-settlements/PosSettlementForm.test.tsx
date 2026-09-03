@@ -63,8 +63,8 @@ function historyPage(items: PosSettlement[], page = 0, hasNext = false): PosSett
 
 const availableReceipt = {
   status: "AVAILABLE" as const,
-  fileName: "settlement.pdf",
-  contentType: "application/pdf" as const,
+  fileName: "settlement.png",
+  contentType: "image/png" as const,
   sizeBytes: 1_024,
   uploadedAt: "2026-08-12T02:00:00Z",
   expiresAt: "2027-08-12T02:00:00Z",
@@ -105,7 +105,7 @@ describe("PosSettlementForm history view", () => {
     getRecentPosSettlementsMock.mockResolvedValue(historyPage([saved]));
     mockReceiptPreviewUrl();
     downloadPosSettlementReceiptMock.mockResolvedValue({
-      blob: vi.fn().mockResolvedValue(new Blob(["receipt"], { type: "application/pdf" })),
+      blob: vi.fn().mockResolvedValue(new Blob(["receipt"], { type: "image/png" })),
     } as unknown as Response);
 
     render(<PosSettlementForm />);
@@ -122,7 +122,7 @@ describe("PosSettlementForm history view", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "협력사 A · 결제일 2026-08-11 상세 보기" }));
     expect(screen.getByText("영수증 있음")).toBeVisible();
-    expect(screen.getByText("settlement.pdf")).toBeVisible();
+    expect(screen.getByText("settlement.png")).toBeVisible();
     expect(await screen.findByLabelText("영수증 미리보기")).toBeVisible();
     expect(screen.getByRole("button", { name: "영수증 다운로드" })).toBeVisible();
     expect(screen.getByText("결제 확인자")).toBeVisible();
@@ -170,7 +170,7 @@ describe("PosSettlementForm history view", () => {
     ]));
     mockReceiptPreviewUrl();
     downloadPosSettlementReceiptMock.mockResolvedValue({
-      blob: vi.fn().mockResolvedValue(new Blob(["receipt"], { type: "application/pdf" })),
+      blob: vi.fn().mockResolvedValue(new Blob(["receipt"], { type: "image/png" })),
     } as unknown as Response);
 
     render(<PosSettlementForm />);
@@ -202,29 +202,29 @@ describe("PosSettlementForm history view", () => {
     getRecentPosSettlementsMock.mockResolvedValue(historyPage([saved]));
     uploadPosSettlementReceiptMock.mockResolvedValue({
       posSettlementId: legacySettlementId,
-      fileName: "history.pdf",
-      contentType: "application/pdf",
+      fileName: "history.png",
+      contentType: "image/png",
       sizeBytes: 1_024,
       uploadedAt: "2026-08-12T03:00:00Z",
       expiresAt: "2027-08-12T03:00:00Z",
     });
     mockReceiptPreviewUrl();
     downloadPosSettlementReceiptMock.mockResolvedValue({
-      blob: vi.fn().mockResolvedValue(new Blob(["receipt"], { type: "application/pdf" })),
+      blob: vi.fn().mockResolvedValue(new Blob(["receipt"], { type: "image/png" })),
     } as unknown as Response);
 
     render(<PosSettlementForm />);
 
     await user.click(await screen.findByRole("button", { name: "협력사 A · 결제일 2026-08-09 상세 보기" }));
     const receiptInput = screen.getByLabelText("영수증 첨부");
-    await user.upload(receiptInput, new File(["%PDF-"], "history.pdf", { type: "application/pdf" }));
+    await user.upload(receiptInput, new File(["png"], "history.png", { type: "image/png" }));
 
     await waitFor(() => expect(uploadPosSettlementReceiptMock).toHaveBeenCalledWith(
       legacySettlementId,
       expect.any(File),
     ));
     expect(screen.getByText("영수증 있음")).toBeVisible();
-    expect(screen.getByText("history.pdf")).toBeVisible();
+    expect(screen.getByText("history.png")).toBeVisible();
     expect(screen.getByRole("button", { name: "영수증 다운로드" })).toBeVisible();
     expect(screen.queryByLabelText("영수증 첨부")).not.toBeInTheDocument();
   });

@@ -24,5 +24,3 @@ tieat:
       endpoint: ${TIEAT_RECEIPTS_AZURE_ENDPOINT:}
       managed-identity-client-id: ${TIEAT_RECEIPTS_AZURE_MANAGED_IDENTITY_CLIENT_ID:}
       container: ${TIEAT_RECEIPTS_AZURE_CONTAINER:tieat-receipts-private}
-      scan-timeout: ${TIEAT_RECEIPTS_AZURE_SCAN_TIMEOUT:PT30S}
-      scan-poll-interval: ${TIEAT_RECEIPTS_AZURE_SCAN_POLL_INTERVAL:PT1S}

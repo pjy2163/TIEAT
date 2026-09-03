@@ -36,7 +36,9 @@ public final class PosSettlementReceiptExceptions {
             FILE_TOO_LARGE,
             UNSUPPORTED_MEDIA_TYPE,
             CONTENT_SIGNATURE_MISMATCH,
-            UNSAFE_FILE
+            FILE_NAME_MISMATCH,
+            INVALID_IMAGE,
+            IMAGE_DIMENSIONS_TOO_LARGE
         }
     }
 

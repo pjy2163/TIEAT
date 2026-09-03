@@ -411,7 +411,7 @@ describe("MonthlyMealUsageList", () => {
     expect(within(ledger).queryByText("결제 전", { exact: true })).not.toBeInTheDocument();
     expect(screen.queryByText("1건 선택", { exact: true })).not.toBeInTheDocument();
     expect(within(dialog).getByText("결제 기록 저장 완료")).toBeVisible();
-    expect(within(dialog).getByLabelText("영수증 첨부")).toHaveAttribute("accept", "image/jpeg,image/png,application/pdf");
+    expect(within(dialog).getByLabelText("영수증 첨부")).toHaveAttribute("accept", "image/jpeg,image/png");
     await waitFor(() => expect(uploadPosSettlementReceiptMock).toHaveBeenCalledWith(savedSettlement.posSettlementId, expect.any(File)));
   });
 
@@ -460,7 +460,7 @@ describe("MonthlyMealUsageList", () => {
     expect(screen.getByRole("list", { name: "전체 장부 목록" })).toHaveTextContent("결제 전");
     expect(screen.getByRole("list", { name: "전체 장부 목록" })).not.toHaveTextContent("결제 완료");
     const fileInput = within(dialog).getByLabelText("영수증 첨부");
-    expect(fileInput).toHaveAttribute("accept", "image/jpeg,image/png,application/pdf");
+    expect(fileInput).toHaveAttribute("accept", "image/jpeg,image/png");
     fireEvent.change(fileInput, { target: { files: [new File(["receipt"], "receipt.jpg", { type: "image/jpeg" })] } });
     await waitFor(() => expect(uploadPosSettlementReceiptMock).toHaveBeenCalledWith(savedSettlement.posSettlementId, expect.any(File)));
   });

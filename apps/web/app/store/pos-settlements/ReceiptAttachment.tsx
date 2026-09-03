@@ -14,9 +14,6 @@ function receiptErrorMessage(error: unknown): string {
   if (error instanceof ApiError && error.errorCode === "POS_SETTLEMENT_RECEIPT_ALREADY_ATTACHED") {
     return "이 결제 기록에는 이미 영수증이 첨부되어 있습니다.";
   }
-  if (error instanceof ApiError && error.errorCode === "POS_SETTLEMENT_RECEIPT_UNSAFE") {
-    return "안전 확인을 통과하지 못한 파일은 첨부할 수 없습니다.";
-  }
   if (error instanceof ApiError && error.status === 404) {
     return "영수증을 찾지 못했거나 보관 기간이 지났습니다.";
   }
@@ -24,8 +21,8 @@ function receiptErrorMessage(error: unknown): string {
 }
 
 function receiptValidationMessage(file: File): string | null {
-  if (!(["image/jpeg", "image/png", "application/pdf"] as string[]).includes(file.type)) {
-    return "JPG, PNG, PDF 파일만 첨부할 수 있습니다.";
+  if (!(["image/jpeg", "image/png"] as string[]).includes(file.type)) {
+    return "JPG 또는 PNG 파일만 첨부할 수 있습니다.";
   }
   if (file.size > 10 * 1024 * 1024) {
     return "영수증 파일은 10MiB 이하만 첨부할 수 있습니다.";
@@ -58,7 +55,7 @@ export function ReceiptAttachment({
     try {
       const uploaded = await uploadPosSettlementReceipt(posSettlementId, file);
       setReceipt(uploaded);
-      setMessage("영수증을 안전하게 첨부했습니다.");
+      setMessage("영수증을 첨부했습니다.");
       onUploaded?.(uploaded);
     } catch (error) {
       setMessage(receiptErrorMessage(error));
@@ -95,12 +92,12 @@ export function ReceiptAttachment({
   return (
     <section className={posSettlementFormStyles.receiptPanel}>
       <p className={posSettlementFormStyles.receiptTitle}>영수증</p>
-      <p className={posSettlementFormStyles.receiptDescription}>JPG, PNG, PDF · 10MiB 이하</p>
+      <p className={posSettlementFormStyles.receiptDescription}>JPG, PNG · 10MiB 이하</p>
       <div className={posSettlementFormStyles.receiptActions}>
         <label className={posSettlementFormStyles.receiptButton}>
           {busy === "upload" ? "영수증 첨부 중…" : "영수증 첨부"}
           <input
-            accept="image/jpeg,image/png,application/pdf"
+            accept="image/jpeg,image/png"
             capture="environment"
             disabled={busy !== null || receipt !== null}
             onChange={(event) => {
