@@ -56,6 +56,7 @@ class MealUsageQrOperationsLifecycleIntegrationTest {
 
     private static final StoreId STORE_ID = new StoreId(UUID.fromString("9d5e37dd-dbe2-40dc-97fb-8e77c89aa4cb"));
     private static final String OPERATOR_ID = "owner-parang";
+    private static final String PUBLIC_CLIENT_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
@@ -501,6 +502,7 @@ class MealUsageQrOperationsLifecycleIntegrationTest {
         return post(publicPath(rawToken) + "/meal-usages")
             .header("Idempotency-Key", UUID.randomUUID())
             .header("Public-Request-Key", MealUsageQrToken.generate())
+            .header("Public-Client-Key", PUBLIC_CLIENT_KEY)
             .contentType("application/json")
             .content("{\"mealContractId\":\"" + mealContractId + "\",\"customerName\":\"홍길동\",\"amountMinor\":" + amount + "}");
     }

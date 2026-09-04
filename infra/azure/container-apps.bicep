@@ -6,6 +6,12 @@ param managedEnvironmentId string
 @description('Name of the web Container App.')
 param webName string
 
+@description('Whether the web Container App ingress is publicly reachable.')
+param webExternalIngress bool = false
+
+@description('CIDR range allowed to reach the externally exposed web ingress.')
+param webAllowedIpCidr string = ''
+
 @description('Name of the API Container App.')
 param apiName string
 
@@ -59,15 +65,15 @@ param dbPasswordKeyVaultUrl string
 @description('Key Vault URI of the TIEAT_QR_TOKEN_ENCRYPTION_KEYS secret.')
 param qrTokenEncryptionKeysKeyVaultUrl string
 
-@description('Key Vault URI of the required onboarding invite-code secret. It is required here even though the production configuration treats onboarding settings as optional.')
-param onboardingInviteCodeKeyVaultUrl string
+@description('Optional Key Vault URI of the onboarding invite-code secret. Leave empty to disable onboarding invites.')
+param onboardingInviteCodeKeyVaultUrl string = ''
 
-@description('Key Vault URI of the NAVER_API_HUB_CLIENT_ID secret. It is required here so the onboarding place-search feature is usable.')
-param naverApiHubClientIdKeyVaultUrl string
+@description('Optional Key Vault URI of the NAVER_API_HUB_CLIENT_ID secret. Both Naver URLs must be set to enable place search.')
+param naverApiHubClientIdKeyVaultUrl string = ''
 
-@description('Key Vault URI of the NAVER_API_HUB_CLIENT_SECRET secret. It is required here so the onboarding place-search feature is usable.')
+@description('Optional Key Vault URI of the NAVER_API_HUB_CLIENT_SECRET secret. Both Naver URLs must be set to enable place search.')
 @secure()
-param naverApiHubClientSecretKeyVaultUrl string
+param naverApiHubClientSecretKeyVaultUrl string = ''
 
 @description('Azure Blob Storage endpoint for private receipt storage, without credentials, query strings, or a path.')
 param receiptsAzureEndpoint string
@@ -81,6 +87,10 @@ param qrTokenEncryptionKeyVersion string = '1'
 @description('Initial floor for this deployment. Pass the current scheduled value on redeploy: 1 during service hours, 0 overnight. scale-schedule.bicep changes the actual floor thereafter.')
 @allowed([0, 1])
 param initialMinReplicas int = 1
+
+var validatedWebAllowedIpCidr = webExternalIngress
+  ? (!empty(webAllowedIpCidr) ? webAllowedIpCidr : fail('webAllowedIpCidr must be set when webExternalIngress is true.'))
+  : ''
 
 // A real minReplicas=1 is eligible for idle billing; a cron desiredReplicas floor is not.
 // Keep HTTP scaling enabled so overnight ledger requests can wake both apps.
@@ -113,10 +123,18 @@ resource web 'Microsoft.App/containerApps@2025-01-01' = {
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
-        external: true
+        external: webExternalIngress
         targetPort: 3000
         transport: 'http'
-        allowInsecure: false
+        allowInsecure: !webExternalIngress
+        ipSecurityRestrictions: webExternalIngress ? [
+          {
+            name: 'operator'
+            action: 'Allow'
+            ipAddressRange: validatedWebAllowedIpCidr
+            description: 'pilot operator only'
+          }
+        ] : []
       }
       registries: [
         {
@@ -201,7 +219,7 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
           identity: apiAcrPullIdentityResourceId
         }
       ]
-      secrets: [
+      secrets: concat([
         {
           name: 'db-url'
           value: dbUrl
@@ -217,26 +235,28 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
           identity: apiRuntimeIdentityResourceId
         }
         {
-          name: 'qr-token-encryption-keys'
+          name: 'qr-token-enc-keys'
           keyVaultUrl: qrTokenEncryptionKeysKeyVaultUrl
           identity: apiRuntimeIdentityResourceId
         }
+      ], onboardingInviteCodeKeyVaultUrl == '' ? [] : [
         {
-          name: 'onboarding-invite-code'
+          name: 'onboard-invite-code'
           keyVaultUrl: onboardingInviteCodeKeyVaultUrl
           identity: apiRuntimeIdentityResourceId
         }
+      ], naverApiHubClientIdKeyVaultUrl == '' || naverApiHubClientSecretKeyVaultUrl == '' ? [] : [
         {
-          name: 'naver-api-hub-client-id'
+          name: 'naver-hub-id'
           keyVaultUrl: naverApiHubClientIdKeyVaultUrl
           identity: apiRuntimeIdentityResourceId
         }
         {
-          name: 'naver-api-hub-client-secret'
+          name: 'naver-hub-secret'
           keyVaultUrl: naverApiHubClientSecretKeyVaultUrl
           identity: apiRuntimeIdentityResourceId
         }
-      ]
+      ])
     }
     template: {
       containers: [
@@ -298,19 +318,7 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
             }
             {
               name: 'TIEAT_QR_TOKEN_ENCRYPTION_KEYS'
-              secretRef: 'qr-token-encryption-keys'
-            }
-            {
-              name: 'TIEAT_ONBOARDING_INVITE_CODE'
-              secretRef: 'onboarding-invite-code'
-            }
-            {
-              name: 'NAVER_API_HUB_CLIENT_ID'
-              secretRef: 'naver-api-hub-client-id'
-            }
-            {
-              name: 'NAVER_API_HUB_CLIENT_SECRET'
-              secretRef: 'naver-api-hub-client-secret'
+              secretRef: 'qr-token-enc-keys'
             }
             {
               name: 'TIEAT_QR_TOKEN_ENCRYPTION_KEY_VERSION'
@@ -335,6 +343,20 @@ resource api 'Microsoft.App/containerApps@2025-01-01' = {
             {
               name: 'TIEAT_RECEIPTS_AZURE_MANAGED_IDENTITY_CLIENT_ID'
               value: apiRuntimeIdentityClientId
+            }
+          ], onboardingInviteCodeKeyVaultUrl == '' ? [] : [
+            {
+              name: 'TIEAT_ONBOARDING_INVITE_CODE'
+              secretRef: 'onboard-invite-code'
+            }
+          ], naverApiHubClientIdKeyVaultUrl == '' || naverApiHubClientSecretKeyVaultUrl == '' ? [] : [
+            {
+              name: 'NAVER_API_HUB_CLIENT_ID'
+              secretRef: 'naver-hub-id'
+            }
+            {
+              name: 'NAVER_API_HUB_CLIENT_SECRET'
+              secretRef: 'naver-hub-secret'
             }
           ], apiTrustedProxyCidrs == '' ? [] : [
             {

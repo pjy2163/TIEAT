@@ -217,6 +217,7 @@ class StoreSessionFoundationHttpIntegrationTest {
     void sessionCookieUsesSafeFlagsAndTracksHttpOrHttpsRequest() throws Exception {
         String httpCookie = mockMvc.perform(get("/api/v1/csrf").secure(false))
             .andExpect(status().isOk())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andReturn()
             .getResponse()
             .getHeader(HttpHeaders.SET_COOKIE);
@@ -229,6 +230,7 @@ class StoreSessionFoundationHttpIntegrationTest {
 
         String httpsCookie = mockMvc.perform(get("/api/v1/csrf").secure(true))
             .andExpect(status().isOk())
+            .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
             .andReturn()
             .getResponse()
             .getHeader(HttpHeaders.SET_COOKIE);
