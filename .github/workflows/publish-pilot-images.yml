@@ -2,6 +2,9 @@ name: Publish pilot images
 
 on:
   workflow_dispatch:
+  push:
+    branches: ['codex/cold-start-idle-savings']
+    paths: ['.github/workflows/publish-pilot-images.yml']
 
 permissions:
   contents: read
