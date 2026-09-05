@@ -1,129 +1,193 @@
 # TIEAT
 
-TIEAT은 프랜차이즈 매장의 협력사 식대 장부 입력과 확인 업무를 줄이기 위한 장부 자동화 서비스입니다.
+> QR 입력부터 매장 확인, 장부와 정산 기록까지 한 흐름으로 연결하는 식대 관리 웹 애플리케이션
 
-협력사 직원은 POS에 비치된 QR을 개인 휴대폰으로 열어 사용 금액을 입력하고, 매장 직원은 태블릿에서 거래를 확인한 뒤 자신의 이니셜로 확정합니다. 선불 계약은 남은 금액을 먼저 적용하고 초과분을 미수금으로 기록합니다.
+![TIEAT 서비스 소개](apps/web/public/og/tieat-og.png)
 
-TIEAT은 결제·충전·송금 서비스가 아니며 고객 자금을 보관하거나 이동시키지 않습니다.
+[프로젝트 페이지](https://tieat.paranglabs.com) · Responsive Web · Installable PWA
 
-## MVP flow
+TIEAT은 매장과 협력사 사이에서 수기로 관리하던 식대 사용 내역을 디지털 장부로 전환한 프로젝트입니다. 협력사 직원은 별도 앱 없이 매장의 QR을 휴대폰으로 열어 이름과 금액을 입력하고, 매장 직원은 태블릿이나 모바일 화면에서 요청을 확인합니다. 확정된 내역은 장부와 미수금 계산에 반영되며 실제 POS 결제 결과도 별도로 기록할 수 있습니다.
 
-```text
-QR mobile or store tablet entry
-  → PENDING meal usage
-  → store staff confirmation
-  → CONFIRMED ledger entry
-  → prepaid allocation and receivable
+TIEAT은 결제, 충전, 송금을 수행하거나 고객 자금을 보관하는 서비스가 아닙니다. 외부 POS에서 완료된 결제 사실을 장부에 기록하고 대조하는 역할에 집중합니다.
+
+## 해결하려는 문제
+
+식대 거래는 입력하는 사람과 확정하는 사람이 다르고, 선불과 후불 계약이 섞이며, 월말에는 다시 장부를 대조해야 합니다. TIEAT은 이 과정을 다음 원칙으로 정리했습니다.
+
+- 협력사 직원의 입력과 매장 직원의 확정을 분리합니다.
+- 모든 거래는 `PENDING` 상태를 거쳐야 장부에 반영됩니다.
+- 선불 잔액을 먼저 차감하고 부족한 금액만 미수금으로 계산합니다.
+- POS 결제 기록은 금전 이동 명령이 아닌, 이미 완료된 결제에 대한 증빙으로 보관합니다.
+- 매장과 협력사 계약을 모든 조회와 변경의 경계로 사용합니다.
+
+```mermaid
+flowchart LR
+    A[협력사 모바일<br/>QR 입력] --> B[PENDING<br/>확인 대기]
+    C[매장 태블릿<br/>직접 입력] --> B
+    B -->|확정 + 이니셜| D[CONFIRMED<br/>전체 장부]
+    B -->|거절| E[REJECTED]
+    D --> F{계약 유형}
+    F -->|선불| G[잔액 우선 차감<br/>초과분은 미수금]
+    F -->|후불| H[전액 미수금]
+    G --> I[POS 결제 기록]
+    H --> I
+    I --> J[영수증 · XLSX 내보내기]
 ```
 
-현재 저장소에는 다음 backend 기반이 구현되어 있습니다.
+## 주요 기능
 
-- 매장·식대 계약 범위를 가진 `MealUsage` 도메인 모델
-- `PENDING → CONFIRMED` 상태 전이와 확인 이니셜
-- 선불 우선 적용 및 초과 미수금 계산
-- Spring Data JPA adapter와 Flyway migration
-- Testcontainers PostgreSQL 통합 테스트
+| 영역 | 제공 기능 |
+| --- | --- |
+| 매장 가입 | 매장 검색, 초대 코드 기반 가입, 첫 협력사 등록 또는 나중에 추가 |
+| 협력사 관리 | 단체·개인 구분, 선불·후불 계약, 초기 선불 잔액, QR 노출 여부, 결제 조건 변경, 보관 처리 |
+| QR 식대 입력 | 모바일 공개 입력, 협력사 선택, 요청 상태 확인과 취소, QR 갱신·일시 중지 |
+| 확인 대기 | 들어온 요청 자동 갱신, 상세 확인, 직원 이니셜 확정, 거절 |
+| 전체 장부 | 기간·협력사 필터, 결제 상태 확인, 모바일 최적화, 페이지 단위 선택 |
+| 정산 기록 | 미수금 묶음 선택, POS 영업일과 결제 총액 기록, 중복 요청 방지 |
+| 증빙과 내보내기 | 비공개 영수증 이미지 보관·조회, 기간별 장부 및 누적 정산 XLSX 다운로드 |
+| 설치형 경험 | 앱 이름과 아이콘을 갖춘 PWA 설치 지원, 매장 장부 화면으로 바로 진입 |
 
-REST API, 인증된 확인 흐름, `CONFIRMED` 영속화, SSE와 Next.js PWA는 아직 구현 중입니다.
+PWA는 현재 설치 가능한 웹 앱 경험에 초점을 맞춥니다. 서비스 워커 기반 오프라인 사용과 푸시 알림은 제공하지 않으므로 장부 사용에는 네트워크 연결이 필요합니다.
 
-## Technology
+## 제품과 구현에서 고려한 점
 
-- Java 25 (BellSoft Liberica)
-- Spring Boot 4.1
-- Gradle Kotlin DSL
-- Spring MVC, Spring Security, Spring Data JPA
-- PostgreSQL 18, Flyway, Testcontainers
-- Docker Compose
+### 역할이 다른 두 화면
 
-Backend는 하나의 배포 단위를 유지하는 modular monolith입니다. 핵심 업무 규칙은 Spring과 JPA에 의존하지 않는 domain package에 두고 application use case와 adapter가 외부 기술을 연결합니다.
+협력사 직원은 휴대폰으로 짧게 입력하고, 매장 직원은 태블릿에서 여러 요청을 빠르게 판단합니다. 공개 QR 화면은 입력 항목을 최소화하고, 매장 화면은 협력사·시간·금액·확인 상태의 정보 우선순위를 유지하면서 320px 폭까지 줄바꿈되도록 구성했습니다.
 
-## Project structure
+### 상태 전이로 장부의 신뢰성 확보
 
-```text
-apps/api
-├── src/main/java/com/tieat
-│   ├── ledger
-│   │   ├── domain
-│   │   ├── application
-│   │   └── adapter
-│   ├── partnership
-│   └── store
-└── src/main/resources/db/migration
+사용 요청과 확정 장부를 같은 상태처럼 다루지 않습니다. `PENDING → CONFIRMED` 전이를 도메인 규칙으로 제한하고, 확정자 이니셜과 시각을 함께 남깁니다. 이미 처리된 요청의 재확정과 계약 범위를 벗어난 변경은 서버에서 차단합니다.
+
+### 금액 계산과 동시성
+
+금액은 부동소수점 대신 정수 원 단위로 저장합니다. 선불 계약은 확정 시점의 잔액을 기준으로 선불 적용액과 미수금을 원자적으로 계산하며, 행 잠금과 낙관적 버전 검사를 사용해 동시에 들어온 확정이 잔액을 중복 차감하지 않도록 했습니다.
+
+### 재시도 가능한 쓰기 요청
+
+모바일 네트워크의 지연이나 응답 유실을 고려해 공개 QR 입력, 협력사 등록, POS 정산 기록에 idempotency key와 요청 스냅샷 검증을 적용했습니다. 같은 요청의 안전한 재시도와 서로 다른 내용의 key 재사용을 구분합니다.
+
+### 변경 이후에도 읽을 수 있는 기록
+
+협력사명과 고객 이름은 거래 시점의 스냅샷으로 남겨 이후 계약 정보가 바뀌어도 과거 장부의 의미를 유지합니다. 고객 이름에는 별도 익명화 작업을 두고, 영수증에는 만료와 삭제 상태를 둬 업무 기록과 개인정보의 보관 주기를 분리했습니다.
+
+## 아키텍처
+
+백엔드는 하나의 배포 단위를 유지하는 modular monolith입니다. 업무 규칙은 Spring과 JPA에 의존하지 않는 domain package에 두고, application use case와 adapter가 HTTP, 데이터베이스, 외부 저장소를 연결합니다. 초기 제품에서 운영 복잡도를 억제하면서도 도메인 경계를 코드에 남기기 위한 선택입니다.
+
+```mermaid
+flowchart TB
+    U[Mobile / Tablet Browser] --> W[Next.js Web]
+    W --> A[Spring Boot API]
+    A --> P[(PostgreSQL)]
+    A --> S[Private Receipt Storage]
+    A --> N[Naver Local Search API]
+
+    subgraph API Modules
+        ST[store / identity]
+        PT[partnership]
+        QR[qr]
+        LG[ledger]
+        SE[settlement]
+    end
+
+    A --- ST
+    A --- PT
+    A --- QR
+    A --- LG
+    A --- SE
 ```
 
-## Run locally
+```text
+apps/
+├── api/                         # Spring Boot API
+│   └── src/main/java/com/tieat
+│       ├── store, identity      # 매장과 세션 인증
+│       ├── partnership          # 협력사와 식대 계약
+│       ├── qr                   # 공개 QR 수명 주기
+│       ├── ledger               # 사용 요청과 확정 장부
+│       └── settlement           # POS 정산과 영수증
+└── web/                         # Next.js App Router UI
+    ├── app/                     # 공개 QR, 가입, 매장 작업 공간
+    └── lib/                     # API client와 응답 검증
 
-SDKMAN을 사용하는 경우 프로젝트 SDK를 적용합니다.
+infra/azure/                     # Azure Bicep 배포 구성
+```
+
+## 기술 스택
+
+| 구분 | 기술 |
+| --- | --- |
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
+| Backend | Java 25, Spring Boot 4.1, Spring MVC, Spring Security, Spring Data JPA |
+| Data | PostgreSQL, Flyway, Spring Session JDBC |
+| Storage / Export | Azure Blob Storage, Apache POI |
+| Test | JUnit 5, Testcontainers, Vitest, Testing Library |
+| Infrastructure | Docker, Azure Container Apps, Key Vault, Managed Identity, Bicep |
+
+## 보안과 개인정보 보호
+
+보안은 UI 검증에 맡기지 않고 요청 경계, 저장소 경계, 운영 경계에 나누어 적용했습니다.
+
+- **인증과 세션**: BCrypt 비밀번호 해시, 서버 측 JDBC 세션, 로그인 시 session ID 교체, `HttpOnly`·`SameSite=Lax` 쿠키를 사용합니다. 운영 쿠키는 HTTPS에서만 전송됩니다.
+- **인가와 테넌트 격리**: 매장 전용 API는 역할 인증을 요구하고, 서버가 세션의 `storeId`를 기준으로 데이터 범위를 결정합니다. 클라이언트가 보낸 매장 식별자를 신뢰하지 않습니다.
+- **CSRF 방어**: 인증 상태를 변경하는 요청에는 세션 기반 CSRF token을 요구합니다. 공개 QR 요청은 세션 인증과 분리된 제한된 경로로만 허용합니다.
+- **민감 작업 재인증**: 협력사 보관 등 영향이 큰 작업은 공용 PIN과 최근 비밀번호 인증을 결합하고 실패 횟수를 제한합니다.
+- **남용 방지**: 로그인, 가입, 초대 코드, 공개 QR 생성에 IP·계정·QR client 단위 rate limit을 적용하며 여러 API 인스턴스가 PostgreSQL 상태를 공유합니다.
+- **QR token 보호**: 조회에는 SHA-256 digest를 사용하고, 운영에서 원본 token은 versioned AES-256-GCM key로 암호화합니다. QR은 만료·갱신·폐기·신규 요청 일시 중지를 지원합니다.
+- **응답과 로그 최소화**: 장부 API는 `no-store`로 요청하고, 공개 QR 페이지는 검색 엔진 노출과 캐시를 막습니다. Web 로그에서 QR 경로의 token, query, fragment를 마스킹합니다.
+- **브라우저 방어선**: 운영 응답에 CSP, HSTS, frame 차단, MIME sniffing 방지, referrer 및 permissions 정책을 적용합니다.
+- **파일 업로드 검증**: 영수증은 허용된 JPG·PNG만 받고 확장자, media type, 파일 signature, 정상 종료, 실제 이미지 디코딩, 크기와 픽셀 수를 함께 검증합니다. 파일은 공개 URL이 아닌 비공개 저장소에 둡니다.
+- **비밀값 관리**: 배포 환경의 DB 자격 증명, QR 암호화 key, 초대 코드, 외부 API secret은 저장소에 두지 않고 Key Vault 참조와 Managed Identity로 주입합니다.
+- **데이터 수명 주기**: 고객 이름 익명화와 만료 영수증 삭제를 web 요청과 분리된 작업으로 실행할 수 있으며 처리 결과는 감사 기록으로 남깁니다.
+
+이 항목들은 현재 저장소에서 구현한 방어선의 설명이며 보안 감사를 대체하지 않습니다. 운영 전에는 실제 네트워크 경로, Key Vault 권한, 백업·복구, 로그 유출 여부를 배포 환경에서 다시 검증해야 합니다.
+
+## 로컬 실행
+
+### 요구 사항
+
+- Java 25
+- Node.js 22
+- Docker와 Docker Compose
+
+PostgreSQL을 실행한 뒤 API와 Web을 각각 시작합니다.
 
 ```bash
-sdk env
 docker compose up -d postgres
 ./gradlew :apps:api:bootRun --args='--spring.profiles.active=local'
 ```
 
-기본 API 주소는 `http://localhost:8080`이며 health endpoint는 다음과 같습니다.
-
-```text
-GET /actuator/health
-```
-
-### Public QR abuse controls
-
-공개 QR 생성 요청은 기본적으로 client IP당 1분에 15건으로 제한되고, 요청 본문은 16KB를 넘을 수 없습니다. 여러 API 인스턴스가 같은 PostgreSQL 제한 상태를 공유합니다.
-
-- `TIEAT_SECURITY_PUBLIC_QR_CREATE_ENABLED=false`: 사고 대응 시 생성 요청을 즉시 503으로 차단합니다.
-- `TIEAT_SECURITY_PUBLIC_QR_CREATE_REQUESTS_PER_MINUTE`: 분당 허용 건수를 조정합니다.
-- `TIEAT_SECURITY_PUBLIC_QR_CREATE_TRUSTED_PROXY_CIDRS`: API에 직접 연결되는 검증된 reverse proxy CIDR만 쉼표로 지정합니다. 비워 두면 `X-Forwarded-For`를 신뢰하지 않고 직접 연결 IP를 사용합니다.
-
-운영에서는 `security_event=public_qr_create_rate_limited` 로그 발생률을 경보로 연결합니다. 이 이벤트에는 QR token이나 client IP가 기록되지 않습니다. 프록시 CIDR을 잘못 넓히면 IP 위조가 가능하므로 실제 배포 경로에서 확인한 범위만 설정해야 합니다.
-
-### Azure Container Apps deployment template
-
-`infra/azure/foundation.bicep`는 최초 파일럿용 기반 리소스를 생성합니다. PostgreSQL 16 B1ms/32GiB(HA·자동 증설 없음, 백업 7일), 전용 서브넷과 private DNS, Consumption 환경, ACR Basic, 비공개 Blob, RBAC Key Vault와 workload identity를 포함합니다. Defender·NAT Gateway·Private Endpoint와 실제 Web/API 앱은 생성하지 않습니다. 배포 전 대상 구독을 명시해 `validate`와 `what-if`를 실행하고, DB 관리자 암호는 커밋하지 않는 운영자 전용 secure parameter 파일로 전달합니다. 앱은 별도의 최소 권한 DB 계정을 사용해야 하며 관리자 암호를 runtime identity가 읽을 수 있는 Key Vault에 넣지 않습니다. Log Analytics의 일일 0.1GB 수집 제한은 비용 상한이 아니며 도달하면 로그가 누락될 수 있습니다.
-
-`infra/azure/container-apps.bicep`는 이미 만들어진 Container Apps environment, ACR, user-assigned identity, Key Vault, PostgreSQL, private Blob Storage를 입력으로 받아 web/API Container App을 구성합니다.
-
-- web ingress만 external HTTPS로 열고 API ingress는 같은 environment 내부로 제한합니다.
-- web 이미지는 빌드 시 `TIEAT_API_ORIGIN=http://<api-app-name>`을 받아야 합니다. API 앱 이름 호출은 같은 Container Apps environment 내부에서만 사용합니다.
-- API image pull identity와 runtime/Key Vault identity는 분리하며, Key Vault에는 DB·QR encryption key·onboarding invite·NAVER API secret을 저장합니다.
-- Web/API의 실제 `minReplicas`는 한국시간 07:55에 각각 1, 00:00에 각각 0으로 전환합니다. 최대 1개와 HTTP 규칙은 유지하여 새벽 장부 조회에도 다시 기동합니다. `container-apps.bicep`의 `initialMinReplicas`는 최초 배포 기본값 1이며, 재배포에는 현재 시간대의 값(야간 0/주간 1)을 전달해야 합니다. 앱만 배포하면 시간 예약은 동작하지 않습니다.
-- 앱 생성 후 `scale-schedule.bicep`를 별도로 배포하면 동일 Web 이미지의 운영 스크립트를 실행하는 예약 Job 두 개가 만들어집니다(UTC `55 22 * * *`, `0 15 * * *`). 별도 상시 서버는 없으며 Job 실행 시간은 과금 대상입니다. 스케줄러 identity의 앱 read/write 권한은 대상 두 앱에만 부여합니다. `minReplicas`만 수정하는 RBAC 권한은 없으므로 이 identity는 앱 설정도 변경할 수 있는 민감한 운영 권한입니다. Web 이미지를 갱신하면 Job 이미지도 같은 검증된 digest로 갱신합니다.
-- 최소 개수 변경은 새 revision을 만들므로 5분 예열은 준비 완료 보장이 아닙니다. 최초 적용 전 두 Job의 수동 실행, 최신 ready revision·설정 보존, 08시 QR 요청과 야간 장부 조회를 실환경에서 확인해야 합니다. 전환 실패 시 기존 revision이 남을 수 있어 Job 실패 감시도 필요합니다. DB와 독립 retention Job에는 이 일정이 적용되지 않습니다.
-- 실제 0 replica이면 앱 컴퓨팅 요금은 없고, 주간 실제 min=1에서는 HTTP 요청 없음·낮은 CPU/네트워크 사용 등 조건을 충족할 때 유휴 요금 대상이 됩니다. 기존 cron floor와 달리 유휴 요금 적용이 가능한 구성이지 전 시간 할인 보장은 아닙니다. 이전 USD 33.48(컴퓨팅), USD 39~40(ACR 등 포함)은 하루 16시간 활성 요금 기준의 참고 추정이며 새 정책의 확정 견적이 아닙니다. 실제 비용은 5분 예열·활성/유휴 비중·새벽 요청·Job·로그·네트워크와 무료 할당량 적용 여부로 재확인합니다. [Azure 과금 기준](https://learn.microsoft.com/en-us/azure/container-apps/billing)
-- Web 이미지는 Next.js standalone 산출물과 정적 파일만 포함하며, Next.js 시작 전 로그 필터를 로드해 QR 경로의 토큰·query·fragment를 마스킹합니다. 이 필터는 Web 프로세스 console 로그 대상이며 Azure ingress·외부 APM 로그는 별도로 확인해야 합니다.
-- VNet 통합 환경은 Azure 관리용 공인 IP·Standard LB를 자동 생성합니다. 2026-09-03 공개 단가 기준 30일 네트워크 정가는 private DNS를 포함해 약 USD 22~26(IP 1~2개 가정)이며 위 추정과 별도입니다. DB 무료 혜택을 전제해도 LB 무료 혜택 적용 확인 전에는 약 USD 61~65 + 변동비로 예산을 잡습니다. 실제 혜택과 사용량에 따라 달라지며, 관리용 `ME_` 리소스 그룹은 직접 수정하지 않습니다. [관리 리소스 과금](https://learn.microsoft.com/en-us/azure/container-apps/custom-virtual-networks#managed-resources)
-- DB URL도 API 일반 환경변수가 아닌 ACA secret로 주입합니다. web reverse proxy 뒤에서 실제 사용자 IP를 제한하려면 배포 경로를 먼저 확인한 뒤 `apiTrustedProxyCidrs`에 검증된 CIDR만 전달하고, 비워 두면 forwarded header를 신뢰하지 않습니다.
-- `webImage`와 `apiImage`에는 mutable tag 대신 검증된 immutable digest를 사용합니다. 배포 전 `az deployment group what-if`로 실제 대상 resource group의 변경을 확인합니다.
-
-운영자가 준비한 parameter 파일로 다음처럼 변경 예정 내용을 먼저 확인합니다.
+다른 터미널에서:
 
 ```bash
-az deployment group what-if \
-  --resource-group <resource-group> \
-  --template-file infra/azure/container-apps.bicep \
-  --parameters @<operator-only-parameters-file>.json
+cd apps/web
+npm ci
+npm run dev
 ```
 
-앱 템플릿은 위 기반 리소스와 권한을 만들지 않습니다. Key Vault Secrets User, ACR pull, PostgreSQL private access, private Blob 설정과 HTTPS·로그·백업·복구는 배포 전 별도 운영 증거로 확인해야 합니다. 영수증은 서버에서 JPG/PNG 형식·확장자·정상 파일 종료·실제 디코딩·최대 25MP를 검증하며, 기존 PDF는 제공하지 않고 외부 악성코드 검사 서비스는 사용하지 않습니다.
+- Web: `http://localhost:3000`
+- API: `http://localhost:8080`
+- Health: `http://localhost:8080/actuator/health`
 
-V28은 영수증의 `scan_status` 컬럼을 `validation_status`로 변경합니다. 적용 후 구버전 API·retention 이미지는 호환되지 않으므로, 운영 적용 전에 대상 DB·백업·모든 실행 이미지 버전과 복구 방법을 확인해야 합니다. 이전 이미지로만 되돌리는 롤백은 사용할 수 없습니다.
+매장 검색과 가입 흐름을 로컬에서 사용하려면 별도의 Naver API 자격 증명과 초대 코드를 환경변수로 설정해야 합니다. QR token 암호화 key를 포함한 모든 비밀값은 `.env` 또는 운영 secret store에서 관리하고 커밋하지 않습니다.
 
-### Retention worker
+## 검증
 
-고객 이름 익명화 worker는 retention profile의 non-web 프로세스로 실행합니다.
-
-```bash
-./gradlew :apps:api:bootRun --args='--spring.profiles.active=retention'
-```
-
-기본 실행 시각은 매일 03:00(Asia/Seoul)이며 `TIEAT_CUSTOMER_NAME_ANONYMIZATION_CRON`으로 override할 수 있습니다. 단일 worker와 로그 실패·success count alert는 외부 플랫폼에서 연결해야 하며, 현재 저장소에는 그 증거가 없습니다.
-
-## Verify
-
-전체 backend 검증:
+Backend unit·integration test:
 
 ```bash
 ./gradlew :apps:api:check --no-daemon
 ```
 
-PostgreSQL 통합 테스트에는 Docker가 필요합니다.
+PostgreSQL integration test에는 Docker가 필요합니다.
+
+Frontend test와 production build:
+
+```bash
+cd apps/web
+npm test
+TIEAT_API_ORIGIN=https://api.example.com npm run build
+```
+
+배포 이미지는 non-root distroless runtime을 사용하고 base image를 digest로 고정합니다. Azure 구성은 외부 Web ingress, 내부 API ingress, private PostgreSQL과 Blob Storage, 최소 권한 Managed Identity를 전제로 하며 변경 전 `validate`와 `what-if` 검토를 거칩니다.

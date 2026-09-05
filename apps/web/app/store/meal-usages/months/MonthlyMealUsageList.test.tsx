@@ -148,7 +148,7 @@ describe("MonthlyMealUsageList", () => {
     expect(screen.getByText("2페이지")).toBeVisible();
   });
 
-  it("places amount, confirmer, and settlement status on one metadata line", async () => {
+  it("keeps metadata ordered and permits wrapping with right-aligned settlement status", async () => {
     getConfirmedMealUsagesMock.mockResolvedValue(page({ hasNext: false }));
     render(<MonthlyMealUsageList />);
 
@@ -176,11 +176,12 @@ describe("MonthlyMealUsageList", () => {
     expect(rowHeader).toHaveClass("flex", "items-start", "justify-between");
     expect(Array.from(rowHeader.children)).toEqual([scopedRow.getByText("협력사 A"), inputTime]);
     expect(customerRow).toHaveClass("mt-2", "flex", "min-w-0", "items-center", "gap-2");
-    expect(paymentMeta).toHaveClass("grid", "min-w-0", "flex-1", "grid-cols-[minmax(0,1fr)_auto_auto]", "items-center", "justify-end", "gap-x-2");
+    expect(customerRow).toHaveClass("flex-wrap");
+    expect(paymentMeta).toHaveClass("ml-auto", "flex", "flex-wrap", "justify-end");
     expect(Array.from(customerRow.children)).toEqual([inputter, paymentMeta]);
     expect(Array.from(paymentMeta.children)).toEqual([amount, confirmer, settlementStatus]);
-    expect(amount).toHaveClass("min-w-0", "text-right", "whitespace-nowrap", "sm:w-[4.5rem]");
-    expect(confirmer).toHaveClass("inline-flex", "min-w-0", "items-center", "justify-self-end", "whitespace-nowrap", "text-right", "font-bold", "sm:w-16");
+    expect(amount).toHaveClass("min-w-0", "text-right", "whitespace-nowrap");
+    expect(confirmer).toHaveClass("inline-flex", "min-w-0", "items-center", "justify-self-end", "whitespace-nowrap", "text-right", "font-bold");
     expect(settlementStatus).toHaveClass("inline-flex", "shrink-0", "items-center", "justify-self-end", "gap-1", "whitespace-nowrap");
     expect(confirmer.parentElement).toBe(paymentMeta);
     expect(settlementStatus.parentElement).toBe(paymentMeta);

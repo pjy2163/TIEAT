@@ -10,7 +10,11 @@ import motionStyles from "./Landing.motion.module.css";
 export const metadata: Metadata = {
   title: "TIEAT | 식대 장부를 한 큐에",
   description: "QR 입력부터 매장 확인, 결제할 금액 확인까지 한 큐에 보는 TIEAT 식대 장부",
+  alternates: { canonical: "/" },
   openGraph: {
+    url: "/",
+    siteName: "TIEAT 식대 장부",
+    locale: "ko_KR",
     title: "TIEAT | 식대 장부를 한 큐에",
     description: "QR 입력부터 매장 확인, 결제할 금액 확인까지 한 큐에 보는 TIEAT 식대 장부",
     type: "website",
