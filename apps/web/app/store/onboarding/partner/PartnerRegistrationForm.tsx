@@ -6,6 +6,7 @@ import {
   ApiError,
   getStoreOnboardingStatus,
   registerFirstPartner,
+  skipFirstPartnerRegistration,
   type FirstPartnerRegistration,
 } from "@/lib/store-api";
 import { signupStyles } from "../../signup/SignupForm.styles";
@@ -118,6 +119,23 @@ export function PartnerRegistrationForm() {
     }
   }
 
+  async function skipPartnerRegistration() {
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      await skipFirstPartnerRegistration();
+      router.replace("/store/meal-usages");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        router.replace("/store/login?next=/store/onboarding/partner");
+      } else {
+        setErrorMessage("협력사 등록을 건너뛰지 못했습니다. 다시 시도해 주세요.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   if (viewState === "loading") {
     return (
       <main className={signupStyles.page}>
@@ -179,9 +197,14 @@ export function PartnerRegistrationForm() {
 
           {errorMessage ? <p className={signupStyles.error} role="alert">{errorMessage}</p> : null}
           {successMessage ? <p className={signupStyles.success} role="status">{successMessage}</p> : null}
-          <button className={signupStyles.button} type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "협력사 등록 중…" : "협력사 등록하기"}
-          </button>
+          <div className={signupStyles.actions}>
+            <button className={signupStyles.secondaryButton} type="button" disabled={isSubmitting} onClick={skipPartnerRegistration}>
+              나중에 협력사 추가
+            </button>
+            <button className={signupStyles.button} type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "처리 중…" : "협력사 등록하기"}
+            </button>
+          </div>
         </form>
       </section>
     </main>

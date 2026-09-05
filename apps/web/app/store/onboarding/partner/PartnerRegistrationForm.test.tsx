@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, getStoreOnboardingStatus, registerFirstPartner } from "@/lib/store-api";
+import { ApiError, getStoreOnboardingStatus, registerFirstPartner, skipFirstPartnerRegistration } from "@/lib/store-api";
 import { PartnerRegistrationForm } from "./PartnerRegistrationForm";
 
 const replace = vi.fn();
@@ -13,11 +13,17 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/store-api", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/store-api")>();
-  return { ...original, getStoreOnboardingStatus: vi.fn(), registerFirstPartner: vi.fn() };
+  return {
+    ...original,
+    getStoreOnboardingStatus: vi.fn(),
+    registerFirstPartner: vi.fn(),
+    skipFirstPartnerRegistration: vi.fn(),
+  };
 });
 
 const getStoreOnboardingStatusMock = vi.mocked(getStoreOnboardingStatus);
 const registerFirstPartnerMock = vi.mocked(registerFirstPartner);
+const skipFirstPartnerRegistrationMock = vi.mocked(skipFirstPartnerRegistration);
 
 beforeEach(() => {
   getStoreOnboardingStatusMock.mockResolvedValue({ onboardingStatus: "PARTNER_REQUIRED", legacy: false });
@@ -73,6 +79,17 @@ describe("PartnerRegistrationForm", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("결제 유형을 선택해 주세요.");
     expect(screen.queryByText(/QR/)).not.toBeInTheDocument();
     expect(registerFirstPartnerMock).not.toHaveBeenCalled();
+  });
+
+  it("skips the first partner and moves to the ledger", async () => {
+    const user = userEvent.setup();
+    skipFirstPartnerRegistrationMock.mockResolvedValue({ onboardingStatus: "COMPLETE", legacy: false });
+    render(<PartnerRegistrationForm />);
+
+    await user.click(await screen.findByRole("button", { name: "나중에 협력사 추가" }));
+
+    await waitFor(() => expect(skipFirstPartnerRegistrationMock).toHaveBeenCalledOnce());
+    expect(replace).toHaveBeenCalledWith("/store/meal-usages");
   });
 
   it("rejects an empty prepaid balance before sending the registration", async () => {

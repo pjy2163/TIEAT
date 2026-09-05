@@ -611,7 +611,12 @@ export function MonthlyMealUsageList() {
                         />
                       ) : null}
                       <div className={monthlyMealUsageListStyles.rowDetails}>
-                        <p className={monthlyMealUsageListStyles.partner}>{item.partnerDisplayName ?? "협력사 정보 미입력"}</p>
+                        <div className={monthlyMealUsageListStyles.rowHeader}>
+                          <p className={monthlyMealUsageListStyles.partner}>{item.partnerDisplayName ?? "협력사 정보 미입력"}</p>
+                          <p className={`${monthlyMealUsageListStyles.personMeta} ${monthlyMealUsageListStyles.metadata}`}>
+                            {dateFormatter.format(new Date(item.createdAt))}
+                          </p>
+                        </div>
                         <div className={monthlyMealUsageListStyles.customerRow}>
                           <p className={monthlyMealUsageListStyles.personMeta}>이름 미입력</p>
                           <div className={monthlyMealUsageListStyles.paymentMeta}>
@@ -630,9 +635,6 @@ export function MonthlyMealUsageList() {
                             ) : null}
                           </div>
                         </div>
-                        <p className={`${monthlyMealUsageListStyles.personMeta} ${monthlyMealUsageListStyles.metadata}`}>
-                          {dateFormatter.format(new Date(item.createdAt))}
-                        </p>
                       </div>
                     </div>
                   </li>

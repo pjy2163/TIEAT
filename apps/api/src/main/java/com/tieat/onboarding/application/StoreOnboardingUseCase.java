@@ -108,6 +108,17 @@ public class StoreOnboardingUseCase {
             .orElseGet(() -> new OnboardingStatus(StoreOnboardingStatus.COMPLETE, true));
     }
 
+    @Transactional
+    public OnboardingStatus skipFirstPartnerRegistration(StoreId storeId) {
+        Objects.requireNonNull(storeId, "Store id must be supplied");
+        Store store = storeRepository.findByIdForUpdate(storeId).orElse(null);
+        if (store == null) {
+            return new OnboardingStatus(StoreOnboardingStatus.COMPLETE, true);
+        }
+        storeRepository.save(store.completeOnboarding());
+        return new OnboardingStatus(StoreOnboardingStatus.COMPLETE, false);
+    }
+
     public List<StorePlaceSearchGateway.PlaceSearchResult> searchPlaces(String inviteCode, String rawQuery) {
         if (!inviteCodeVerifier.matches(inviteCode)) {
             throw OnboardingException.inviteInvalid();

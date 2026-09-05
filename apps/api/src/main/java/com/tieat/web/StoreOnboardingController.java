@@ -125,6 +125,17 @@ class StoreOnboardingController {
             .body(new OnboardingStatusResponse(status.status().name(), status.legacy()));
     }
 
+    @PostMapping("/store-onboarding/partner-skip")
+    ResponseEntity<OnboardingStatusResponse> skipFirstPartnerRegistration(
+        @org.springframework.security.core.annotation.AuthenticationPrincipal StoreAccountPrincipal principal
+    ) {
+        StoreOnboardingUseCase.OnboardingStatus status = storeOnboardingUseCase
+            .skipFirstPartnerRegistration(principal.storeId());
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .body(new OnboardingStatusResponse(status.status().name(), status.legacy()));
+    }
+
     @PostMapping("/store-onboarding/partners")
     ResponseEntity<PartnerRegistrationResponse> registerFirstPartner(
         @RequestBody FirstPartnerRegistrationRequest request,

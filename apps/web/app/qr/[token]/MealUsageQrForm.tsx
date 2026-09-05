@@ -36,6 +36,13 @@ function amountError(amountInput: string): string | null {
   return null;
 }
 
+function formatAmountInput(value: string): string {
+  const digits = value.replaceAll(",", "");
+  if (!/^\d*$/.test(digits)) return value;
+  const normalized = digits.replace(/^0+(?=\d)/, "");
+  return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
 function customerNameError(customerNameInput: string): string | null {
   const normalized = customerNameInput.trim();
   if (!normalized) return "고객 이름을 입력해 주세요.";
@@ -387,7 +394,8 @@ function MealUsageQrFormForToken({ token, onRetry }: { token: string; onRetry: (
       setFormError(customerNameValidationError);
       return;
     }
-    const validationError = amountError(amountInput);
+    const rawAmountInput = amountInput.replaceAll(",", "");
+    const validationError = amountError(rawAmountInput);
     if (validationError) {
       setFormError(validationError);
       return;
@@ -415,7 +423,7 @@ function MealUsageQrFormForToken({ token, onRetry }: { token: string; onRetry: (
         return;
       }
       const usage = await createPublicMealUsage(
-        token, idempotencyKey, publicRequestKey, selectedMealContractId, normalizedCustomerName, Number(amountInput),
+        token, idempotencyKey, publicRequestKey, selectedMealContractId, normalizedCustomerName, Number(rawAmountInput),
         publicClientKey
       );
       const pendingCapability = { mealUsageId: usage.mealUsageId, idempotencyKey, publicRequestKey };
@@ -582,11 +590,10 @@ function MealUsageQrFormForToken({ token, onRetry }: { token: string; onRetry: (
               max={MAX_AMOUNT_MINOR}
               min="1"
               onChange={(event) => {
-                setAmountInput(event.target.value);
+                setAmountInput(formatAmountInput(event.target.value));
                 resetRequestKeys();
               }}
-              pattern="[0-9]*"
-              placeholder="예: 8500"
+              placeholder="예: 8,500"
               type="text"
               value={amountInput}
             />

@@ -2,6 +2,7 @@ package com.tieat.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -119,6 +120,39 @@ class StorePartnerOnboardingHttpIntegrationTest {
         mockMvc.perform(get("/api/v1/store-onboarding").cookie(session.cookie()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.onboardingStatus").value("COMPLETE"));
+    }
+
+    @Test
+    void skipsTheFirstPartnerAndAllowsLaterPartnerSetup() throws Exception {
+        SessionHandle session = StoreOnboardingHttpIntegrationSupport.signUpManualStore(
+            mockMvc, objectMapper, "skip-partner-store", "correct-password", "나중에 설정할 가게"
+        );
+        String csrfToken = StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session);
+
+        mockMvc.perform(post("/api/v1/store-onboarding/partner-skip").cookie(session.cookie()))
+            .andExpect(StoreOnboardingHttpIntegrationSupport.problem(403, "CSRF_TOKEN_INVALID"));
+        mockMvc.perform(post("/api/v1/store-onboarding/partner-skip")
+                .cookie(session.cookie())
+                .header("X-CSRF-TOKEN", csrfToken))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.onboardingStatus").value("COMPLETE"))
+            .andExpect(jsonPath("$.legacy").value(false));
+
+        UUID storeId = storeIdFor("skip-partner-store");
+        assertThat(jdbcTemplate.queryForObject("select onboarding_status from stores where id = ?", String.class, storeId))
+            .isEqualTo("COMPLETE");
+        assertThat(jdbcTemplate.queryForObject("select count(*) from meal_contracts where store_id = ?", Long.class, storeId))
+            .isZero();
+
+        mockMvc.perform(post("/api/v1/store-partners")
+                .cookie(session.cookie())
+                .header("X-CSRF-TOKEN", StoreOnboardingHttpIntegrationSupport.csrfToken(mockMvc, objectMapper, session))
+                .header("Idempotency-Key", UUID.randomUUID())
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content(partnerBody("나중에 추가한 협력사", "POSTPAID", 0, true)))
+            .andExpect(status().isCreated());
+        assertThat(jdbcTemplate.queryForObject("select count(*) from meal_contracts where store_id = ?", Long.class, storeId))
+            .isEqualTo(1);
     }
 
     @Test

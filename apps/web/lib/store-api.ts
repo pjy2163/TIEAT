@@ -377,6 +377,20 @@ export async function getStoreOnboardingStatus(): Promise<StoreOnboardingStatus>
   return parseOnboardingStatus(await response.json() as unknown);
 }
 
+export async function skipFirstPartnerRegistration(): Promise<StoreOnboardingStatus> {
+  const csrf = await getCsrfToken();
+  const response = await fetch(`${API_PATH}/store-onboarding/partner-skip`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { [csrf.headerName]: csrf.token },
+  });
+  if (!response.ok) {
+    throw await apiError(response);
+  }
+  return parseOnboardingStatus(await response.json() as unknown);
+}
+
 export async function registerFirstPartner(
   request: FirstPartnerRegistration,
 ): Promise<FirstPartnerRegistrationResult> {

@@ -113,7 +113,7 @@ describe("MealUsageQrForm", () => {
     ));
     expect(await screen.findByRole("status")).toHaveTextContent("요청을 취소했습니다");
     expect(screen.getByLabelText("고객 이름")).toHaveValue("홍길동");
-    expect(screen.getByLabelText("금액")).toHaveValue("8500");
+    expect(screen.getByLabelText("금액")).toHaveValue("8,500");
     await user.click(screen.getByRole("button", { name: "요청 보내기" }));
     await waitFor(() => expect(createPublicMealUsageMock).toHaveBeenCalledTimes(2));
     expect(createPublicMealUsageMock.mock.calls[1]).toEqual([
@@ -203,7 +203,7 @@ describe("MealUsageQrForm", () => {
     await user.click(screen.getByRole("button", { name: "요청 보내기" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("입력은 유지");
     expect(screen.getByLabelText("고객 이름")).toHaveValue("홍길동");
-    expect(screen.getByLabelText("금액")).toHaveValue("8500");
+    expect(screen.getByLabelText("금액")).toHaveValue("8,500");
     await user.click(screen.getByRole("button", { name: "요청 보내기" }));
 
     await waitFor(() => expect(createPublicMealUsageMock).toHaveBeenCalledTimes(2));
@@ -351,6 +351,6 @@ describe("MealUsageQrForm", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("새 요청이 일시 중지되었습니다");
     expect(screen.getByLabelText("고객 이름")).toHaveValue("홍길동");
-    expect(screen.getByLabelText("금액")).toHaveValue("8500");
+    expect(screen.getByLabelText("금액")).toHaveValue("8,500");
   });
 });

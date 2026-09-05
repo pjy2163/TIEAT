@@ -160,6 +160,7 @@ describe("MonthlyMealUsageList", () => {
     const settlementStatus = scopedRow.getByText("결제 전");
     const inputter = scopedRow.getByText("이름 미입력");
     const customerRow = inputter.parentElement as HTMLElement;
+    const rowHeader = scopedRow.getByText("협력사 A").parentElement as HTMLElement;
     const paymentMeta = amount.parentElement as HTMLElement;
     expect(within(paymentMeta).getByText("₩12,000")).toBeVisible();
     const inputTimeText = new Intl.DateTimeFormat("ko-KR", {
@@ -172,27 +173,28 @@ describe("MonthlyMealUsageList", () => {
     expect(scopedRow.queryByText("입력자", { exact: true })).not.toBeInTheDocument();
     expect(scopedRow.queryByText("입력 시각", { exact: true })).not.toBeInTheDocument();
     expect(row).toHaveClass("flex", "items-stretch", "gap-x-4", "px-5", "py-5", "sm:px-6");
-    expect(customerRow).toHaveClass("mt-2", "flex", "min-w-0", "flex-col", "items-stretch", "gap-1", "sm:flex-row", "sm:items-center", "sm:gap-3");
-    expect(paymentMeta).toHaveClass("grid", "min-w-0", "grid-cols-[minmax(0,1fr)_auto_auto]", "items-center", "justify-end", "gap-x-2", "sm:flex-1", "sm:grid-cols-[4.5rem_4rem_max-content]", "sm:gap-x-4");
+    expect(rowHeader).toHaveClass("flex", "items-start", "justify-between");
+    expect(Array.from(rowHeader.children)).toEqual([scopedRow.getByText("협력사 A"), inputTime]);
+    expect(customerRow).toHaveClass("mt-2", "flex", "min-w-0", "items-center", "gap-2");
+    expect(paymentMeta).toHaveClass("grid", "min-w-0", "flex-1", "grid-cols-[minmax(0,1fr)_auto_auto]", "items-center", "justify-end", "gap-x-2");
     expect(Array.from(customerRow.children)).toEqual([inputter, paymentMeta]);
     expect(Array.from(paymentMeta.children)).toEqual([amount, confirmer, settlementStatus]);
     expect(amount).toHaveClass("min-w-0", "text-right", "whitespace-nowrap", "sm:w-[4.5rem]");
-    expect(confirmer).toHaveClass("inline-flex", "min-w-0", "items-center", "justify-self-end", "whitespace-nowrap", "text-right", "sm:w-16");
+    expect(confirmer).toHaveClass("inline-flex", "min-w-0", "items-center", "justify-self-end", "whitespace-nowrap", "text-right", "font-bold", "sm:w-16");
     expect(settlementStatus).toHaveClass("inline-flex", "shrink-0", "items-center", "justify-self-end", "gap-1", "whitespace-nowrap");
     expect(confirmer.parentElement).toBe(paymentMeta);
     expect(settlementStatus.parentElement).toBe(paymentMeta);
     expect(amount.parentElement).toBe(paymentMeta);
     expect(inputter.compareDocumentPosition(amount) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(inputter.compareDocumentPosition(inputTime) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(inputTime.compareDocumentPosition(inputter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(amount.compareDocumentPosition(confirmer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(confirmer.compareDocumentPosition(settlementStatus) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(settlementStatus.compareDocumentPosition(inputTime) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(inputTime).toHaveClass("mt-2", "break-words");
+    expect(inputTime).toHaveClass("text-right", "text-xs");
     for (const className of ["text-sm", "font-medium", "leading-5", "text-[var(--text-secondary)]"]) {
       expect(inputter).toHaveClass(className);
-      expect(confirmer).toHaveClass(className);
       expect(inputTime).toHaveClass(className);
     }
+    expect(confirmer).toHaveClass("text-sm", "font-bold", "leading-5", "text-[var(--text-primary)]");
   });
 
   it("clears sensitive rows and sends only the allowlisted monthly next path after 401", async () => {
