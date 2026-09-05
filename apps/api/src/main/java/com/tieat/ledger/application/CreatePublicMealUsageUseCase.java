@@ -16,6 +16,7 @@ import com.tieat.security.application.RateLimiter;
 import com.tieat.security.web.RateLimitKeys;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -117,6 +118,7 @@ public class CreatePublicMealUsageUseCase {
         if (mealUsageRepository.countPublicQrCreatedSince(context.id(), now.minusSeconds(60)) >= MAX_SUCCESSES_PER_MINUTE) {
             throw new PublicMealUsageRateLimitExceededException();
         }
+        final Instant createdAt = now.plusNanos(500).truncatedTo(ChronoUnit.MICROS);
         MealUsage created = mealUsageRepository.save(MealUsage.pendingFromPublicQr(
             MealUsageId.newId(),
             context.storeId(),
@@ -125,10 +127,10 @@ public class CreatePublicMealUsageUseCase {
             selectedContract.partnerDisplayName(),
             command.customerName(),
             command.amount(),
-            now
+            createdAt
         ));
         idempotencyRepository.save(new PublicMealUsageIdempotency(
-            context.id(), command.idempotencyKey(), command.mealContractId(), command.amount(), created.id(), requestKeyHash, now
+            context.id(), command.idempotencyKey(), command.mealContractId(), command.amount(), created.id(), requestKeyHash, createdAt
         ));
         return created;
     }
