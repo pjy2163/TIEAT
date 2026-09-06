@@ -13,6 +13,7 @@
 
 - Finding IDs and affected environment: `SEC-CAP-QR-LONG-TTL`, `SEC-CAP-003`, `TIEAT-CAP-001`; Azure 파일럿 `rg-tieat-pilot-krc`, 호스트 `tieat.paranglabs.com`
 - Pilot scope: 운영 계정 `parangofsky@gmail.com`과 초대 코드로 명시적으로 등록한 파일럿 매장만 사용한다. 일반 공개 가입과 파일럿 외 매장 확장은 이 승인 범위에 포함하지 않는다.
+- 2026-09-06 운영자 추가 승인: 초대된 파일럿 매장 고객의 모바일 데이터 QR 접속을 허용한다. Web의 운영자 단일 IP 제한을 해제하되 API 내부 ingress, 초대 코드 가입, QR 보완 통제는 유지한다. 이는 전체 인터넷 공개 `GO` 승인이 아니며 위 파일럿 만료일을 연장하지 않는다.
 - Pilot period: 2026-09-04 20:09 KST부터 2026-10-01 23:59 KST까지.
 - Decision owner, operator, and approval time: 운영 계정 `parangofsky@gmail.com`; 2026-09-04 20:09 KST.
 - Reason and bounded business impact: 매장 부착 QR을 자주 교체하지 않는 제한된 파일럿 운영을 위해 QR capability 기본 수명을 90일로 유지한다. 유출 시 해당 매장의 공개 요청 생성 경로가 악용될 수 있는 위험을 파일럿 기간에만 수용한다.
