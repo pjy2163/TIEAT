@@ -29,7 +29,7 @@ jobs:
           load: true
           tags: ${{ env.ACR_REGISTRY }}/tieat-api:git-${{ github.sha }}
 
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
           registry: ${{ env.ACR_REGISTRY }}
           username: ${{ secrets.ACR_API_USERNAME }}
@@ -76,7 +76,7 @@ jobs:
           build-args: |
             TIEAT_API_ORIGIN=http://ca-tieat-api
 
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
         with:
           registry: ${{ env.ACR_REGISTRY }}
           username: ${{ secrets.ACR_WEB_USERNAME }}
