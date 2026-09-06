@@ -1,6 +1,6 @@
 plugins {
     java
-    id("org.springframework.boot") version "4.1.0"
+    id("org.springframework.boot") version "4.1.1"
 }
 
 group = "com.tieat"
@@ -14,8 +14,8 @@ java {
 }
 
 dependencies {
-    implementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.0"))
-    implementation(enforcedPlatform("io.netty:netty-bom:4.2.16.Final"))
+    implementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.1"))
+    implementation(enforcedPlatform("io.netty:netty-bom:4.2.17.Final"))
 
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
@@ -26,10 +26,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.flywaydb:flyway-database-postgresql")
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-api:3.0.3")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-api:3.1.0")
     implementation("org.apache.poi:poi-ooxml:5.5.1")
-    implementation("com.azure:azure-storage-blob:12.35.0")
-    implementation("com.azure:azure-identity:1.18.4")
+    implementation("com.azure:azure-storage-blob:12.35.1")
+    implementation("com.azure:azure-identity:1.18.6")
 
     runtimeOnly("org.postgresql:postgresql")
 
@@ -41,7 +41,7 @@ dependencies {
         }
     }
 
-    testImplementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.0"))
+    testImplementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.1"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-webmvc-test")
     testImplementation("org.springframework.security:spring-security-test")
