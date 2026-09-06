@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import Script from "next/script";
 import { BrandWordmark, SectionHeading, Wordmark, type LandingFlowStep } from "./Landing.components";
 import { LandingBrandIntro } from "./LandingBrandIntro";
@@ -191,10 +192,10 @@ export default function Home() {
         <div className={landingStyles.footerInner}>
           <div className={landingStyles.footerTop}>
             <div>
-              <a className={landingStyles.footerBrand} href="/" aria-label="TIEAT 홈">
+              <Link className={landingStyles.footerBrand} href="/" aria-label="TIEAT 홈">
                 <img className={landingStyles.footerIcon} src="/icon.svg" alt="" />
                 <span className={landingStyles.footerBrandName}>TIEAT</span>
-              </a>
+              </Link>
               <p className={landingStyles.footerDescription}>QR 입력부터 매장 확인과 장부까지.</p>
             </div>
             <nav className={landingStyles.footerNav} aria-label="하단 메뉴">

@@ -45,6 +45,7 @@ export function StoreMealUsageQrView() {
   const [pauseState, setPauseState] = useState<"idle" | "loading">("idle");
   const [retryKey, setRetryKey] = useState(0);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Retry changes intentionally reset the visible request state before fetching. */
   useEffect(() => {
     let active = true;
     setRequestState("loading");
@@ -70,6 +71,7 @@ export function StoreMealUsageQrView() {
       active = false;
     };
   }, [retryKey]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   async function renewExpiredQr() {
     setRenewalState("loading");
@@ -91,6 +93,7 @@ export function StoreMealUsageQrView() {
     finally { setPauseState("idle"); }
   }
 
+  /* eslint-disable react-hooks/set-state-in-effect -- A changed server payload invalidates the previously rendered QR image. */
   useEffect(() => {
     let active = true;
     if (view?.status !== "AVAILABLE" || view.publicPath === null) {
@@ -116,6 +119,7 @@ export function StoreMealUsageQrView() {
       active = false;
     };
   }, [view]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const storeName = storeDisplayName ?? "매장";
 

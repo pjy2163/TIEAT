@@ -1,0 +1,73 @@
+name: Continuous integration
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API check
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up BellSoft Liberica JDK 25
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: liberica
+          java-version: '25'
+          cache: gradle
+
+      - name: Run API checks
+        run: ./gradlew :apps:api:check --no-daemon --console=plain
+
+  web:
+    name: Web check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TIEAT_API_ORIGIN: https://api.example.test
+    steps:
+      - name: Check out revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install locked web dependencies
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+
+      - name: Audit production web dependencies
+        working-directory: apps/web
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Lint web application
+        working-directory: apps/web
+        run: npm run lint
+
+      - name: Test web application
+        working-directory: apps/web
+        run: npm test
+
+      - name: Build web application
+        working-directory: apps/web
+        run: npm run build

@@ -101,6 +101,7 @@ export function StorePartnerProvider({ children }: Readonly<{ children: React.Re
       });
   }, [pathname, router]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Route changes intentionally reset tenant-scoped client state before the next request. */
   useEffect(() => {
     if (!isWorkspaceRoute) {
       setRawScope({ kind: "all" });
@@ -116,6 +117,7 @@ export function StorePartnerProvider({ children }: Readonly<{ children: React.Re
     window.addEventListener("popstate", syncFromUrl);
     return () => window.removeEventListener("popstate", syncFromUrl);
   }, [isWorkspaceRoute, pathname, serializedSearchParams]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (!isWorkspaceRoute) return;

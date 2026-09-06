@@ -112,7 +112,7 @@ public class RecordPosSettlementUseCase {
             command.posBusinessDate(),
             command.submittedTotalMinor(),
             command.actorLoginId(),
-            Instant.now(clock),
+            Instant.now(clock).truncatedTo(java.time.temporal.ChronoUnit.MICROS),
             command.idempotencyKey(),
             allocations
         );

@@ -142,6 +142,7 @@ class StoreSignupHttpIntegrationTest {
                 signupBodyWithInvite("wrong-code", "new-store", "correct-password", "새 가게")
             ))
             .andExpect(StoreOnboardingHttpIntegrationSupport.problem(403, "ONBOARDING_INVITE_INVALID"));
+        jdbcTemplate.update("delete from auth_abuse_rate_limits");
         mockMvc.perform(StoreOnboardingHttpIntegrationSupport.signupRequest(
                 session,
                 csrfToken,
@@ -194,6 +195,7 @@ class StoreSignupHttpIntegrationTest {
 
         mockMvc.perform(placeSearchRequest(session, csrfToken, "wrong-code", "TIEAT"))
             .andExpect(StoreOnboardingHttpIntegrationSupport.problem(403, "ONBOARDING_INVITE_INVALID"));
+        jdbcTemplate.update("delete from auth_abuse_rate_limits");
         mockMvc.perform(placeSearchRequest(session, csrfToken, StoreOnboardingHttpIntegrationSupport.INVITE_CODE, "X"))
             .andExpect(StoreOnboardingHttpIntegrationSupport.problem(400, "STORE_PLACE_SEARCH_INVALID"));
         assertThat(placeSearchGateway.calls()).isZero();

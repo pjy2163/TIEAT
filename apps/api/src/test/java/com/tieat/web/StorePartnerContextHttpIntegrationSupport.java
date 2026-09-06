@@ -45,6 +45,7 @@ import org.springframework.core.type.filter.TypeFilter;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
@@ -60,6 +61,7 @@ import tools.jackson.databind.ObjectMapper;
 @SpringBootTest(classes = StorePartnerContextHttpIntegrationSupport.R032TestApplication.class)
 @AutoConfigureMockMvc
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @TestPropertySource(properties = {
     "spring.servlet.multipart.max-file-size=10MB",
     "spring.servlet.multipart.max-request-size=11MB"

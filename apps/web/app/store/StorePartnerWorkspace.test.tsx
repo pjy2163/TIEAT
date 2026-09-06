@@ -83,7 +83,7 @@ function mealUsage(id: string, partnerDisplayName: string): MonthlyMealUsage {
 
 function mealPage(items: MonthlyMealUsage[], page = 0, hasNext = false): ConfirmedMealUsagePage {
   return {
-    fromDate: "2026-08-01",
+    fromDate: `${currentKoreanDateForTest().slice(0, 7)}-01`,
     toDate: currentKoreanDateForTest(),
     timeZone: "Asia/Seoul",
     items,

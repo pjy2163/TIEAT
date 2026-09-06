@@ -41,7 +41,7 @@ class RecordPosSettlementUseCaseTest {
         );
         RecordPosSettlementUseCase useCase = new RecordPosSettlementUseCase(
             repository,
-            Clock.fixed(RECORDED_AT, ZoneOffset.UTC)
+            Clock.fixed(RECORDED_AT.plusNanos(123), ZoneOffset.UTC)
         );
 
         PosSettlement recorded = useCase.record(command(UUID.randomUUID(), List.of(secondUsageId, firstUsageId), 3_000));

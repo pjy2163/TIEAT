@@ -42,7 +42,7 @@ import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-@SpringBootTest(classes = TieatApiApplication.class)
+@SpringBootTest(classes = TieatApiApplication.class, properties = "tieat.session.cookie.secure=")
 @AutoConfigureMockMvc
 @Import(StoreSessionReauthenticationHttpIntegrationTest.TestClockConfiguration.class)
 @Testcontainers
