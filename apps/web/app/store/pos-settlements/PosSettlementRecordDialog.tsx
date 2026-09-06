@@ -194,6 +194,7 @@ export function PosSettlementRecordDialog({
   }, [onAccessDenied, onSessionExpired, seed]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Opening the dialog intentionally starts its request lifecycle.
     void loadReceivables();
   }, [loadReceivables]);
 

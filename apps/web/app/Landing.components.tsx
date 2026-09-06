@@ -1,6 +1,7 @@
 import { landingStyles } from "./Landing.styles";
 import motionStyles from "./Landing.motion.module.css";
 import { TieatWordmark } from "./TieatWordmark";
+import Link from "next/link";
 import type { ReactNode, Ref } from "react";
 
 type SectionHeadingProps = {
@@ -34,9 +35,9 @@ export function BrandWordmark({ variant = "hero" }: BrandWordmarkProps) {
 
 export function Wordmark() {
   return (
-    <a className={landingStyles.wordmarkLink} href="/" aria-label="TIEAT 홈">
+    <Link className={landingStyles.wordmarkLink} href="/" aria-label="TIEAT 홈">
       <TieatWordmark className={landingStyles.wordmarkMark} markId="header" variant="header" />
-    </a>
+    </Link>
   );
 }
 

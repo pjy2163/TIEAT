@@ -90,6 +90,7 @@ export function LandingBrandIntro() {
   const [target, setTarget] = useState<IntroTarget>({ x: 0, y: 0, scale: 1 });
   const [sourceFrame, setSourceFrame] = useState<IntroFrame | null>(null);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Intro state is initialized from browser-only motion and session preferences after hydration. */
   useLayoutEffect(() => {
     const clearMotion = () => {
       timersRef.current.forEach((timer) => window.clearTimeout(timer));
@@ -233,6 +234,7 @@ export function LandingBrandIntro() {
       }
     };
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (phase === "pending" || phase === "done" || !sourceFrame) {
     return null;

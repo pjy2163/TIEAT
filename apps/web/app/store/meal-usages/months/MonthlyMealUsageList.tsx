@@ -129,7 +129,10 @@ export function MonthlyMealUsageList() {
   const renderedScopeRef = useRef<string | null>(null);
   const paymentTriggerRef = useRef<HTMLElement | null>(null);
   const routerRef = useRef(router);
-  routerRef.current = router;
+
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
 
   const replaceResult = useCallback((next: ConfirmedMealUsagePage | null) => {
     resultRef.current = next;
@@ -370,6 +373,7 @@ export function MonthlyMealUsageList() {
 
   useEffect(() => {
     if (!scopeReady || scopeState === "invalid") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Scope changes intentionally start a fresh request lifecycle.
     void load(fromDate, toDate, page, selectedMealContractId);
   }, [fromDate, load, page, scopeReady, scopeState, selectedMealContractId, toDate]);
 
