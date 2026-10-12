@@ -4,7 +4,6 @@
 
 ![TIEAT 서비스 소개](apps/web/public/og/tieat-og.png)
 
-[프로젝트 페이지](https://tieat.paranglabs.com) · Responsive Web · Installable PWA
 
 TIEAT은 매장과 협력사 사이에서 수기로 관리하던 식대 사용 내역을 디지털 장부로 전환한 프로젝트입니다. 협력사 직원은 별도 앱 없이 매장의 QR을 휴대폰으로 열어 이름과 금액을 입력하고, 매장 직원은 태블릿이나 모바일 화면에서 요청을 확인합니다. 확정된 내역은 장부와 미수금 계산에 반영되며 실제 POS 결제 결과도 별도로 기록할 수 있습니다.
 
