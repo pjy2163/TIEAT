@@ -61,20 +61,47 @@ QR mobile or store tablet entry
 - PostgreSQL 18, Flyway, Testcontainers
 - Docker Compose
 
-Backend는 하나의 배포 단위를 유지하는 modular monolith입니다. 핵심 업무 규칙은 Spring과 JPA에 의존하지 않는 domain package에 두고 application use case와 adapter가 외부 기술을 연결합니다.
+## 아키텍처
 
-## Project structure
+백엔드는 하나의 배포 단위를 유지하는 modular monolith입니다. 업무 규칙은 Spring과 JPA에 의존하지 않는 domain package에 두고, application use case와 adapter가 HTTP, 데이터베이스, 외부 저장소를 연결합니다. 초기 제품에서 운영 복잡도를 억제하면서도 도메인 경계를 코드에 남기기 위한 선택입니다.
+
+```mermaid
+flowchart TB
+    U[Mobile / Tablet Browser] --> W[Next.js Web]
+    W --> A[Spring Boot API]
+    A --> P[(PostgreSQL)]
+    A --> S[Private Receipt Storage]
+    A --> N[Naver Local Search API]
+
+    subgraph API Modules
+        ST[store / identity]
+        PT[partnership]
+        QR[qr]
+        LG[ledger]
+        SE[settlement]
+    end
+
+    A --- ST
+    A --- PT
+    A --- QR
+    A --- LG
+    A --- SE
+```
 
 ```text
-apps/api
-├── src/main/java/com/tieat
-│   ├── ledger
-│   │   ├── domain
-│   │   ├── application
-│   │   └── adapter
-│   ├── partnership
-│   └── store
-└── src/main/resources/db/migration
+apps/
+├── api/                         # Spring Boot API
+│   └── src/main/java/com/tieat
+│       ├── store, identity      # 매장과 세션 인증
+│       ├── partnership          # 협력사와 식대 계약
+│       ├── qr                   # 공개 QR 수명 주기
+│       ├── ledger               # 사용 요청과 확정 장부
+│       └── settlement           # POS 정산과 영수증
+└── web/                         # Next.js App Router UI
+    ├── app/                     # 공개 QR, 가입, 매장 작업 공간
+    └── lib/                     # API client와 응답 검증
+
+infra/azure/                     # Azure Bicep 배포 구성
 ```
 
 ## Run locally
