@@ -9,6 +9,34 @@ TIEAT은 매장과 협력사 사이에서 수기로 관리하던 식대 사용 �
 
 TIEAT은 결제, 충전, 송금을 수행하거나 고객 자금을 보관하는 서비스가 아닙니다. 외부 POS에서 완료된 결제 사실을 장부에 기록하고 대조하는 역할에 집중합니다.
 
+## 서비스 데모
+
+데모 매장에서 식대 **12,000원**을 요청하고 매장 직원이 확정하면, **선불 8,000원**과 **미수금 4,000원**이 장부에 반영됩니다.
+
+![TIEAT 서비스 소개 화면](./assets/readme/01-landing.png)
+
+랜딩에서 QR 입력부터 매장 확인, 정산 기록까지의 흐름
+
+| 모바일 QR 입력 | 요청 접수 |
+| --- | --- |
+| <img src="./assets/readme/02-mobile-qr-request.png" alt="모바일에서 12,000원 식대를 입력한 화면" width="210"> | <img src="./assets/readme/03-mobile-request-submitted.png" alt="모바일에서 확인 대기 요청을 보낸 결과" width="210"> |
+| 협력사를 검색하고 이름과 식대 금액을 입력 | 요청은 매장 직원이 확인할 때까지 대기 |
+
+| 매장 확정 | 정산 전 장부 |
+| --- | --- |
+| ![매장 확인자가 이니셜로 식대를 확정하는 화면](./assets/readme/04-store-confirmation.png) | ![확정된 식대에 결제 전 상태가 표시된 장부](./assets/readme/05-ledger-payment-due.png) |
+| 매장 직원이 금액을 확인하고 이니셜로 확정 | 확정된 식대가 장부에 올라오고, 미수금이 남은 건은 `결제 전`으로 표시 |
+
+| POS 정산 입력 | 정산 저장 완료 |
+| --- | --- |
+| ![POS 정산 금액과 결제일을 입력하는 화면](./assets/readme/06-pos-settlement.png) | ![미수금 4,000원의 정산 기록이 저장된 화면](./assets/readme/07-pos-settlement-recorded.png) |
+| 외부 POS에서 완료한 결제의 날짜와 금액을 입력 | 미수금 4,000원에 대한 결제 기록 저장 |
+
+| 정산 후 장부 | 결제 내역 |
+| --- | --- |
+| ![정산 후 결제 완료 상태가 표시된 장부](./assets/readme/08-ledger-payment-recorded.png) | ![협력사별로 조회할 수 있는 결제 내역](./assets/readme/09-pos-settlement-history.png) |
+| 미수 잔액이 0원이 되고 장부 상태가 `결제 완료`로 바뀜 | 협력사별로 저장된 결제 기록 확인 가능 |
+
 ## 해결하려는 문제
 
 식대 거래는 입력하는 사람과 확정하는 사람이 다르고, 선불과 후불 계약이 섞이며, 월말에는 다시 장부를 대조해야 합니다. TIEAT은 이 과정을 다음 원칙으로 정리했습니다.
@@ -124,6 +152,12 @@ infra/azure/                     # Azure Bicep 배포 구성
 | Test | JUnit 5, Testcontainers, Vitest, Testing Library |
 | Infrastructure | Docker, Azure Container Apps, Key Vault, Managed Identity, Bicep |
 
+## 배포 구성
+
+파일럿 배포는 Next.js 웹과 Spring Boot API를 Docker 이미지로 빌드해 Azure Container Apps에서 실행하는 구성입니다. GitHub Actions로 이미지를 Azure Container Registry(ACR)에 게시합니다.
+
+데이터는 Azure Database for PostgreSQL에, 영수증은 Azure Blob Storage에 저장하고 시크릿은 Azure Key Vault에서 관리합니다.
+
 ## 보안과 개인정보 보호
 
 보안은 UI 검증에 맡기지 않고 요청 경계, 저장소 경계, 운영 경계에 나누어 적용했습니다.
@@ -147,7 +181,7 @@ infra/azure/                     # Azure Bicep 배포 구성
 ### 요구 사항
 
 - Java 25
-- Node.js 22
+- Node.js 24
 - Docker와 Docker Compose
 
 PostgreSQL을 실행한 뒤 API와 Web을 각각 시작합니다.
