@@ -1,0 +1,4 @@
+# Synthetic QR token fixtures in historical unit-test commits.
+9929e3fa45c7197fe2a369efb28cacbe9c0d9be3:apps/web/app/qr/[token]/MealUsageQrForm.test.tsx:generic-api-key:18
+9929e3fa45c7197fe2a369efb28cacbe9c0d9be3:apps/web/lib/public-qr-api.test.ts:generic-api-key:17
+3a317b0c0cd1ad6fca9973729ad693424d077e79:apps/api/src/test/java/com/tieat/web/ApiExceptionHandlerTest.java:generic-api-key:44
